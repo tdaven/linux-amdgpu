@@ -1197,6 +1197,9 @@ int rv770_init(struct radeon_device *rdev)
 	r = radeon_fence_driver_init(rdev, 1);
 	if (r)
 		return r;
+	r = radeon_semaphore_driver_init(rdev);
+	if (r)
+		return r;
 	/* initialize AGP */
 	if (rdev->flags & RADEON_IS_AGP) {
 		r = radeon_agp_init(rdev);
@@ -1270,6 +1273,7 @@ void rv770_fini(struct radeon_device *rdev)
 	rv770_pcie_gart_fini(rdev);
 	r600_vram_scratch_fini(rdev);
 	radeon_gem_fini(rdev);
+	radeon_semaphore_driver_fini(rdev);
 	radeon_fence_driver_fini(rdev);
 	radeon_agp_fini(rdev);
 	radeon_bo_fini(rdev);
