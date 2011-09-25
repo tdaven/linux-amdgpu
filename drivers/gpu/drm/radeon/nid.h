@@ -449,6 +449,8 @@
 			 (((op) & 0xFF) << 8) |				\
 			 ((n) & 0x3FFF) << 16)
 
+#define PACKET3_COMPUTE(op, n)	(PACKET3(op, n) | 1 << 1)
+
 /* Packet 3 types */
 #define	PACKET3_NOP					0x10
 #define	PACKET3_SET_BASE				0x11
