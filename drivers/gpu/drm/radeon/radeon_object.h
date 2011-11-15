@@ -128,4 +128,22 @@ extern void radeon_bo_move_notify(struct ttm_buffer_object *bo,
 					struct ttm_mem_reg *mem);
 extern int radeon_bo_fault_reserve_notify(struct ttm_buffer_object *bo);
 extern int radeon_bo_get_surface_reg(struct radeon_bo *bo);
+
+/*
+ * sub allocation
+ */
+extern int radeon_sa_bo_manager_init(struct radeon_device *rdev,
+				     struct radeon_sa_manager *sa_manager,
+				     unsigned size, u32 domain);
+extern void radeon_sa_bo_manager_fini(struct radeon_device *rdev,
+				      struct radeon_sa_manager *sa_manager);
+extern int radeon_sa_bo_new(struct radeon_device *rdev,
+			    struct radeon_sa_manager *sa_manager,
+			    struct radeon_sa_bo *sa_bo,
+			    unsigned size, unsigned align,
+			    radeon_sa_bo_destroy_t destroy,
+			    radeon_sa_bo_done_t done);
+extern void radeon_sa_bo_free(struct radeon_device *rdev,
+			      struct radeon_sa_bo *sa_bo);
+
 #endif
