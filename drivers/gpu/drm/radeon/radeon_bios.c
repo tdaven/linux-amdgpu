@@ -32,6 +32,9 @@
 
 #include <linux/vga_switcheroo.h>
 #include <linux/slab.h>
+#ifdef CONFIG_ACPI
+#include <linux/acpi.h>
+#endif
 /*
  * BIOS.
  */
@@ -476,6 +479,58 @@ static bool radeon_read_disabled_bios(struct radeon_device *rdev)
 		return legacy_read_disabled_bios(rdev);
 }
 
+#ifdef CONFIG_ACPI
+static bool radeon_acpi_vfct_bios(struct radeon_device *rdev)
+{
+	bool ret = false;
+	struct acpi_table_header *hdr;
+	/* acpi_get_table_with_size is not exported :( */
+	acpi_size tbl_size = 0x7fffffff;
+	UEFI_ACPI_VFCT *vfct;
+	GOP_VBIOS_CONTENT *vbios;
+	VFCT_IMAGE_HEADER *vhdr;
+
+	if (!ACPI_SUCCESS(acpi_get_table("VFCT", 1, &hdr)))
+		return false;
+	if (tbl_size < sizeof(UEFI_ACPI_VFCT)) {
+		DRM_ERROR("ACPI VFCT table present but broken (too short #1)\n");
+		goto out_unmap;
+	}
+
+	vfct = (UEFI_ACPI_VFCT *)hdr;
+	if (vfct->VBIOSImageOffset + sizeof(VFCT_IMAGE_HEADER) > tbl_size) {
+		DRM_ERROR("ACPI VFCT table present but broken (too short #2)\n");
+		goto out_unmap;
+	}
+
+	vbios = (GOP_VBIOS_CONTENT *)((char *)hdr + vfct->VBIOSImageOffset);
+	vhdr = &vbios->VbiosHeader;
+	DRM_INFO("ACPI VFCT contains a BIOS for %02x:%02x.%d %04x:%04x, size %d\n",
+			vhdr->PCIBus, vhdr->PCIDevice, vhdr->PCIFunction,
+			vhdr->VendorID, vhdr->DeviceID, vhdr->ImageLength);
+
+	if (vhdr->PCIBus != rdev->pdev->bus->number ||
+	    vhdr->PCIDevice != PCI_SLOT(rdev->pdev->devfn) ||
+	    vhdr->PCIFunction != PCI_FUNC(rdev->pdev->devfn) ||
+	    vhdr->VendorID != rdev->pdev->vendor ||
+	    vhdr->DeviceID != rdev->pdev->device) {
+		DRM_INFO("ACPI VFCT table is not for this card\n");
+		goto out_unmap;
+	};
+
+	if (vfct->VBIOSImageOffset + sizeof(VFCT_IMAGE_HEADER) + vhdr->ImageLength > tbl_size) {
+		DRM_ERROR("ACPI VFCT image truncated\n");
+		goto out_unmap;
+	}
+
+	rdev->bios = kmemdup(&vbios->VbiosContent, vhdr->ImageLength, GFP_KERNEL);
+	ret = !!rdev->bios;
+
+out_unmap:
+	/* uh, no idea what to do here... */
+	return ret;
+}
+#endif
 
 bool radeon_get_bios(struct radeon_device *rdev)
 {
@@ -487,6 +542,10 @@ bool radeon_get_bios(struct radeon_device *rdev)
 		r = igp_read_bios_from_vram(rdev);
 	if (r == false)
 		r = radeon_read_bios(rdev);
+#ifdef CONFIG_ACPI
+	if (r == false)
+		r = radeon_acpi_vfct_bios(rdev);
+#endif
 	if (r == false) {
 		r = radeon_read_disabled_bios(rdev);
 	}
