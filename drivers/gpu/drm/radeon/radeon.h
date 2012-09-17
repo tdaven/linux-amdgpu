@@ -2212,6 +2212,9 @@ struct radeon_device {
 	/* clock, powergating flags */
 	u32 cg_flags;
 	u32 pg_flags;
+
+	struct dev_pm_domain vga_pm_domain;
+	bool have_disp_power_ref;
 };
 
 int radeon_device_init(struct radeon_device *rdev,
@@ -2673,8 +2676,8 @@ extern void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain);
 extern bool radeon_ttm_bo_is_radeon_bo(struct ttm_buffer_object *bo);
 extern void radeon_vram_location(struct radeon_device *rdev, struct radeon_mc *mc, u64 base);
 extern void radeon_gtt_location(struct radeon_device *rdev, struct radeon_mc *mc);
-extern int radeon_resume_kms(struct drm_device *dev, bool resume);
-extern int radeon_suspend_kms(struct drm_device *dev, bool suspend);
+extern int radeon_resume_kms(struct drm_device *dev, bool resume, bool fbcon);
+extern int radeon_suspend_kms(struct drm_device *dev, bool suspend, bool fbcon);
 extern void radeon_ttm_set_active_vram_size(struct radeon_device *rdev, u64 size);
 extern void radeon_program_register_sequence(struct radeon_device *rdev,
 					     const u32 *registers,

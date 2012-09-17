@@ -1086,7 +1086,7 @@ static void radeon_switcheroo_set_state(struct pci_dev *pdev, enum vga_switchero
 		if (d3_delay < 20 && radeon_switcheroo_quirk_long_wakeup(pdev))
 			dev->pdev->d3_delay = 20;
 
-		radeon_resume_kms(dev, 1);
+		radeon_resume_kms(dev, true, true);
 
 		dev->pdev->d3_delay = d3_delay;
 
@@ -1096,7 +1096,7 @@ static void radeon_switcheroo_set_state(struct pci_dev *pdev, enum vga_switchero
 		printk(KERN_INFO "radeon: switched off\n");
 		drm_kms_helper_poll_disable(dev);
 		dev->switch_power_state = DRM_SWITCH_POWER_CHANGING;
-		radeon_suspend_kms(dev, 1);
+		radeon_suspend_kms(dev, true, true);
 		dev->switch_power_state = DRM_SWITCH_POWER_OFF;
 	}
 }
@@ -1292,7 +1292,8 @@ int radeon_device_init(struct radeon_device *rdev,
 	/* this will fail for cards that aren't VGA class devices, just
 	 * ignore it */
 	vga_client_register(rdev->pdev, rdev, NULL, radeon_vga_set_decode);
-	vga_switcheroo_register_client(rdev->pdev, &radeon_switcheroo_ops, false);
+	vga_switcheroo_register_client(rdev->pdev, &radeon_switcheroo_ops, true);
+	vga_switcheroo_init_domain_pm_ops(rdev->dev, &rdev->vga_pm_domain);
 
 	r = radeon_init(rdev);
 	if (r)
@@ -1373,7 +1374,7 @@ void radeon_device_fini(struct radeon_device *rdev)
  * Returns 0 for success or an error on failure.
  * Called at driver suspend.
  */
-int radeon_suspend_kms(struct drm_device *dev, bool suspend)
+int radeon_suspend_kms(struct drm_device *dev, bool suspend, bool fbcon)
 {
 	struct radeon_device *rdev;
 	struct drm_crtc *crtc;
@@ -1448,9 +1449,12 @@ int radeon_suspend_kms(struct drm_device *dev, bool suspend)
 		pci_disable_device(dev->pdev);
 		pci_set_power_state(dev->pdev, PCI_D3hot);
 	}
-	console_lock();
-	radeon_fbdev_set_suspend(rdev, 1);
-	console_unlock();
+
+	if (fbcon) {
+		console_lock();
+		radeon_fbdev_set_suspend(rdev, 1);
+		console_unlock();
+	}
 	return 0;
 }
 
@@ -1463,7 +1467,7 @@ int radeon_suspend_kms(struct drm_device *dev, bool suspend)
  * Returns 0 for success or an error on failure.
  * Called at driver resume.
  */
-int radeon_resume_kms(struct drm_device *dev, bool resume)
+int radeon_resume_kms(struct drm_device *dev, bool resume, bool fbcon)
 {
 	struct drm_connector *connector;
 	struct radeon_device *rdev = dev->dev_private;
@@ -1472,12 +1476,15 @@ int radeon_resume_kms(struct drm_device *dev, bool resume)
 	if (dev->switch_power_state == DRM_SWITCH_POWER_OFF)
 		return 0;
 
-	console_lock();
+	if (fbcon) {
+		console_lock();
+	}
 	if (resume) {
 		pci_set_power_state(dev->pdev, PCI_D0);
 		pci_restore_state(dev->pdev);
 		if (pci_enable_device(dev->pdev)) {
-			console_unlock();
+			if (fbcon)
+				console_unlock();
 			return -1;
 		}
 	}
@@ -1492,9 +1499,11 @@ int radeon_resume_kms(struct drm_device *dev, bool resume)
 	radeon_pm_resume(rdev);
 	radeon_restore_bios_scratch_regs(rdev);
 
-	radeon_fbdev_set_suspend(rdev, 0);
-	console_unlock();
-
+	if (fbcon) {
+		radeon_fbdev_set_suspend(rdev, 0);
+		console_unlock();
+	}
+       
 	/* init dig PHYs, disp eng pll */
 	if (rdev->is_atom_bios) {
 		radeon_atom_encoder_init(rdev);
