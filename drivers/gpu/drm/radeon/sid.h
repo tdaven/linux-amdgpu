@@ -1096,6 +1096,9 @@
 					 (1 << 21) |			\
 					 (((n) & 0xFFFFF) << 0))
 
+#define DMA_POLL_REG_MEM_PACKET(m)	((14 << 28) |			\
+					 ((m) << 27))
+
 /* async DMA Packet types */
 #define	DMA_PACKET_WRITE				  0x2
 #define	DMA_PACKET_COPY					  0x3

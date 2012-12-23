@@ -3222,24 +3222,33 @@ void si_vm_set_page(struct radeon_device *rdev,
 void si_vm_flush(struct radeon_device *rdev, int ridx, struct radeon_vm *vm)
 {
 	struct radeon_ring *ring = &rdev->ring[ridx];
+	u32 vm_reg, vm_addr;
 
 	if (vm == NULL)
 		return;
+
+	if (vm->id < 8)
+		vm_reg = VM_CONTEXT0_PAGE_TABLE_BASE_ADDR + (vm->id << 2);
+	else
+		vm_reg = VM_CONTEXT8_PAGE_TABLE_BASE_ADDR + ((vm->id - 8) << 2);
+	vm_addr = vm->pd_gpu_addr >> 12;
 
 	/* write new base address */
 	radeon_ring_write(ring, PACKET3(PACKET3_WRITE_DATA, 3));
 	radeon_ring_write(ring, (WRITE_DATA_ENGINE_SEL(0) |
 				 WRITE_DATA_DST_SEL(0)));
-
-	if (vm->id < 8) {
-		radeon_ring_write(ring,
-				  (VM_CONTEXT0_PAGE_TABLE_BASE_ADDR + (vm->id << 2)) >> 2);
-	} else {
-		radeon_ring_write(ring,
-				  (VM_CONTEXT8_PAGE_TABLE_BASE_ADDR + ((vm->id - 8) << 2)) >> 2);
-	}
+	radeon_ring_write(ring, vm_reg >> 2);
 	radeon_ring_write(ring, 0);
-	radeon_ring_write(ring, vm->pd_gpu_addr >> 12);
+	radeon_ring_write(ring, vm_addr);
+
+	/* wait for the new value to hit the reg */
+	radeon_ring_write(ring, PACKET3(PACKET3_WAIT_REG_MEM, 5));
+	radeon_ring_write(ring, 3); /* == */
+	radeon_ring_write(ring, vm_reg >> 2);
+	radeon_ring_write(ring, 0);
+	radeon_ring_write(ring, vm_addr); /* ref */
+	radeon_ring_write(ring, 0xfffffff); /* mask */
+	radeon_ring_write(ring, 0x10);
 
 	/* flush hdp cache */
 	radeon_ring_write(ring, PACKET3(PACKET3_WRITE_DATA, 3));
@@ -3256,6 +3265,15 @@ void si_vm_flush(struct radeon_device *rdev, int ridx, struct radeon_vm *vm)
 	radeon_ring_write(ring, VM_INVALIDATE_REQUEST >> 2);
 	radeon_ring_write(ring, 0);
 	radeon_ring_write(ring, 1 << vm->id);
+
+	/* wait for the request bit to clear */
+	radeon_ring_write(ring, PACKET3(PACKET3_WAIT_REG_MEM, 5));
+	radeon_ring_write(ring, 3); /* == */
+	radeon_ring_write(ring, VM_INVALIDATE_REQUEST >> 2);
+	radeon_ring_write(ring, 0);
+	radeon_ring_write(ring, 0); /* ref */
+	radeon_ring_write(ring, 1 << vm->id); /* mask */
+	radeon_ring_write(ring, 0x10);
 
 	/* sync PFP to ME, otherwise we might get invalid PFP reads */
 	radeon_ring_write(ring, PACKET3(PACKET3_PFP_SYNC_ME, 0));
@@ -3286,6 +3304,13 @@ void si_dma_vm_flush(struct radeon_device *rdev, int ridx, struct radeon_vm *vm)
 	radeon_ring_write(ring, DMA_PACKET(DMA_PACKET_SRBM_WRITE, 0, 0, 0, 0));
 	radeon_ring_write(ring, (0xf << 16) | (VM_INVALIDATE_REQUEST >> 2));
 	radeon_ring_write(ring, 1 << vm->id);
+
+	radeon_ring_write(ring, DMA_POLL_REG_MEM_PACKET(0));
+	radeon_ring_write(ring, (VM_INVALIDATE_REQUEST >> 2));
+	radeon_ring_write(ring, (0xfff < 16));
+	radeon_ring_write(ring, 1 << vm->id); /* mask */
+	radeon_ring_write(ring, 0); /* value */
+	radeon_ring_write(ring, (3 << 28) | 0x10); /* ==, interval */
 }
 
 /*
