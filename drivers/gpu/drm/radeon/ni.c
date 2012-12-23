@@ -2111,12 +2111,30 @@ void cayman_vm_set_page(struct radeon_device *rdev,
 void cayman_vm_flush(struct radeon_device *rdev, int ridx, struct radeon_vm *vm)
 {
 	struct radeon_ring *ring = &rdev->ring[ridx];
+	u32 vm_reg, vm_addr;
 
 	if (vm == NULL)
 		return;
 
-	radeon_ring_write(ring, PACKET0(VM_CONTEXT0_PAGE_TABLE_BASE_ADDR + (vm->id << 2), 0));
-	radeon_ring_write(ring, vm->pd_gpu_addr >> 12);
+	/* wait idle */
+	radeon_ring_write(ring, PACKET0(WAIT_UNTIL, 0));
+	radeon_ring_write(ring, WAIT_3D_IDLECLEAN);
+
+	vm_reg = VM_CONTEXT0_PAGE_TABLE_BASE_ADDR + (vm->id << 2);
+	vm_addr = vm->pd_gpu_addr >> 12;
+
+	/* write new vm base */
+	radeon_ring_write(ring, PACKET0(vm_reg, 0));
+	radeon_ring_write(ring, vm_addr);
+
+	/* wait for the new value to hit the reg */
+	radeon_ring_write(ring, PACKET3(PACKET3_WAIT_REG_MEM, 5));
+	radeon_ring_write(ring, 3); /* == */
+	radeon_ring_write(ring, vm_reg >> 2);
+	radeon_ring_write(ring, 0);
+	radeon_ring_write(ring, vm_addr); /* ref */
+	radeon_ring_write(ring, 0xfffffff); /* mask */
+	radeon_ring_write(ring, 0x10);
 
 	/* flush hdp cache */
 	radeon_ring_write(ring, PACKET0(HDP_MEM_COHERENCY_FLUSH_CNTL, 0));
@@ -2125,6 +2143,15 @@ void cayman_vm_flush(struct radeon_device *rdev, int ridx, struct radeon_vm *vm)
 	/* bits 0-7 are the VM contexts0-7 */
 	radeon_ring_write(ring, PACKET0(VM_INVALIDATE_REQUEST, 0));
 	radeon_ring_write(ring, 1 << vm->id);
+
+	/* wait for the request bit to clear */
+	radeon_ring_write(ring, PACKET3(PACKET3_WAIT_REG_MEM, 5));
+	radeon_ring_write(ring, 3); /* == */
+	radeon_ring_write(ring, VM_INVALIDATE_REQUEST >> 2);
+	radeon_ring_write(ring, 0);
+	radeon_ring_write(ring, 0); /* ref */
+	radeon_ring_write(ring, 1 << vm->id); /* mask */
+	radeon_ring_write(ring, 0x10);
 
 	/* sync PFP to ME, otherwise we might get invalid PFP reads */
 	radeon_ring_write(ring, PACKET3(PACKET3_PFP_SYNC_ME, 0));
@@ -2151,5 +2178,11 @@ void cayman_dma_vm_flush(struct radeon_device *rdev, int ridx, struct radeon_vm 
 	radeon_ring_write(ring, DMA_PACKET(DMA_PACKET_SRBM_WRITE, 0, 0, 0));
 	radeon_ring_write(ring, (0xf << 16) | (VM_INVALIDATE_REQUEST >> 2));
 	radeon_ring_write(ring, 1 << vm->id);
+
+	/* wait for the request bit to clear */
+	radeon_ring_write(ring, DMA_SRBM_READ_PACKET(DMA_PACKET_SRBM_WRITE, 1, 0));
+	radeon_ring_write(ring, (0xfff << 20) | (VM_INVALIDATE_REQUEST >> 2));
+	radeon_ring_write(ring, 1 << vm->id); /* mask */
+	radeon_ring_write(ring, 0); /* value */
 }
 

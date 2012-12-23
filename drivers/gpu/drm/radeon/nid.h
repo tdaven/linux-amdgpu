@@ -270,6 +270,10 @@
 #define		INSTANCE_BROADCAST_WRITES      		(1 << 30)
 #define		SE_BROADCAST_WRITES      		(1 << 31)
 
+#define	WAIT_UNTIL					0x8040
+#define         WAIT_3D_IDLE                            (1 << 15)
+#define         WAIT_3D_IDLECLEAN                       (1 << 17)
+
 #define	SCRATCH_REG0					0x8500
 #define	SCRATCH_REG1					0x8504
 #define	SCRATCH_REG2					0x8508
@@ -682,6 +686,11 @@
 
 #define DMA_IB_PACKET(cmd, vmid, n)	((((cmd) & 0xF) << 28) |	\
 					 (((vmid) & 0xF) << 20) |	\
+					 (((n) & 0xFFFFF) << 0))
+
+#define DMA_SRBM_READ_PACKET(cmd, p, n)	((((cmd) & 0xF) << 28) |	\
+					 (1 << 27) |			\
+					 (((p) & 0x1) << 26) |		\
 					 (((n) & 0xFFFFF) << 0))
 
 /* async DMA Packet types */
