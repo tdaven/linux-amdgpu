@@ -297,6 +297,16 @@ void rv515_mc_stop(struct radeon_device *rdev, struct rv515_mc_save *save)
 	WREG32(R_000300_VGA_RENDER_CONTROL, 0);
 	/* blank the display controllers */
 	for (i = 0; i < rdev->num_crtc; i++) {
+		/* XXX this is a hack to avoid strange behavior with EFI on certain systems */
+		crtc_enabled = RREG32(AVIVO_D1CRTC_CONTROL + crtc_offsets[i]) & AVIVO_CRTC_EN;
+		if (crtc_enabled) {
+			WREG32(AVIVO_D1CRTC_UPDATE_LOCK + crtc_offsets[i], 1);
+			tmp = RREG32(AVIVO_D1CRTC_CONTROL + crtc_offsets[i]);
+			tmp &= ~AVIVO_CRTC_EN;
+			WREG32(AVIVO_D1CRTC_CONTROL + crtc_offsets[i], tmp);
+			WREG32(AVIVO_D1CRTC_UPDATE_LOCK + crtc_offsets[i], 0);
+		}
+		/* ***** */
 		crtc_enabled = RREG32(AVIVO_D1CRTC_CONTROL + crtc_offsets[i]) & AVIVO_CRTC_EN;
 		if (crtc_enabled) {
 			save->crtc_enabled[i] = true;
