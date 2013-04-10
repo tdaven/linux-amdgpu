@@ -1557,6 +1557,16 @@ void evergreen_mc_stop(struct radeon_device *rdev, struct evergreen_mc_save *sav
 	WREG32(VGA_RENDER_CONTROL, 0);
 	/* blank the display controllers */
 	for (i = 0; i < rdev->num_crtc; i++) {
+		/* XXX this is a hack to avoid strange behavior with EFI on certain systems */
+		crtc_enabled = RREG32(EVERGREEN_CRTC_CONTROL + crtc_offsets[i]) & EVERGREEN_CRTC_MASTER_EN;
+		if (crtc_enabled) {
+			WREG32(EVERGREEN_CRTC_UPDATE_LOCK + crtc_offsets[i], 1);
+			tmp = RREG32(EVERGREEN_CRTC_CONTROL + crtc_offsets[i]);
+			tmp &= ~EVERGREEN_CRTC_MASTER_EN;
+			WREG32(EVERGREEN_CRTC_CONTROL + crtc_offsets[i], tmp);
+			WREG32(EVERGREEN_CRTC_UPDATE_LOCK + crtc_offsets[i], 0);
+		}
+		/* ***** */
 		crtc_enabled = RREG32(EVERGREEN_CRTC_CONTROL + crtc_offsets[i]) & EVERGREEN_CRTC_MASTER_EN;
 		if (crtc_enabled) {
 			save->crtc_enabled[i] = true;
