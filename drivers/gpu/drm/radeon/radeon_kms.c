@@ -130,12 +130,14 @@ int radeon_driver_load_kms(struct drm_device *dev, unsigned long flags)
 				"Error during ACPI methods call\n");
 	}
 
-	pm_runtime_use_autosuspend(dev->dev);
-	pm_runtime_set_autosuspend_delay(dev->dev, 5000);
-	pm_runtime_set_active(dev->dev);
-	pm_runtime_allow(dev->dev);
-	pm_runtime_mark_last_busy(dev->dev);
-	pm_runtime_put_autosuspend(dev->dev);
+	if (radeon_runtime_pm != 0) {
+		pm_runtime_use_autosuspend(dev->dev);
+		pm_runtime_set_autosuspend_delay(dev->dev, 5000);
+		pm_runtime_set_active(dev->dev);
+		pm_runtime_allow(dev->dev);
+		pm_runtime_mark_last_busy(dev->dev);
+		pm_runtime_put_autosuspend(dev->dev);
+	}
 
 out:
 	if (r)
