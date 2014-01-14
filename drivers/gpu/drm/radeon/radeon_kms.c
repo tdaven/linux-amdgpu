@@ -461,6 +461,13 @@ static int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 	case RADEON_INFO_SI_CP_DMA_COMPUTE:
 		*value = 1;
 		break;
+	case RADEON_INFO_MAX_SCLK:
+		if ((rdev->pm.pm_method == PM_METHOD_DPM) &&
+		    rdev->pm.dpm_enabled)
+			*value = rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.sclk * 10;
+		else
+			*value = rdev->pm.default_sclk * 10;
+		break;
 	default:
 		DRM_DEBUG_KMS("Invalid request %d\n", info->request);
 		return -EINVAL;
