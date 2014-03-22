@@ -2028,6 +2028,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 5:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P16_32x32_16x16) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_DEPTH_MICRO_TILING));
 				break;
 			case 6:
@@ -2048,6 +2049,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 9:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P16_32x32_16x16) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_DISPLAY_MICRO_TILING));
 				break;
 			case 10:
@@ -2070,6 +2072,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 13:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P16_32x32_16x16) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_THIN_MICRO_TILING));
 				break;
 			case 14:
@@ -2092,6 +2095,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 27:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P16_32x32_16x16) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_ROTATED_MICRO_TILING));
 				break;
 			case 28:
@@ -2246,6 +2250,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 5:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P8_32x32_16x16) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_DEPTH_MICRO_TILING));
 				break;
 			case 6:
@@ -2266,6 +2271,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 9:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P8_32x32_16x16) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_DISPLAY_MICRO_TILING));
 				break;
 			case 10:
@@ -2288,6 +2294,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 13:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P8_32x32_16x16) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_THIN_MICRO_TILING));
 				break;
 			case 14:
@@ -2310,6 +2317,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 27:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P8_32x32_16x16) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_ROTATED_MICRO_TILING));
 				break;
 			case 28:
@@ -2466,6 +2474,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 					break;
 				case 5:
 					gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+							 PIPE_CONFIG(ADDR_SURF_P4_16x16) |
 							 MICRO_TILE_MODE_NEW(ADDR_SURF_DEPTH_MICRO_TILING));
 					break;
 				case 6:
@@ -2486,6 +2495,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 					break;
 				case 9:
 					gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+							 PIPE_CONFIG(ADDR_SURF_P4_16x16) |
 							 MICRO_TILE_MODE_NEW(ADDR_SURF_DISPLAY_MICRO_TILING));
 					break;
 				case 10:
@@ -2508,6 +2518,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 					break;
 				case 13:
 					gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+							 PIPE_CONFIG(ADDR_SURF_P4_16x16) |
 							 MICRO_TILE_MODE_NEW(ADDR_SURF_THIN_MICRO_TILING));
 					break;
 				case 14:
@@ -2530,6 +2541,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 					break;
 				case 27:
 					gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+							 PIPE_CONFIG(ADDR_SURF_P4_16x16) |
 							 MICRO_TILE_MODE_NEW(ADDR_SURF_ROTATED_MICRO_TILING));
 					break;
 				case 28:
@@ -2592,6 +2604,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 					break;
 				case 5:
 					gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+							 PIPE_CONFIG(ADDR_SURF_P4_8x16) |
 							 MICRO_TILE_MODE_NEW(ADDR_SURF_DEPTH_MICRO_TILING));
 					break;
 				case 6:
@@ -2612,6 +2625,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 					break;
 				case 9:
 					gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+							 PIPE_CONFIG(ADDR_SURF_P4_8x16) |
 							 MICRO_TILE_MODE_NEW(ADDR_SURF_DISPLAY_MICRO_TILING));
 					break;
 				case 10:
@@ -2634,6 +2648,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 					break;
 				case 13:
 					gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+							 PIPE_CONFIG(ADDR_SURF_P4_8x16) |
 							 MICRO_TILE_MODE_NEW(ADDR_SURF_THIN_MICRO_TILING));
 					break;
 				case 14:
@@ -2656,6 +2671,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 					break;
 				case 27:
 					gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+							 PIPE_CONFIG(ADDR_SURF_P4_8x16) |
 							 MICRO_TILE_MODE_NEW(ADDR_SURF_ROTATED_MICRO_TILING));
 					break;
 				case 28:
@@ -2812,6 +2828,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 5:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P2) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_DEPTH_MICRO_TILING));
 				break;
 			case 6:
@@ -2827,11 +2844,13 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 						 TILE_SPLIT(split_equal_to_row_size));
 				break;
 			case 8:
-				gb_tile_moden = ARRAY_MODE(ARRAY_LINEAR_ALIGNED);
+				gb_tile_moden = ARRAY_MODE(ARRAY_LINEAR_ALIGNED) |
+						PIPE_CONFIG(ADDR_SURF_P2);
 				break;
 			case 9:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
-						 MICRO_TILE_MODE_NEW(ADDR_SURF_DISPLAY_MICRO_TILING));
+						 MICRO_TILE_MODE_NEW(ADDR_SURF_DISPLAY_MICRO_TILING) |
+						 PIPE_CONFIG(ADDR_SURF_P2));
 				break;
 			case 10:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_2D_TILED_THIN1) |
@@ -2853,6 +2872,7 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 13:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
+						 PIPE_CONFIG(ADDR_SURF_P2) |
 						 MICRO_TILE_MODE_NEW(ADDR_SURF_THIN_MICRO_TILING));
 				break;
 			case 14:
@@ -2875,7 +2895,8 @@ static void cik_tiling_mode_table_init(struct radeon_device *rdev)
 				break;
 			case 27:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_1D_TILED_THIN1) |
-						 MICRO_TILE_MODE_NEW(ADDR_SURF_ROTATED_MICRO_TILING));
+						 MICRO_TILE_MODE_NEW(ADDR_SURF_ROTATED_MICRO_TILING) |
+						 PIPE_CONFIG(ADDR_SURF_P2));
 				break;
 			case 28:
 				gb_tile_moden = (ARRAY_MODE(ARRAY_PRT_2D_TILED_THIN1) |
