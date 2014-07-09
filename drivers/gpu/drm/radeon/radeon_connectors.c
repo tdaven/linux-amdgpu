@@ -285,6 +285,27 @@ static struct drm_encoder *radeon_best_single_encoder(struct drm_connector *conn
 	return NULL;
 }
 
+static void radeon_get_native_mode(struct drm_connector *connector)
+{
+	struct drm_encoder *encoder = radeon_best_single_encoder(connector);
+	struct radeon_encoder *radeon_encoder;
+
+	if (encoder == NULL)
+		return;
+
+	radeon_encoder = to_radeon_encoder(encoder);
+
+	if (!list_empty(&connector->probed_modes)) {
+		struct drm_display_mode *preferred_mode =
+			list_first_entry(&connector->probed_modes,
+					 struct drm_display_mode, head);
+
+		radeon_encoder->native_mode = *preferred_mode;
+	} else {
+		radeon_encoder->native_mode.clock = 0;
+	}
+}
+
 /*
  * radeon_connector_analog_encoder_conflict_solve
  * - search for other connectors sharing this encoder
@@ -585,6 +606,35 @@ static int radeon_connector_set_property(struct drm_connector *connector, struct
 		radeon_property_change_mode(&radeon_encoder->base);
 	}
 
+	if (property == dev->mode_config.scaling_mode_property) {
+		enum radeon_rmx_type rmx_type;
+
+		if (connector->encoder)
+			radeon_encoder = to_radeon_encoder(connector->encoder);
+		else {
+			struct drm_connector_helper_funcs *connector_funcs = connector->helper_private;
+			radeon_encoder = to_radeon_encoder(connector_funcs->best_encoder(connector));
+		}
+
+		switch (val) {
+		default:
+		case DRM_MODE_SCALE_NONE: rmx_type = RMX_OFF; break;
+		case DRM_MODE_SCALE_CENTER: rmx_type = RMX_CENTER; break;
+		case DRM_MODE_SCALE_ASPECT: rmx_type = RMX_ASPECT; break;
+		case DRM_MODE_SCALE_FULLSCREEN: rmx_type = RMX_FULL; break;
+		}
+		if (radeon_encoder->rmx_type == rmx_type)
+			return 0;
+
+		if ((rmx_type != DRM_MODE_SCALE_NONE) &&
+		    (radeon_encoder->native_mode.clock == 0))
+			return 0;
+
+		radeon_encoder->rmx_type = rmx_type;
+
+		radeon_property_change_mode(&radeon_encoder->base);
+	}
+
 	return 0;
 }
 
@@ -802,6 +852,8 @@ static int radeon_vga_get_modes(struct drm_connector *connector)
 
 	ret = radeon_ddc_get_modes(radeon_connector);
 
+	radeon_get_native_mode(connector);
+
 	return ret;
 }
 
@@ -1005,6 +1057,9 @@ static int radeon_dvi_get_modes(struct drm_connector *connector)
 	int ret;
 
 	ret = radeon_ddc_get_modes(radeon_connector);
+
+	radeon_get_native_mode(connector);
+
 	return ret;
 }
 
@@ -1384,6 +1439,8 @@ static int radeon_dp_get_modes(struct drm_connector *connector)
 				radeon_atom_ext_encoder_setup_ddc(encoder);
 		}
 		ret = radeon_ddc_get_modes(radeon_connector);
+
+		radeon_get_native_mode(connector);
 	}
 
 	return ret;
@@ -1747,6 +1804,9 @@ radeon_add_atom_connector(struct drm_device *dev,
 			drm_object_attach_property(&radeon_connector->base.base,
 						      rdev->mode_info.load_detect_property,
 						      1);
+			drm_object_attach_property(&radeon_connector->base.base,
+						   dev->mode_config.scaling_mode_property,
+						   DRM_MODE_SCALE_NONE);
 			break;
 		case DRM_MODE_CONNECTOR_DVII:
 		case DRM_MODE_CONNECTOR_DVID:
@@ -1766,6 +1826,10 @@ radeon_add_atom_connector(struct drm_device *dev,
 			drm_object_attach_property(&radeon_connector->base.base,
 						      rdev->mode_info.underscan_vborder_property,
 						      0);
+
+			drm_object_attach_property(&radeon_connector->base.base,
+						      dev->mode_config.scaling_mode_property,
+						      DRM_MODE_SCALE_NONE);
 
 			drm_object_attach_property(&radeon_connector->base.base,
 						   rdev->mode_info.dither_property,
@@ -1817,6 +1881,10 @@ radeon_add_atom_connector(struct drm_device *dev,
 			drm_object_attach_property(&radeon_connector->base.base,
 						      rdev->mode_info.load_detect_property,
 						      1);
+			if (ASIC_IS_AVIVO(rdev))
+				drm_object_attach_property(&radeon_connector->base.base,
+							   dev->mode_config.scaling_mode_property,
+							   DRM_MODE_SCALE_NONE);
 			/* no HPD on analog connectors */
 			radeon_connector->hpd.hpd = RADEON_HPD_NONE;
 			connector->polled = DRM_CONNECTOR_POLL_CONNECT;
@@ -1835,6 +1903,10 @@ radeon_add_atom_connector(struct drm_device *dev,
 			drm_object_attach_property(&radeon_connector->base.base,
 						      rdev->mode_info.load_detect_property,
 						      1);
+			if (ASIC_IS_AVIVO(rdev))
+				drm_object_attach_property(&radeon_connector->base.base,
+							   dev->mode_config.scaling_mode_property,
+							   DRM_MODE_SCALE_NONE);
 			/* no HPD on analog connectors */
 			radeon_connector->hpd.hpd = RADEON_HPD_NONE;
 			connector->interlace_allowed = true;
@@ -1868,16 +1940,17 @@ radeon_add_atom_connector(struct drm_device *dev,
 				drm_object_attach_property(&radeon_connector->base.base,
 							      rdev->mode_info.underscan_vborder_property,
 							      0);
+				drm_object_attach_property(&radeon_connector->base.base,
+							   rdev->mode_info.dither_property,
+							   RADEON_FMT_DITHER_DISABLE);
+				drm_object_attach_property(&radeon_connector->base.base,
+							   dev->mode_config.scaling_mode_property,
+							   DRM_MODE_SCALE_NONE);
 			}
 			if (ASIC_IS_DCE2(rdev) && (radeon_audio != 0)) {
 				drm_object_attach_property(&radeon_connector->base.base,
 							   rdev->mode_info.audio_property,
 							   RADEON_AUDIO_AUTO);
-			}
-			if (ASIC_IS_AVIVO(rdev)) {
-				drm_object_attach_property(&radeon_connector->base.base,
-							   rdev->mode_info.dither_property,
-							   RADEON_FMT_DITHER_DISABLE);
 			}
 			if (connector_type == DRM_MODE_CONNECTOR_DVII) {
 				radeon_connector->dac_load_detect = true;
@@ -1918,16 +1991,17 @@ radeon_add_atom_connector(struct drm_device *dev,
 				drm_object_attach_property(&radeon_connector->base.base,
 							      rdev->mode_info.underscan_vborder_property,
 							      0);
+				drm_object_attach_property(&radeon_connector->base.base,
+							   rdev->mode_info.dither_property,
+							   RADEON_FMT_DITHER_DISABLE);
+				drm_object_attach_property(&radeon_connector->base.base,
+							   dev->mode_config.scaling_mode_property,
+							   DRM_MODE_SCALE_NONE);
 			}
 			if (ASIC_IS_DCE2(rdev) && (radeon_audio != 0)) {
 				drm_object_attach_property(&radeon_connector->base.base,
 							   rdev->mode_info.audio_property,
 							   RADEON_AUDIO_AUTO);
-			}
-			if (ASIC_IS_AVIVO(rdev)) {
-				drm_object_attach_property(&radeon_connector->base.base,
-							   rdev->mode_info.dither_property,
-							   RADEON_FMT_DITHER_DISABLE);
 			}
 			subpixel_order = SubPixelHorizontalRGB;
 			connector->interlace_allowed = true;
@@ -1965,17 +2039,17 @@ radeon_add_atom_connector(struct drm_device *dev,
 				drm_object_attach_property(&radeon_connector->base.base,
 							      rdev->mode_info.underscan_vborder_property,
 							      0);
+				drm_object_attach_property(&radeon_connector->base.base,
+							   rdev->mode_info.dither_property,
+							   RADEON_FMT_DITHER_DISABLE);
+				drm_object_attach_property(&radeon_connector->base.base,
+							   dev->mode_config.scaling_mode_property,
+							   DRM_MODE_SCALE_NONE);
 			}
 			if (ASIC_IS_DCE2(rdev) && (radeon_audio != 0)) {
 				drm_object_attach_property(&radeon_connector->base.base,
 							   rdev->mode_info.audio_property,
 							   RADEON_AUDIO_AUTO);
-			}
-			if (ASIC_IS_AVIVO(rdev)) {
-				drm_object_attach_property(&radeon_connector->base.base,
-							   rdev->mode_info.dither_property,
-							   RADEON_FMT_DITHER_DISABLE);
-
 			}
 			connector->interlace_allowed = true;
 			/* in theory with a DP to VGA converter... */
