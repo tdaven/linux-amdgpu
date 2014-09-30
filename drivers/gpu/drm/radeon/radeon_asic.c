@@ -2120,6 +2120,8 @@ static struct radeon_asic ci_asic = {
 		.force_performance_level = &ci_dpm_force_performance_level,
 		.vblank_too_short = &ci_dpm_vblank_too_short,
 		.powergate_uvd = &ci_dpm_powergate_uvd,
+		.get_current_sclk = &ci_dpm_get_current_sclk,
+		.get_current_mclk = &ci_dpm_get_current_mclk,
 	},
 	.pflip = {
 		.page_flip = &evergreen_page_flip,
