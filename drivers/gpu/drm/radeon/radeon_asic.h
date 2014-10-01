@@ -552,6 +552,8 @@ struct radeon_fence *evergreen_copy_dma(struct radeon_device *rdev,
 void evergreen_hdmi_enable(struct drm_encoder *encoder, bool enable);
 void evergreen_hdmi_setmode(struct drm_encoder *encoder, struct drm_display_mode *mode);
 int evergreen_get_temp(struct radeon_device *rdev);
+int evergreen_get_allowed_info_register(struct radeon_device *rdev,
+					u32 reg, u32 *val);
 int sumo_get_temp(struct radeon_device *rdev);
 int tn_get_temp(struct radeon_device *rdev);
 int cypress_dpm_init(struct radeon_device *rdev);
