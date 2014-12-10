@@ -624,7 +624,6 @@ static struct radeon_asic rs600_asic = {
 		.wait_for_vblank = &avivo_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &r600_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r100_copy_blit,
@@ -691,7 +690,6 @@ static struct radeon_asic rs690_asic = {
 		.wait_for_vblank = &avivo_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &r600_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r100_copy_blit,
@@ -919,7 +917,6 @@ static struct radeon_asic r600_asic = {
 		.wait_for_vblank = &avivo_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &r600_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -1004,7 +1001,6 @@ static struct radeon_asic rv6xx_asic = {
 		.wait_for_vblank = &avivo_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &r600_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -1094,7 +1090,6 @@ static struct radeon_asic rs780_asic = {
 		.wait_for_vblank = &avivo_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &r600_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -1197,7 +1192,6 @@ static struct radeon_asic rv770_asic = {
 		.wait_for_vblank = &avivo_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &r600_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -1314,7 +1308,6 @@ static struct radeon_asic evergreen_asic = {
 		.wait_for_vblank = &dce4_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &evergreen_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -1405,7 +1398,6 @@ static struct radeon_asic sumo_asic = {
 		.wait_for_vblank = &dce4_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &evergreen_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -1495,7 +1487,6 @@ static struct radeon_asic btc_asic = {
 		.wait_for_vblank = &dce4_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &evergreen_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -1640,7 +1631,6 @@ static struct radeon_asic cayman_asic = {
 		.wait_for_vblank = &dce4_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &evergreen_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -1742,7 +1732,6 @@ static struct radeon_asic trinity_asic = {
 		.wait_for_vblank = &dce4_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &evergreen_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -1874,7 +1863,6 @@ static struct radeon_asic si_asic = {
 		.wait_for_vblank = &dce4_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &evergreen_hdmi_enable,
 	},
 	.copy = {
 		.blit = &r600_copy_cpdma,
@@ -2040,7 +2028,6 @@ static struct radeon_asic ci_asic = {
 		.wait_for_vblank = &dce4_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &evergreen_hdmi_enable,
 	},
 	.copy = {
 		.blit = &cik_copy_cpdma,
@@ -2150,7 +2137,6 @@ static struct radeon_asic kv_asic = {
 		.wait_for_vblank = &dce4_wait_for_vblank,
 		.set_backlight_level = &atombios_set_backlight_level,
 		.get_backlight_level = &atombios_get_backlight_level,
-		.hdmi_enable = &evergreen_hdmi_enable,
 	},
 	.copy = {
 		.blit = &cik_copy_cpdma,
