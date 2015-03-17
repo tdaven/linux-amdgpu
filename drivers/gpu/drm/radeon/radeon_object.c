@@ -330,6 +330,7 @@ int radeon_bo_pin_restricted(struct radeon_bo *bo, u32 domain, u64 max_offset,
 			     u64 *gpu_addr)
 {
 	int r, i;
+	unsigned lpfn;
 
 	if (radeon_ttm_tt_has_userptr(bo->tbo.ttm))
 		return -EPERM;
@@ -352,19 +353,16 @@ int radeon_bo_pin_restricted(struct radeon_bo *bo, u32 domain, u64 max_offset,
 
 		return 0;
 	}
-	radeon_ttm_placement_from_domain(bo, domain, 0, 0);
-	for (i = 0; i < bo->placement.num_placement; i++) {
-		/* force to pin into visible video ram */
-		if ((bo->placements[i].flags & TTM_PL_FLAG_VRAM) &&
-		    !(bo->flags & RADEON_GEM_NO_CPU_ACCESS) &&
-		    (!max_offset || max_offset > bo->rdev->mc.visible_vram_size))
-			bo->placements[i].lpfn =
-				bo->rdev->mc.visible_vram_size >> PAGE_SHIFT;
-		else
-			bo->placements[i].lpfn = max_offset >> PAGE_SHIFT;
-
+	/* force to pin into visible video ram */
+	if ((domain == RADEON_GEM_DOMAIN_VRAM) &&
+	    !(bo->flags & RADEON_GEM_NO_CPU_ACCESS) &&
+	    (!max_offset || max_offset > bo->rdev->mc.visible_vram_size))
+		lpfn = bo->rdev->mc.visible_vram_size >> PAGE_SHIFT;
+	else
+		lpfn = max_offset >> PAGE_SHIFT;
+	radeon_ttm_placement_from_domain(bo, domain, 0, lpfn);
+	for (i = 0; i < bo->placement.num_placement; i++)
 		bo->placements[i].flags |= TTM_PL_FLAG_NO_EVICT;
-	}
 
 	r = ttm_bo_validate(&bo->tbo, &bo->placement, false, false);
 	if (likely(r == 0)) {
