@@ -197,7 +197,7 @@ static void radeon_evict_flags(struct ttm_buffer_object *bo,
 	switch (bo->mem.mem_type) {
 	case TTM_PL_VRAM:
 		if (rbo->rdev->ring[radeon_copy_ring_index(rbo->rdev)].ready == false)
-			radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_CPU);
+			radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_CPU, 0, 0);
 		else if (rbo->rdev->mc.visible_vram_size < rbo->rdev->mc.real_vram_size &&
 			 bo->mem.start < (rbo->rdev->mc.visible_vram_size >> PAGE_SHIFT)) {
 			unsigned fpfn = rbo->rdev->mc.visible_vram_size >> PAGE_SHIFT;
@@ -209,7 +209,7 @@ static void radeon_evict_flags(struct ttm_buffer_object *bo,
 			 * BOs to be evicted from VRAM
 			 */
 			radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_VRAM |
-							 RADEON_GEM_DOMAIN_GTT);
+							 RADEON_GEM_DOMAIN_GTT, 0, 0);
 			rbo->placement.num_busy_placement = 0;
 			for (i = 0; i < rbo->placement.num_placement; i++) {
 				if (rbo->placements[i].flags & TTM_PL_FLAG_VRAM) {
@@ -222,11 +222,11 @@ static void radeon_evict_flags(struct ttm_buffer_object *bo,
 				}
 			}
 		} else
-			radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_GTT);
+			radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_GTT, 0, 0);
 		break;
 	case TTM_PL_TT:
 	default:
-		radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_CPU);
+		radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_CPU, 0, 0);
 	}
 	*placement = rbo->placement;
 }

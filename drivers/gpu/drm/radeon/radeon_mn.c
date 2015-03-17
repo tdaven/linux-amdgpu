@@ -141,14 +141,14 @@ static void radeon_mn_invalidate_range_start(struct mmu_notifier *mn,
 				DRM_ERROR("(%d) failed to wait for user bo\n", r);
 		}
 
-		radeon_ttm_placement_from_domain(bo, RADEON_GEM_DOMAIN_CPU);
+		radeon_ttm_placement_from_domain(bo, RADEON_GEM_DOMAIN_CPU, 0, 0);
 		r = ttm_bo_validate(&bo->tbo, &bo->placement, false, false);
 		if (r)
 			DRM_ERROR("(%d) failed to validate user bo\n", r);
 
 		radeon_bo_unreserve(bo);
 	}
-	
+
 	mutex_unlock(&rmn->lock);
 }
 

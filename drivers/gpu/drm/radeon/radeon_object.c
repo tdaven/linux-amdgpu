@@ -93,7 +93,8 @@ bool radeon_ttm_bo_is_radeon_bo(struct ttm_buffer_object *bo)
 	return false;
 }
 
-void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain)
+void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain,
+				      unsigned fpfn, unsigned lpfn)
 {
 	u32 c = 0, i;
 
@@ -103,8 +104,9 @@ void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain)
 		/* Try placing BOs which don't need CPU access outside of the
 		 * CPU accessible part of VRAM
 		 */
-		if ((rbo->flags & RADEON_GEM_NO_CPU_ACCESS) &&
-		    rbo->rdev->mc.visible_vram_size < rbo->rdev->mc.real_vram_size) {
+		if (fpfn >= rbo->rdev->mc.visible_vram_size ||
+		    ((rbo->flags & RADEON_GEM_NO_CPU_ACCESS) &&
+		     rbo->rdev->mc.visible_vram_size < rbo->rdev->mc.real_vram_size)) {
 			rbo->placements[c].fpfn =
 				rbo->rdev->mc.visible_vram_size >> PAGE_SHIFT;
 			rbo->placements[c++].flags = TTM_PL_FLAG_WC |
@@ -112,7 +114,7 @@ void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain)
 						     TTM_PL_FLAG_VRAM;
 		}
 
-		rbo->placements[c].fpfn = 0;
+		rbo->placements[c].fpfn = fpfn;
 		rbo->placements[c++].flags = TTM_PL_FLAG_WC |
 					     TTM_PL_FLAG_UNCACHED |
 					     TTM_PL_FLAG_VRAM;
@@ -120,18 +122,18 @@ void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain)
 
 	if (domain & RADEON_GEM_DOMAIN_GTT) {
 		if (rbo->flags & RADEON_GEM_GTT_UC) {
-			rbo->placements[c].fpfn = 0;
+			rbo->placements[c].fpfn = fpfn;
 			rbo->placements[c++].flags = TTM_PL_FLAG_UNCACHED |
 				TTM_PL_FLAG_TT;
 
 		} else if ((rbo->flags & RADEON_GEM_GTT_WC) ||
 			   (rbo->rdev->flags & RADEON_IS_AGP)) {
-			rbo->placements[c].fpfn = 0;
+			rbo->placements[c].fpfn = fpfn;
 			rbo->placements[c++].flags = TTM_PL_FLAG_WC |
 				TTM_PL_FLAG_UNCACHED |
 				TTM_PL_FLAG_TT;
 		} else {
-			rbo->placements[c].fpfn = 0;
+			rbo->placements[c].fpfn = fpfn;
 			rbo->placements[c++].flags = TTM_PL_FLAG_CACHED |
 						     TTM_PL_FLAG_TT;
 		}
@@ -139,24 +141,24 @@ void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain)
 
 	if (domain & RADEON_GEM_DOMAIN_CPU) {
 		if (rbo->flags & RADEON_GEM_GTT_UC) {
-			rbo->placements[c].fpfn = 0;
+			rbo->placements[c].fpfn = fpfn;
 			rbo->placements[c++].flags = TTM_PL_FLAG_UNCACHED |
 				TTM_PL_FLAG_SYSTEM;
 
 		} else if ((rbo->flags & RADEON_GEM_GTT_WC) ||
 		    rbo->rdev->flags & RADEON_IS_AGP) {
-			rbo->placements[c].fpfn = 0;
+			rbo->placements[c].fpfn = fpfn;
 			rbo->placements[c++].flags = TTM_PL_FLAG_WC |
 				TTM_PL_FLAG_UNCACHED |
 				TTM_PL_FLAG_SYSTEM;
 		} else {
-			rbo->placements[c].fpfn = 0;
+			rbo->placements[c].fpfn = fpfn;
 			rbo->placements[c++].flags = TTM_PL_FLAG_CACHED |
 						     TTM_PL_FLAG_SYSTEM;
 		}
 	}
 	if (!c) {
-		rbo->placements[c].fpfn = 0;
+		rbo->placements[c].fpfn = fpfn;
 		rbo->placements[c++].flags = TTM_PL_MASK_CACHING |
 					     TTM_PL_FLAG_SYSTEM;
 	}
@@ -171,7 +173,7 @@ void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain)
 			rbo->placements[i].lpfn =
 				rbo->rdev->mc.visible_vram_size >> PAGE_SHIFT;
 		else
-			rbo->placements[i].lpfn = 0;
+			rbo->placements[i].lpfn = lpfn;
 	}
 
 	/*
@@ -252,7 +254,7 @@ int radeon_bo_create(struct radeon_device *rdev,
 	bo->flags &= ~RADEON_GEM_GTT_WC;
 #endif
 
-	radeon_ttm_placement_from_domain(bo, domain);
+	radeon_ttm_placement_from_domain(bo, domain, 0, 0);
 	/* Kernel allocation are uninterruptible */
 	down_read(&rdev->pm.mclk_lock);
 	r = ttm_bo_init(&rdev->mman.bdev, &bo->tbo, size, type,
@@ -350,7 +352,7 @@ int radeon_bo_pin_restricted(struct radeon_bo *bo, u32 domain, u64 max_offset,
 
 		return 0;
 	}
-	radeon_ttm_placement_from_domain(bo, domain);
+	radeon_ttm_placement_from_domain(bo, domain, 0, 0);
 	for (i = 0; i < bo->placement.num_placement; i++) {
 		/* force to pin into visible video ram */
 		if ((bo->placements[i].flags & TTM_PL_FLAG_VRAM) &&
@@ -557,7 +559,7 @@ int radeon_bo_list_validate(struct radeon_device *rdev,
 			}
 
 		retry:
-			radeon_ttm_placement_from_domain(bo, domain);
+			radeon_ttm_placement_from_domain(bo, domain, 0, 0);
 			if (ring == R600_RING_TYPE_UVD_INDEX)
 				radeon_uvd_force_into_uvd_segment(bo, allowed);
 
@@ -800,7 +802,7 @@ int radeon_bo_fault_reserve_notify(struct ttm_buffer_object *bo)
 		return 0;
 
 	/* hurrah the memory is not visible ! */
-	radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_VRAM);
+	radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_VRAM, 0, 0);
 	lpfn =	rdev->mc.visible_vram_size >> PAGE_SHIFT;
 	for (i = 0; i < rbo->placement.num_placement; i++) {
 		/* Force into visible VRAM */
@@ -810,7 +812,7 @@ int radeon_bo_fault_reserve_notify(struct ttm_buffer_object *bo)
 	}
 	r = ttm_bo_validate(bo, &rbo->placement, false, false);
 	if (unlikely(r == -ENOMEM)) {
-		radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_GTT);
+		radeon_ttm_placement_from_domain(rbo, RADEON_GEM_DOMAIN_GTT, 0, 0);
 		return ttm_bo_validate(bo, &rbo->placement, false, false);
 	} else if (unlikely(r != 0)) {
 		return r;

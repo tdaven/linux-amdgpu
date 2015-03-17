@@ -337,7 +337,7 @@ int radeon_gem_userptr_ioctl(struct drm_device *dev, void *data,
 			goto release_object;
 		}
 
-		radeon_ttm_placement_from_domain(bo, RADEON_GEM_DOMAIN_GTT);
+		radeon_ttm_placement_from_domain(bo, RADEON_GEM_DOMAIN_GTT, 0, 0);
 		r = ttm_bo_validate(&bo->tbo, &bo->placement, true, false);
 		radeon_bo_unreserve(bo);
 		up_read(&current->mm->mmap_sem);
