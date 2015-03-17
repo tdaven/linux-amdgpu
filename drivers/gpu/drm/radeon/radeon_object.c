@@ -557,9 +557,13 @@ int radeon_bo_list_validate(struct radeon_device *rdev,
 			}
 
 		retry:
-			radeon_ttm_placement_from_domain(bo, domain, 0, 0);
-			if (ring == R600_RING_TYPE_UVD_INDEX)
+			if (ring == R600_RING_TYPE_UVD_INDEX) {
+				radeon_ttm_placement_from_domain(bo, domain,
+								 0, (256 * 1024 * 1024) >> PAGE_SHIFT);
 				radeon_uvd_force_into_uvd_segment(bo, allowed);
+			} else {
+				radeon_ttm_placement_from_domain(bo, domain, 0, 0);
+			}
 
 			initial_bytes_moved = atomic64_read(&rdev->num_bytes_moved);
 			r = ttm_bo_validate(&bo->tbo, &bo->placement, true, false);
