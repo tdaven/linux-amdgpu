@@ -67,7 +67,7 @@ static void radeon_do_test_moves(struct radeon_device *rdev, int flag)
 	}
 
 	r = radeon_bo_create(rdev, size, PAGE_SIZE, true, RADEON_GEM_DOMAIN_VRAM,
-			     0, NULL, NULL, &vram_obj);
+			     0, 0, 0, NULL, NULL, &vram_obj);
 	if (r) {
 		DRM_ERROR("Failed to create VRAM object\n");
 		goto out_cleanup;
@@ -87,7 +87,7 @@ static void radeon_do_test_moves(struct radeon_device *rdev, int flag)
 		struct radeon_fence *fence = NULL;
 
 		r = radeon_bo_create(rdev, size, PAGE_SIZE, true,
-				     RADEON_GEM_DOMAIN_GTT, 0, NULL, NULL,
+				     RADEON_GEM_DOMAIN_GTT, 0, 0, 0, NULL, NULL,
 				     gtt_obj + i);
 		if (r) {
 			DRM_ERROR("Failed to create GTT object %d\n", i);

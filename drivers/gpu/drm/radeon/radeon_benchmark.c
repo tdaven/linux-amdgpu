@@ -94,7 +94,8 @@ static void radeon_benchmark_move(struct radeon_device *rdev, unsigned size,
 	int time;
 
 	n = RADEON_BENCHMARK_ITERATIONS;
-	r = radeon_bo_create(rdev, size, PAGE_SIZE, true, sdomain, 0, NULL, NULL, &sobj);
+	r = radeon_bo_create(rdev, size, PAGE_SIZE, true, sdomain, 0, 0, 0,
+			     NULL, NULL, &sobj);
 	if (r) {
 		goto out_cleanup;
 	}
@@ -106,7 +107,8 @@ static void radeon_benchmark_move(struct radeon_device *rdev, unsigned size,
 	if (r) {
 		goto out_cleanup;
 	}
-	r = radeon_bo_create(rdev, size, PAGE_SIZE, true, ddomain, 0, NULL, NULL, &dobj);
+	r = radeon_bo_create(rdev, size, PAGE_SIZE, true, ddomain, 0, 0, 0,
+			     NULL, NULL, &dobj);
 	if (r) {
 		goto out_cleanup;
 	}

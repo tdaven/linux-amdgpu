@@ -4756,7 +4756,7 @@ static int cik_mec_init(struct radeon_device *rdev)
 		r = radeon_bo_create(rdev,
 				     rdev->mec.num_mec *rdev->mec.num_pipe * MEC_HPD_SIZE * 2,
 				     PAGE_SIZE, true,
-				     RADEON_GEM_DOMAIN_GTT, 0, NULL, NULL,
+				     RADEON_GEM_DOMAIN_GTT, 0, 0, 0, NULL, NULL,
 				     &rdev->mec.hpd_eop_obj);
 		if (r) {
 			dev_warn(rdev->dev, "(%d) create HDP EOP bo failed\n", r);
@@ -4922,7 +4922,7 @@ static int cik_cp_compute_resume(struct radeon_device *rdev)
 			r = radeon_bo_create(rdev,
 					     sizeof(struct bonaire_mqd),
 					     PAGE_SIZE, true,
-					     RADEON_GEM_DOMAIN_GTT, 0, NULL,
+					     RADEON_GEM_DOMAIN_GTT, 0, 0, 0, NULL,
 					     NULL, &rdev->ring[idx].mqd_obj);
 			if (r) {
 				dev_warn(rdev->dev, "(%d) create MQD bo failed\n", r);

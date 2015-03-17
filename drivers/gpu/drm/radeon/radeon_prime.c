@@ -68,7 +68,7 @@ struct drm_gem_object *radeon_gem_prime_import_sg_table(struct drm_device *dev,
 
 	ww_mutex_lock(&resv->lock, NULL);
 	ret = radeon_bo_create(rdev, attach->dmabuf->size, PAGE_SIZE, false,
-			       RADEON_GEM_DOMAIN_GTT, 0, sg, resv, &bo);
+			       RADEON_GEM_DOMAIN_GTT, 0, 0, 0, sg, resv, &bo);
 	ww_mutex_unlock(&resv->lock);
 	if (ret)
 		return ERR_PTR(ret);

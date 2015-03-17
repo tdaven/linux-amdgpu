@@ -190,8 +190,8 @@ void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain,
 
 int radeon_bo_create(struct radeon_device *rdev,
 		     unsigned long size, int byte_align, bool kernel,
-		     u32 domain, u32 flags, struct sg_table *sg,
-		     struct reservation_object *resv,
+		     u32 domain, unsigned fpfn, unsigned lpfn, u32 flags,
+		     struct sg_table *sg, struct reservation_object *resv,
 		     struct radeon_bo **bo_ptr)
 {
 	struct radeon_bo *bo;
@@ -254,7 +254,7 @@ int radeon_bo_create(struct radeon_device *rdev,
 	bo->flags &= ~RADEON_GEM_GTT_WC;
 #endif
 
-	radeon_ttm_placement_from_domain(bo, domain, 0, 0);
+	radeon_ttm_placement_from_domain(bo, domain, fpfn, lpfn);
 	/* Kernel allocation are uninterruptible */
 	down_read(&rdev->pm.mclk_lock);
 	r = ttm_bo_init(&rdev->mman.bdev, &bo->tbo, size, type,

@@ -124,7 +124,8 @@ extern int radeon_bo_wait(struct radeon_bo *bo, u32 *mem_type,
 
 extern int radeon_bo_create(struct radeon_device *rdev,
 			    unsigned long size, int byte_align,
-			    bool kernel, u32 domain, u32 flags,
+			    bool kernel, u32 domain, unsigned fpfn,
+			    unsigned lpfn, u32 flags,
 			    struct sg_table *sg,
 			    struct reservation_object *resv,
 			    struct radeon_bo **bo_ptr);

@@ -212,7 +212,7 @@ static int alloc_gtt_mem(struct kgd_dev *kgd, size_t size,
 		return -ENOMEM;
 
 	r = radeon_bo_create(rdev, size, PAGE_SIZE, true, RADEON_GEM_DOMAIN_GTT,
-				RADEON_GEM_GTT_WC, NULL, NULL, &(*mem)->bo);
+			     0, 0, RADEON_GEM_GTT_WC, NULL, NULL, &(*mem)->bo);
 	if (r) {
 		dev_err(rdev->dev,
 			"failed to allocate BO for amdkfd (%d)\n", r);
