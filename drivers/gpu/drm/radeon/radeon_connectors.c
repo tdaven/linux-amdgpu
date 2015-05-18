@@ -1303,8 +1303,10 @@ radeon_dvi_detect(struct drm_connector *connector, bool force)
 
 	/* DVI-D and HDMI-A are digital only */
 	if ((connector->connector_type == DRM_MODE_CONNECTOR_DVID) ||
-	    (connector->connector_type == DRM_MODE_CONNECTOR_HDMIA))
+	    (connector->connector_type == DRM_MODE_CONNECTOR_HDMIA)) {
+		radeon_connector->use_digital = true;
 		goto out;
+	}
 
 	/* if we aren't forcing don't do destructive polling */
 	if (!force) {
@@ -1379,7 +1381,7 @@ out:
 	/* updated in get modes as well since we need to know if it's analog or digital */
 	radeon_connector_update_scratch_regs(connector, ret);
 
-	if (radeon_audio != 0) {
+	if ((radeon_audio != 0) && (radeon_connector->use_digital)) {
 		radeon_connector_get_edid(connector);
 		radeon_audio_detect(connector, ret);
 	}
