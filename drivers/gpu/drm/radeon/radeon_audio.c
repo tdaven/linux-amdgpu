@@ -245,8 +245,11 @@ static struct radeon_audio_funcs dce6_dp_funcs = {
 static void radeon_audio_enable(struct radeon_device *rdev,
 				struct r600_audio_pin *pin, u8 enable_mask)
 {
-	if (rdev->audio.funcs->enable)
+	if (rdev->audio.funcs->enable) {
+		if (pin)
+			pin->in_use = enable_mask ? true : false;
 		rdev->audio.funcs->enable(rdev, pin, enable_mask);
+	}
 }
 
 static void radeon_audio_interface_init(struct radeon_device *rdev)
@@ -486,7 +489,8 @@ void radeon_audio_detect(struct drm_connector *connector,
 		else
 			radeon_encoder->audio = rdev->audio.hdmi_funcs;
 
-		dig->afmt->pin = radeon_audio_get_pin(encoder);
+		if (!dig->afmt->pin)
+			dig->afmt->pin = radeon_audio_get_pin(encoder);
 		if (drm_detect_monitor_audio(radeon_connector_edid(connector))) {
 			radeon_audio_enable(rdev, dig->afmt->pin, 0xf);
 		} else {

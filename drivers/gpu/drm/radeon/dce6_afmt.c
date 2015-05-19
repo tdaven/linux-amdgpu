@@ -81,7 +81,7 @@ struct r600_audio_pin *dce6_audio_get_pin(struct radeon_device *rdev)
 	dce6_afmt_get_connected_pins(rdev);
 
 	for (i = 0; i < rdev->audio.num_pins; i++) {
-		if (rdev->audio.pin[i].connected)
+		if (rdev->audio.pin[i].connected && !rdev->audio.pin[i].in_use)
 			return &rdev->audio.pin[i];
 	}
 	DRM_ERROR("No connected audio pins found!\n");

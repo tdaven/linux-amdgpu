@@ -1752,6 +1752,7 @@ struct r600_audio_pin {
 	u8			category_code;
 	u32			offset;
 	bool			connected;
+	bool			in_use;
 	u32			id;
 };
 
