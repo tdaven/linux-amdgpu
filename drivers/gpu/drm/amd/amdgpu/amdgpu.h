@@ -52,6 +52,7 @@
 #include "amdgpu_irq.h"
 #include "amdgpu_ucode.h"
 #include "amdgpu_gds.h"
+#include "amdgpu_acp.h"
 
 #include "gpu_scheduler.h"
 
@@ -1934,6 +1935,10 @@ struct amdgpu_device {
 	struct drm_device		*ddev;
 	struct pci_dev			*pdev;
 	struct rw_semaphore		exclusive_lock;
+
+#ifdef CONFIG_DRM_AMD_ACP
+	struct amdgpu_acp		acp;
+#endif
 
 	/* ASIC */
 	enum amd_asic_type		asic_type;
