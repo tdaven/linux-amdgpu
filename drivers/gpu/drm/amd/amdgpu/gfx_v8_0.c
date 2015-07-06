@@ -2027,6 +2027,40 @@ static void gfx_v8_0_gpu_init(struct amdgpu_device *adev)
 		adev->gfx.config.sc_earlyz_tile_fifo_size = 0x130;
 		gb_addr_config = CARRIZO_GB_ADDR_CONFIG_GOLDEN;
 		break;
+	case CHIP_STONEY:
+		adev->gfx.config.max_shader_engines = 1;
+		adev->gfx.config.max_tile_pipes = 2;
+		adev->gfx.config.max_sh_per_se = 1;
+		adev->gfx.config.max_backends_per_se = 1;
+
+		switch (adev->pdev->revision) {
+		case 0xc0:
+		case 0xc1:
+		case 0xc2:
+		case 0xc4:
+		case 0xc8:
+		case 0xc9:
+			adev->gfx.config.max_cu_per_sh = 3;
+			break;
+		case 0xd0:
+		case 0xd1:
+		case 0xd2:
+		default:
+			adev->gfx.config.max_cu_per_sh = 2;
+			break;
+		}
+
+		adev->gfx.config.max_texture_channel_caches = 2;
+		adev->gfx.config.max_gprs = 256;
+		adev->gfx.config.max_gs_threads = 16;
+		adev->gfx.config.max_hw_contexts = 8;
+
+		adev->gfx.config.sc_prim_fifo_size_frontend = 0x20;
+		adev->gfx.config.sc_prim_fifo_size_backend = 0x100;
+		adev->gfx.config.sc_hiz_tile_fifo_size = 0x30;
+		adev->gfx.config.sc_earlyz_tile_fifo_size = 0x130;
+		gb_addr_config = CARRIZO_GB_ADDR_CONFIG_GOLDEN;
+		break;
 	default:
 		adev->gfx.config.max_shader_engines = 2;
 		adev->gfx.config.max_tile_pipes = 4;
