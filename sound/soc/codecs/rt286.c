@@ -358,6 +358,15 @@ static int rt286_jack_detect(struct rt286_priv *rt286, bool *hp, bool *mic)
 		*hp = buf & 0x80000000;
 		regmap_read(rt286->regmap, RT286_GET_MIC1_SENSE, &buf);
 		*mic = buf & 0x80000000;
+		if (*mic) {
+			regmap_write(rt286->regmap, RT286_SET_MIC1, 0x24);
+			msleep(50);
+
+			regmap_update_bits(rt286->regmap,
+						RT286_CBJ_CTRL1,
+						0xfcc0, 0xd400);
+			msleep(300);
+		}
 	}
 
 	snd_soc_dapm_disable_pin(&rt286->codec->dapm, "HV");
@@ -395,9 +404,20 @@ int rt286_mic_detect(struct snd_soc_codec *codec, struct snd_soc_jack *jack)
 
 	rt286->jack = jack;
 
-	/* Send an initial empty report */
-	snd_soc_jack_report(rt286->jack, 0,
-		SND_JACK_MICROPHONE | SND_JACK_HEADPHONE);
+	if (jack) {
+		/* enable IRQ */
+		if (rt286->jack->status & SND_JACK_HEADPHONE)
+			snd_soc_dapm_force_enable_pin(&codec->dapm, "LDO1");
+		regmap_update_bits(rt286->regmap, RT286_IRQ_CTRL, 0x2, 0x2);
+		/* Send an initial empty report */
+		snd_soc_jack_report(rt286->jack, rt286->jack->status,
+			SND_JACK_MICROPHONE | SND_JACK_HEADPHONE);
+	} else {
+		/* disable IRQ */
+		regmap_update_bits(rt286->regmap, RT286_IRQ_CTRL, 0x2, 0x0);
+		snd_soc_dapm_disable_pin(&codec->dapm, "LDO1");
+	}
+	snd_soc_dapm_sync(&codec->dapm);
 
 	return 0;
 }
@@ -1037,7 +1057,6 @@ static int rt286_probe(struct snd_soc_codec *codec)
 	struct rt286_priv *rt286 = snd_soc_codec_get_drvdata(codec);
 
 	rt286->codec = codec;
-	codec->dapm.bias_level = SND_SOC_BIAS_OFF;
 
 	if (rt286->i2c->irq) {
 		regmap_update_bits(rt286->regmap,
@@ -1068,7 +1087,6 @@ static int rt286_suspend(struct snd_soc_codec *codec)
 
 	regcache_cache_only(rt286->regmap, true);
 	regcache_mark_dirty(rt286->regmap);
-
 	return 0;
 }
 
@@ -1079,7 +1097,6 @@ static int rt286_resume(struct snd_soc_codec *codec)
 	regcache_cache_only(rt286->regmap, false);
 	rt286_index_sync(codec);
 	regcache_sync(rt286->regmap);
-
 	return 0;
 }
 #else
@@ -1089,7 +1106,8 @@ static int rt286_resume(struct snd_soc_codec *codec)
 
 #define RT286_STEREO_RATES (SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_48000)
 #define RT286_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \
-			SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S8)
+			SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S8) | \
+			SNDRV_PCM_FMTBIT_S32_LE
 
 static const struct snd_soc_dai_ops rt286_aif_dai_ops = {
 	.hw_params = rt286_hw_params,
@@ -1204,12 +1222,17 @@ static struct dmi_system_id dmi_dell_dino[] = {
 	{ }
 };
 
+static struct rt286_platform_data rt286_acpi_data = {
+	.cbj_en = false,
+	.gpio2_en = false,
+};
+
 static int rt286_i2c_probe(struct i2c_client *i2c,
 			   const struct i2c_device_id *id)
 {
-	struct rt286_platform_data *pdata = dev_get_platdata(&i2c->dev);
+	struct rt286_platform_data *pdata = &rt286_acpi_data;
 	struct rt286_priv *rt286;
-	int i, ret;
+	int i, ret, val;
 
 	rt286 = devm_kzalloc(&i2c->dev,	sizeof(*rt286),
 				GFP_KERNEL);
@@ -1224,17 +1247,29 @@ static int rt286_i2c_probe(struct i2c_client *i2c,
 		return ret;
 	}
 
-	regmap_read(rt286->regmap,
-		RT286_GET_PARAM(AC_NODE_ROOT, AC_PAR_VENDOR_ID), &ret);
-	if (ret != RT286_VENDOR_ID && ret != RT288_VENDOR_ID) {
+	ret = regmap_read(rt286->regmap,
+		RT286_GET_PARAM(AC_NODE_ROOT, AC_PAR_VENDOR_ID), &val);
+	if (ret != 0) {
+		dev_err(&i2c->dev, "I2C error %d\n", ret);
+		return ret;
+	}
+	if (val != RT286_VENDOR_ID && val != RT288_VENDOR_ID) {
 		dev_err(&i2c->dev,
-			"Device with ID register %x is not rt286\n", ret);
+			"Device with ID register %x is not rt286\n", val);
 		return -ENODEV;
 	}
 
 	rt286->index_cache = rt286_index_def;
 	rt286->i2c = i2c;
 	i2c_set_clientdata(i2c, rt286);
+
+	/* restore codec default */
+	for (i = 0; i < INDEX_CACHE_SIZE; i++)
+		regmap_write(rt286->regmap, rt286->index_cache[i].reg,
+				rt286->index_cache[i].def);
+	for (i = 0; i < ARRAY_SIZE(rt286_reg); i++)
+		regmap_write(rt286->regmap, rt286_reg[i].reg,
+				rt286_reg[i].def);
 
 	if (pdata)
 		rt286->pdata = *pdata;
@@ -1292,7 +1327,7 @@ static int rt286_i2c_probe(struct i2c_client *i2c,
 
 	if (rt286->i2c->irq) {
 		ret = request_threaded_irq(rt286->i2c->irq, NULL, rt286_irq,
-			IRQF_TRIGGER_HIGH | IRQF_ONESHOT, "rt286", rt286);
+			IRQF_TRIGGER_RISING | IRQF_ONESHOT, "rt286", rt286);
 		if (ret != 0) {
 			dev_err(&i2c->dev,
 				"Failed to reguest IRQ: %d\n", ret);

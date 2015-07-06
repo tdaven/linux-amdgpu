@@ -2010,6 +2010,46 @@ static void gfx_v7_0_setup_rb(struct amdgpu_device *adev,
 }
 
 /**
+ * gmc_v7_0_init_compute_vmid - gart enable
+ *
+ * @rdev: amdgpu_device pointer
+ *
+ * Initialize compute vmid sh_mem registers
+ *
+ */
+#define DEFAULT_SH_MEM_BASES	(0x6000)
+#define FIRST_COMPUTE_VMID	(8)
+#define LAST_COMPUTE_VMID	(16)
+static void gmc_v7_0_init_compute_vmid(struct amdgpu_device *adev)
+{
+	int i;
+	uint32_t sh_mem_config;
+	uint32_t sh_mem_bases;
+
+	/*
+	 * Configure apertures:
+	 * LDS:         0x60000000'00000000 - 0x60000001'00000000 (4GB)
+	 * Scratch:     0x60000001'00000000 - 0x60000002'00000000 (4GB)
+	 * GPUVM:       0x60010000'00000000 - 0x60020000'00000000 (1TB)
+	*/
+	sh_mem_bases = DEFAULT_SH_MEM_BASES | (DEFAULT_SH_MEM_BASES << 16);
+	sh_mem_config = SH_MEM_ALIGNMENT_MODE_UNALIGNED <<
+			SH_MEM_CONFIG__ALIGNMENT_MODE__SHIFT;
+	sh_mem_config |= MTYPE_NONCACHED << SH_MEM_CONFIG__DEFAULT_MTYPE__SHIFT;
+	mutex_lock(&adev->srbm_mutex);
+	for (i = FIRST_COMPUTE_VMID; i < LAST_COMPUTE_VMID; i++) {
+		cik_srbm_select(adev, 0, 0, 0, i);
+		/* CP and shaders */
+		WREG32(mmSH_MEM_CONFIG, sh_mem_config);
+		WREG32(mmSH_MEM_APE1_BASE, 1);
+		WREG32(mmSH_MEM_APE1_LIMIT, 0);
+		WREG32(mmSH_MEM_BASES, sh_mem_bases);
+	}
+	cik_srbm_select(adev, 0, 0, 0, 0);
+	mutex_unlock(&adev->srbm_mutex);
+}
+
+/**
  * gfx_v7_0_gpu_init - setup the 3D engine
  *
  * @adev: amdgpu_device pointer
@@ -2230,6 +2270,8 @@ static void gfx_v7_0_gpu_init(struct amdgpu_device *adev)
 	cik_srbm_select(adev, 0, 0, 0, 0);
 	mutex_unlock(&adev->srbm_mutex);
 
+	gmc_v7_0_init_compute_vmid(adev);
+
 	WREG32(mmSX_DEBUG_1, 0x20);
 
 	WREG32(mmTA_CNTL_AUX, 0x00010000);
@@ -2414,8 +2456,10 @@ static void gfx_v7_0_ring_emit_hdp_flush(struct amdgpu_ring *ring)
  * GPU caches.
  */
 static void gfx_v7_0_ring_emit_fence_gfx(struct amdgpu_ring *ring, u64 addr,
-					 u64 seq, bool write64bit)
+					 u64 seq, unsigned flags)
 {
+	bool write64bit = flags & AMDGPU_FENCE_FLAG_64BIT;
+	bool int_sel = flags & AMDGPU_FENCE_FLAG_INT;
 	/* Workaround for cache flush problems. First send a dummy EOP
 	 * event down the pipe with seq one below.
 	 */
@@ -2438,7 +2482,7 @@ static void gfx_v7_0_ring_emit_fence_gfx(struct amdgpu_ring *ring, u64 addr,
 				 EVENT_INDEX(5)));
 	amdgpu_ring_write(ring, addr & 0xfffffffc);
 	amdgpu_ring_write(ring, (upper_32_bits(addr) & 0xffff) |
-				DATA_SEL(write64bit ? 2 : 1) | INT_SEL(2));
+				DATA_SEL(write64bit ? 2 : 1) | INT_SEL(int_sel ? 2 : 0));
 	amdgpu_ring_write(ring, lower_32_bits(seq));
 	amdgpu_ring_write(ring, upper_32_bits(seq));
 }
@@ -2454,15 +2498,18 @@ static void gfx_v7_0_ring_emit_fence_gfx(struct amdgpu_ring *ring, u64 addr,
  */
 static void gfx_v7_0_ring_emit_fence_compute(struct amdgpu_ring *ring,
 					     u64 addr, u64 seq,
-					     bool write64bits)
+					     unsigned flags)
 {
+	bool write64bit = flags & AMDGPU_FENCE_FLAG_64BIT;
+	bool int_sel = flags & AMDGPU_FENCE_FLAG_INT;
+
 	/* RELEASE_MEM - flush caches, send int */
 	amdgpu_ring_write(ring, PACKET3(PACKET3_RELEASE_MEM, 5));
 	amdgpu_ring_write(ring, (EOP_TCL1_ACTION_EN |
 				 EOP_TC_ACTION_EN |
 				 EVENT_TYPE(CACHE_FLUSH_AND_INV_TS_EVENT) |
 				 EVENT_INDEX(5)));
-	amdgpu_ring_write(ring, DATA_SEL(write64bits ? 2 : 1) | INT_SEL(2));
+	amdgpu_ring_write(ring, DATA_SEL(write64bit ? 2 : 1) | INT_SEL(int_sel ? 2 : 0));
 	amdgpu_ring_write(ring, addr & 0xfffffffc);
 	amdgpu_ring_write(ring, upper_32_bits(addr));
 	amdgpu_ring_write(ring, lower_32_bits(seq));
@@ -2705,6 +2752,9 @@ static int gfx_v7_0_cp_gfx_load_microcode(struct amdgpu_device *adev)
 	adev->gfx.pfp_fw_version = le32_to_cpu(pfp_hdr->header.ucode_version);
 	adev->gfx.ce_fw_version = le32_to_cpu(ce_hdr->header.ucode_version);
 	adev->gfx.me_fw_version = le32_to_cpu(me_hdr->header.ucode_version);
+	adev->gfx.me_feature_version = le32_to_cpu(me_hdr->ucode_feature_version);
+	adev->gfx.ce_feature_version = le32_to_cpu(ce_hdr->ucode_feature_version);
+	adev->gfx.pfp_feature_version = le32_to_cpu(pfp_hdr->ucode_feature_version);
 
 	gfx_v7_0_cp_gfx_enable(adev, false);
 
@@ -2873,7 +2923,7 @@ static int gfx_v7_0_cp_gfx_resume(struct amdgpu_device *adev)
 	rb_bufsz = order_base_2(ring->ring_size / 8);
 	tmp = (order_base_2(AMDGPU_GPU_PAGE_SIZE/8) << 8) | rb_bufsz;
 #ifdef __BIG_ENDIAN
-	tmp |= BUF_SWAP_32BIT;
+	tmp |= 2 << CP_RB0_CNTL__BUF_SWAP__SHIFT;
 #endif
 	WREG32(mmCP_RB0_CNTL, tmp);
 
@@ -3392,7 +3442,8 @@ static int gfx_v7_0_cp_compute_resume(struct amdgpu_device *adev)
 		mqd->queue_state.cp_hqd_pq_control |=
 			(order_base_2(AMDGPU_GPU_PAGE_SIZE/8) << 8);
 #ifdef __BIG_ENDIAN
-		mqd->queue_state.cp_hqd_pq_control |= BUF_SWAP_32BIT;
+		mqd->queue_state.cp_hqd_pq_control |=
+			2 << CP_HQD_PQ_CONTROL__ENDIAN_SWAP__SHIFT;
 #endif
 		mqd->queue_state.cp_hqd_pq_control &=
 			~(CP_HQD_PQ_CONTROL__UNORD_DISPATCH_MASK |
@@ -4819,6 +4870,8 @@ static int gfx_v7_0_hw_init(void *handle)
 	r = gfx_v7_0_cp_resume(adev);
 	if (r)
 		return r;
+
+	adev->gfx.ce_ram_size = 0x8000;
 
 	return r;
 }

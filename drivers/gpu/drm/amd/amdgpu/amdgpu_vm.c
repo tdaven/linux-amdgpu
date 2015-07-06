@@ -1001,6 +1001,9 @@ int amdgpu_vm_bo_map(struct amdgpu_device *adev,
 
 	list_add(&mapping->list, &bo_va->mappings);
 	interval_tree_insert(&mapping->it, &vm->va);
+	trace_amdgpu_vm_bo_map(bo_va, mapping);
+
+	bo_va->addr = 0;
 
 	/* Make sure the page tables are allocated */
 	saddr >>= amdgpu_vm_block_size;
@@ -1056,6 +1059,7 @@ error_free:
 	mutex_lock(&vm->mutex);
 	list_del(&mapping->list);
 	interval_tree_remove(&mapping->it, &vm->va);
+	trace_amdgpu_vm_bo_unmap(bo_va, mapping);
 	kfree(mapping);
 
 error_unlock:
@@ -1082,6 +1086,8 @@ int amdgpu_vm_bo_unmap(struct amdgpu_device *adev,
 	struct amdgpu_bo_va_mapping *mapping;
 	struct amdgpu_vm *vm = bo_va->vm;
 
+	saddr /= AMDGPU_GPU_PAGE_SIZE;
+
 	list_for_each_entry(mapping, &bo_va->mappings, list) {
 		if (mapping->it.start == saddr)
 			break;
@@ -1095,6 +1101,7 @@ int amdgpu_vm_bo_unmap(struct amdgpu_device *adev,
 	mutex_lock(&vm->mutex);
 	list_del(&mapping->list);
 	interval_tree_remove(&mapping->it, &vm->va);
+	trace_amdgpu_vm_bo_unmap(bo_va, mapping);
 
 	if (bo_va->addr) {
 		/* clear the old address */
@@ -1135,6 +1142,7 @@ void amdgpu_vm_bo_rmv(struct amdgpu_device *adev,
 	list_for_each_entry_safe(mapping, next, &bo_va->mappings, list) {
 		list_del(&mapping->list);
 		interval_tree_remove(&mapping->it, &vm->va);
+		trace_amdgpu_vm_bo_unmap(bo_va, mapping);
 		if (bo_va->addr)
 			list_add(&mapping->list, &vm->freed);
 		else

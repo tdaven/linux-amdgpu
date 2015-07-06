@@ -47,6 +47,7 @@ source "sound/soc/kirkwood/Kconfig"
 source "sound/soc/intel/Kconfig"
 source "sound/soc/mxs/Kconfig"
 source "sound/soc/pxa/Kconfig"
+source "sound/soc/qcom/Kconfig"
 source "sound/soc/rockchip/Kconfig"
 source "sound/soc/samsung/Kconfig"
 source "sound/soc/sh/Kconfig"
@@ -64,4 +65,4 @@ source "sound/soc/codecs/Kconfig"
 source "sound/soc/generic/Kconfig"
 
 endif	# SND_SOC
-
+source "sound/soc/amd/Kconfig"

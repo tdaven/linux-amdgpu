@@ -71,6 +71,10 @@
 #include "uvd_v5_0.h"
 #include "uvd_v6_0.h"
 #include "vce_v3_0.h"
+#if defined(CONFIG_DRM_AMD_ACP)
+#include "amdgpu_acp.h"
+#endif
+#include "amdgpu_dm.h"
 
 /*
  * Indirect registers accessor
@@ -173,8 +177,6 @@ static const u32 tonga_mgcg_cgcg_init[] =
 	mmPCIE_DATA, 0x000f0000, 0x00000000,
 	mmSMC_IND_INDEX_4, 0xffffffff, 0xC060000C,
 	mmSMC_IND_DATA_4, 0xc0000fff, 0x00000100,
-	mmXDMA_CLOCK_GATING_CNTL, 0xffffffff, 0x00000100,
-	mmXDMA_MEM_POWER_CNTL, 0x00000101, 0x00000000,
 	mmCGTT_DRM_CLK_CTRL0, 0xff000fff, 0x00000100,
 	mmHDP_XDP_CGTT_BLK_CTRL, 0xc0000fff, 0x00000104,
 };
@@ -193,8 +195,6 @@ static const u32 cz_mgcg_cgcg_init[] =
 	mmCGTT_DRM_CLK_CTRL0, 0xffffffff, 0x00600100,
 	mmPCIE_INDEX, 0xffffffff, 0x0140001c,
 	mmPCIE_DATA, 0x000f0000, 0x00000000,
-	mmXDMA_CLOCK_GATING_CNTL, 0xffffffff, 0x00000100,
-	mmXDMA_MEM_POWER_CNTL, 0x00000101, 0x00000000,
 	mmCGTT_DRM_CLK_CTRL0, 0xff000fff, 0x00000100,
 	mmHDP_XDP_CGTT_BLK_CTRL, 0xc0000fff, 0x00000104,
 };
@@ -593,12 +593,12 @@ u32 vi_gpu_check_soft_reset(struct amdgpu_device *adev)
 			reset_mask |= AMDGPU_RESET_VCE1;
 
 	}
+#endif
 
 	if (adev->asic_type != CHIP_TOPAZ) {
 		if (amdgpu_display_is_display_hung(adev))
 			reset_mask |= AMDGPU_RESET_DISPLAY;
 	}
-#endif
 
 	/* Skip MC reset as it's mostly likely not hung, just busy */
 	if (reset_mask & AMDGPU_RESET_MC) {
@@ -1171,7 +1171,99 @@ static const struct amdgpu_ip_block_version cz_ip_blocks[] =
 		.rev = 0,
 		.funcs = &vce_v3_0_ip_funcs,
 	},
+#if defined(CONFIG_DRM_AMD_ACP)
+	{
+		.type = AMD_IP_BLOCK_TYPE_ACP,
+		.major = 2,
+		.minor = 2,
+		.rev = 0,
+		.funcs = &acp_ip_funcs,
+	},
+#endif
 };
+
+/*
+ * This is temporary. After we've gone through full testing with
+ * DAL we want to remove dce_v11
+ */
+#if defined(CONFIG_DRM_AMD_DAL)
+static const struct amdgpu_ip_block_version cz_ip_blocks_dal[] =
+{
+	/* ORDER MATTERS! */
+	{
+		.type = AMD_IP_BLOCK_TYPE_COMMON,
+		.major = 2,
+		.minor = 0,
+		.rev = 0,
+		.funcs = &vi_common_ip_funcs,
+	},
+	{
+		.type = AMD_IP_BLOCK_TYPE_GMC,
+		.major = 8,
+		.minor = 0,
+		.rev = 0,
+		.funcs = &gmc_v8_0_ip_funcs,
+	},
+	{
+		.type = AMD_IP_BLOCK_TYPE_IH,
+		.major = 3,
+		.minor = 0,
+		.rev = 0,
+		.funcs = &cz_ih_ip_funcs,
+	},
+	{
+		.type = AMD_IP_BLOCK_TYPE_SMC,
+		.major = 8,
+		.minor = 0,
+		.rev = 0,
+		.funcs = &cz_dpm_ip_funcs,
+	},
+	{
+		.type = AMD_IP_BLOCK_TYPE_DCE,
+		.major = 11,
+		.minor = 0,
+		.rev = 0,
+		.funcs = &amdgpu_dm_funcs,
+	},
+	{
+		.type = AMD_IP_BLOCK_TYPE_GFX,
+		.major = 8,
+		.minor = 0,
+		.rev = 0,
+		.funcs = &gfx_v8_0_ip_funcs,
+	},
+	{
+		.type = AMD_IP_BLOCK_TYPE_SDMA,
+		.major = 3,
+		.minor = 0,
+		.rev = 0,
+		.funcs = &sdma_v3_0_ip_funcs,
+	},
+	{
+		.type = AMD_IP_BLOCK_TYPE_UVD,
+		.major = 6,
+		.minor = 0,
+		.rev = 0,
+		.funcs = &uvd_v6_0_ip_funcs,
+	},
+	{
+		.type = AMD_IP_BLOCK_TYPE_VCE,
+		.major = 3,
+		.minor = 0,
+		.rev = 0,
+		.funcs = &vce_v3_0_ip_funcs,
+	},
+#if defined(CONFIG_DRM_AMD_ACP)
+	{
+		.type = AMD_IP_BLOCK_TYPE_ACP,
+		.major = 2,
+		.minor = 2,
+		.rev = 0,
+		.funcs = &acp_ip_funcs,
+	},
+#endif
+};
+#endif
 
 int vi_set_ip_blocks(struct amdgpu_device *adev)
 {
@@ -1185,17 +1277,23 @@ int vi_set_ip_blocks(struct amdgpu_device *adev)
 		adev->num_ip_blocks = ARRAY_SIZE(tonga_ip_blocks);
 		break;
 	case CHIP_CARRIZO:
+#if defined(CONFIG_DRM_AMD_DAL)
+		if (amdgpu_dal != 0) {
+			adev->ip_blocks = cz_ip_blocks_dal;
+			adev->num_ip_blocks = ARRAY_SIZE(cz_ip_blocks_dal);
+		} else {
+			adev->ip_blocks = cz_ip_blocks;
+			adev->num_ip_blocks = ARRAY_SIZE(cz_ip_blocks);
+		}
+#else
 		adev->ip_blocks = cz_ip_blocks;
 		adev->num_ip_blocks = ARRAY_SIZE(cz_ip_blocks);
+#endif
 		break;
 	default:
 		/* FIXME: not supported yet */
 		return -EINVAL;
 	}
-
-	adev->ip_block_enabled = kcalloc(adev->num_ip_blocks, sizeof(bool), GFP_KERNEL);
-	if (adev->ip_block_enabled == NULL)
-		return -ENOMEM;
 
 	return 0;
 }
@@ -1267,7 +1365,7 @@ static int vi_common_early_init(void *handle)
 	case CHIP_CARRIZO:
 		adev->has_uvd = true;
 		adev->cg_flags = 0;
-		adev->pg_flags = AMDGPU_PG_SUPPORT_UVD;
+		adev->pg_flags = AMDGPU_PG_SUPPORT_UVD | AMDGPU_PG_SUPPORT_VCE;
 		adev->external_rev_id = adev->rev_id + 0x1;
 		if (amdgpu_smc_load_fw && smc_enabled)
 			adev->firmware.smu_load = true;

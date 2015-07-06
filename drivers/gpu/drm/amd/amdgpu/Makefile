@@ -2,9 +2,19 @@
 # Makefile for the drm device driver.  This driver provides support for the
 # Direct Rendering Infrastructure (DRI) in XFree86 4.1.0 and higher.
 
-ccflags-y := -Iinclude/drm -Idrivers/gpu/drm/amd/include/asic_reg \
-	-Idrivers/gpu/drm/amd/include
+FULL_AMD_PATH=drivers/gpu/drm/amd
+DAL_FOLDER_NAME=dal
+FULL_AMD_DAL_PATH = $(FULL_AMD_PATH)/$(DAL_FOLDER_NAME)
 
+ccflags-y := -Iinclude/drm -I$(FULL_AMD_PATH)/include/asic_reg \
+		-I$(FULL_AMD_PATH)/include \
+		-I$(FULL_AMD_PATH)/include/bus \
+		-I$(FULL_AMD_PATH)/acp/include \
+		-I$(FULL_AMD_PATH)/amdgpu \
+		-I$(FULL_AMD_DAL_PATH) \
+		-I$(FULL_AMD_DAL_PATH)/include \
+		-I$(FULL_AMD_PATH)/dsat
+		
 amdgpu-y := amdgpu_drv.o
 
 # add KMS driver
@@ -71,10 +81,36 @@ amdgpu-y += \
 	amdgpu_vce.o \
 	vce_v3_0.o
 
+# add cgs
+amdgpu-y += amdgpu_cgs.o
+
+# ACP componet
+ifneq ($(CONFIG_DRM_AMD_ACP),)
+amdgpu-y += amdgpu_acp.o
+
+AMDACPPATH := ../acp
+include $(FULL_AMD_PATH)/acp/Makefile
+
+amdgpu-y += $(AMD_ACP_FILES)
+endif
+
 amdgpu-$(CONFIG_COMPAT) += amdgpu_ioc32.o
 amdgpu-$(CONFIG_VGA_SWITCHEROO) += amdgpu_atpx_handler.o
 amdgpu-$(CONFIG_ACPI) += amdgpu_acpi.o
 amdgpu-$(CONFIG_MMU_NOTIFIER) += amdgpu_mn.o
+
+ifneq ($(CONFIG_DRM_AMD_DAL),)
+amdgpu-y += amdgpu_dal_services.o amdgpu_dm_types.o amdgpu_dm.o \
+	amdgpu_dm_irq.o
+
+RELATIVE_AMD_DAL_PATH = ../$(DAL_FOLDER_NAME)
+include $(FULL_AMD_DAL_PATH)/Makefile
+
+amdgpu-y += $(AMD_DAL_FILES)
+
+include $(FULL_AMD_PATH)/dsat/Makefile
+
+endif
 
 obj-$(CONFIG_DRM_AMDGPU)+= amdgpu.o
 

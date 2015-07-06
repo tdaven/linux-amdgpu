@@ -31,6 +31,8 @@
 #include "amdgpu_uvd.h"
 #include "amdgpu_vce.h"
 
+#include "amdgpu_dsat_ioctl.h"
+
 #include <linux/vga_switcheroo.h>
 #include <linux/slab.h>
 #include <linux/pm_runtime.h>
@@ -188,6 +190,8 @@ static int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 		struct drm_amdgpu_info_hw_ip ip = {};
 		enum amd_ip_block_type type;
 		uint32_t ring_mask = 0;
+		uint32_t ib_start_alignment = 0;
+		uint32_t ib_size_alignment = 0;
 
 		if (info->query_hw_ip.ip_instance >= AMDGPU_HW_IP_INSTANCE_MAX_COUNT)
 			return -EINVAL;
@@ -197,25 +201,35 @@ static int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 			type = AMD_IP_BLOCK_TYPE_GFX;
 			for (i = 0; i < adev->gfx.num_gfx_rings; i++)
 				ring_mask |= ((adev->gfx.gfx_ring[i].ready ? 1 : 0) << i);
+			ib_start_alignment = AMDGPU_GPU_PAGE_SIZE;
+			ib_size_alignment = 8;
 			break;
 		case AMDGPU_HW_IP_COMPUTE:
 			type = AMD_IP_BLOCK_TYPE_GFX;
 			for (i = 0; i < adev->gfx.num_compute_rings; i++)
 				ring_mask |= ((adev->gfx.compute_ring[i].ready ? 1 : 0) << i);
+			ib_start_alignment = AMDGPU_GPU_PAGE_SIZE;
+			ib_size_alignment = 8;
 			break;
 		case AMDGPU_HW_IP_DMA:
 			type = AMD_IP_BLOCK_TYPE_SDMA;
 			ring_mask = adev->sdma[0].ring.ready ? 1 : 0;
 			ring_mask |= ((adev->sdma[1].ring.ready ? 1 : 0) << 1);
+			ib_start_alignment = AMDGPU_GPU_PAGE_SIZE;
+			ib_size_alignment = 1;
 			break;
 		case AMDGPU_HW_IP_UVD:
 			type = AMD_IP_BLOCK_TYPE_UVD;
 			ring_mask = adev->uvd.ring.ready ? 1 : 0;
+			ib_start_alignment = AMDGPU_GPU_PAGE_SIZE;
+			ib_size_alignment = 8;
 			break;
 		case AMDGPU_HW_IP_VCE:
 			type = AMD_IP_BLOCK_TYPE_VCE;
 			for (i = 0; i < AMDGPU_MAX_VCE_RINGS; i++)
 				ring_mask |= ((adev->vce.ring[i].ready ? 1 : 0) << i);
+			ib_start_alignment = AMDGPU_GPU_PAGE_SIZE;
+			ib_size_alignment = 8;
 			break;
 		default:
 			return -EINVAL;
@@ -228,6 +242,8 @@ static int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 				ip.hw_ip_version_minor = adev->ip_blocks[i].minor;
 				ip.capabilities_flags = 0;
 				ip.available_rings = ring_mask;
+				ip.ib_start_alignment = ib_start_alignment;
+				ip.ib_size_alignment = ib_size_alignment;
 				break;
 			}
 		}
@@ -291,15 +307,15 @@ static int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 			break;
 		case AMDGPU_INFO_FW_GFX_ME:
 			fw_info.ver = adev->gfx.me_fw_version;
-			fw_info.feature = 0;
+			fw_info.feature = adev->gfx.me_feature_version;
 			break;
 		case AMDGPU_INFO_FW_GFX_PFP:
 			fw_info.ver = adev->gfx.pfp_fw_version;
-			fw_info.feature = 0;
+			fw_info.feature = adev->gfx.pfp_feature_version;
 			break;
 		case AMDGPU_INFO_FW_GFX_CE:
 			fw_info.ver = adev->gfx.ce_fw_version;
-			fw_info.feature = 0;
+			fw_info.feature = adev->gfx.ce_feature_version;
 			break;
 		case AMDGPU_INFO_FW_GFX_RLC:
 			fw_info.ver = adev->gfx.rlc_fw_version;
@@ -414,11 +430,15 @@ static int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 		dev_info.num_shader_arrays_per_engine = adev->gfx.config.max_sh_per_se;
 		/* return all clocks in KHz */
 		dev_info.gpu_counter_freq = amdgpu_asic_get_xclk(adev) * 10;
-		if (adev->pm.dpm_enabled)
+		if (adev->pm.dpm_enabled) {
 			dev_info.max_engine_clock =
 				adev->pm.dpm.dyn_state.max_clock_voltage_on_ac.sclk * 10;
-		else
+			dev_info.max_memory_clock =
+				adev->pm.dpm.dyn_state.max_clock_voltage_on_ac.mclk * 10;
+		} else {
 			dev_info.max_engine_clock = adev->pm.default_sclk * 10;
+			dev_info.max_memory_clock = adev->pm.default_mclk * 10;
+		}
 		dev_info.enabled_rb_pipes_mask = adev->gfx.config.backend_enable_mask;
 		dev_info.num_rb_pipes = adev->gfx.config.max_backends_per_se *
 					adev->gfx.config.max_shader_engines;
@@ -437,7 +457,10 @@ static int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 		amdgpu_asic_get_cu_info(adev, &cu_info);
 		dev_info.cu_active_number = cu_info.number;
 		dev_info.cu_ao_mask = cu_info.ao_cu_mask;
+		dev_info.ce_ram_size = adev->gfx.ce_ram_size;
 		memcpy(&dev_info.cu_bitmap[0], &cu_info.bitmap[0], sizeof(cu_info.bitmap));
+		dev_info.vram_type = adev->mc.vram_type;
+		dev_info.vram_bit_width = adev->mc.vram_width;
 
 		return copy_to_user(out, &dev_info,
 				    min((size_t)size, sizeof(dev_info))) ? -EFAULT : 0;
@@ -651,6 +674,12 @@ int amdgpu_get_vblank_timestamp_kms(struct drm_device *dev, int crtc,
 
 	/* Get associated drm_crtc: */
 	drmcrtc = &adev->mode_info.crtcs[crtc]->base;
+	if (!drmcrtc) {
+		/* This can occur on driver load if some component fails to
+		 * initialize completely and driver is unloaded */
+		DRM_ERROR("Uninitialized crtc %d\n", crtc);
+		return -EINVAL;
+	}
 
 	/* Helper routine in DRM core does all the work: */
 	return drm_calc_vbltimestamp_from_scanoutpos(dev, crtc, max_error,
@@ -672,5 +701,11 @@ const struct drm_ioctl_desc amdgpu_ioctls_kms[] = {
 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_VA, amdgpu_gem_va_ioctl, DRM_AUTH|DRM_UNLOCKED|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_OP, amdgpu_gem_op_ioctl, DRM_AUTH|DRM_UNLOCKED|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_USERPTR, amdgpu_gem_userptr_ioctl, DRM_AUTH|DRM_UNLOCKED|DRM_RENDER_ALLOW),
+
+#ifdef CONFIG_DRM_AMD_DAL
+	/* DSAT */
+	DRM_IOCTL_DEF_DRV(AMDGPU_DSAT_COMMAND, amdgpu_dsat_cmd_ioctl, DRM_AUTH|DRM_ROOT_ONLY),
+#endif
+
 };
 int amdgpu_max_kms_ioctl = ARRAY_SIZE(amdgpu_ioctls_kms);

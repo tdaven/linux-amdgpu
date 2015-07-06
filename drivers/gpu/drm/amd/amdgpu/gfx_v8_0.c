@@ -116,11 +116,14 @@ static const u32 golden_settings_tonga_a11[] =
 	mmPA_SC_ENHANCE, 0xffffffff, 0x20000001,
 	mmPA_SC_FIFO_DEPTH_CNTL, 0x000003ff, 0x000000fc,
 	mmPA_SC_LINE_STIPPLE_STATE, 0x0000ff0f, 0x00000000,
+	mmSQ_RANDOM_WAVE_PRI, 0x001fffff, 0x000006fd,
 	mmTA_CNTL_AUX, 0x000f000f, 0x000b0000,
 	mmTCC_CTRL, 0x00100000, 0xf31fff7f,
+	mmTCC_EXE_DISABLE, 0x00000002, 0x00000002,
 	mmTCP_ADDR_CONFIG, 0x000003ff, 0x000002fb,
 	mmTCP_CHAN_STEER_HI, 0xffffffff, 0x0000543b,
 	mmTCP_CHAN_STEER_LO, 0xffffffff, 0xa9210876,
+	mmVGT_RESET_DEBUG, 0x00000004, 0x00000004,
 };
 
 static const u32 tonga_golden_common_all[] =
@@ -224,8 +227,10 @@ static const u32 golden_settings_iceland_a11[] =
 	mmPA_SC_LINE_STIPPLE_STATE, 0x0000ff0f, 0x00000000,
 	mmPA_SC_RASTER_CONFIG, 0x3f3fffff, 0x00000002,
 	mmPA_SC_RASTER_CONFIG_1, 0x0000003f, 0x00000000,
+	mmSQ_RANDOM_WAVE_PRI, 0x001fffff, 0x000006fd,
 	mmTA_CNTL_AUX, 0x000f000f, 0x000b0000,
 	mmTCC_CTRL, 0x00100000, 0xf31fff7f,
+	mmTCC_EXE_DISABLE, 0x00000002, 0x00000002,
 	mmTCP_ADDR_CONFIG, 0x000003ff, 0x000000f1,
 	mmTCP_CHAN_STEER_HI, 0xffffffff, 0x00000000,
 	mmTCP_CHAN_STEER_LO, 0xffffffff, 0x00000010,
@@ -318,7 +323,9 @@ static const u32 cz_golden_settings_a11[] =
 	mmGB_GPU_ID, 0x0000000f, 0x00000000,
 	mmPA_SC_ENHANCE, 0xffffffff, 0x00000001,
 	mmPA_SC_LINE_STIPPLE_STATE, 0x0000ff0f, 0x00000000,
+	mmSQ_RANDOM_WAVE_PRI, 0x001fffff, 0x000006fd,
 	mmTA_CNTL_AUX, 0x000f000f, 0x00010000,
+	mmTCC_EXE_DISABLE, 0x00000002, 0x00000002,
 	mmTCP_ADDR_CONFIG, 0x0000000f, 0x000000f3,
 	mmTCP_CHAN_STEER_LO, 0xffffffff, 0x00001302
 };
@@ -894,6 +901,8 @@ static int gfx_v8_0_sw_init(void *handle)
 			NULL, &adev->gds.oa_gfx_bo);
 	if (r)
 		return r;
+
+	adev->gfx.ce_ram_size = 0x8000;
 
 	return 0;
 }
@@ -1885,6 +1894,51 @@ static void gfx_v8_0_setup_rb(struct amdgpu_device *adev,
 	mutex_unlock(&adev->grbm_idx_mutex);
 }
 
+/**
+ * gmc_v8_0_init_compute_vmid - gart enable
+ *
+ * @rdev: amdgpu_device pointer
+ *
+ * Initialize compute vmid sh_mem registers
+ *
+ */
+#define DEFAULT_SH_MEM_BASES	(0x6000)
+#define FIRST_COMPUTE_VMID	(8)
+#define LAST_COMPUTE_VMID	(16)
+static void gmc_v8_0_init_compute_vmid(struct amdgpu_device *adev)
+{
+	int i;
+	uint32_t sh_mem_config;
+	uint32_t sh_mem_bases;
+
+	/*
+	 * Configure apertures:
+	 * LDS:         0x60000000'00000000 - 0x60000001'00000000 (4GB)
+	 * Scratch:     0x60000001'00000000 - 0x60000002'00000000 (4GB)
+	 * GPUVM:       0x60010000'00000000 - 0x60020000'00000000 (1TB)
+	 */
+	sh_mem_bases = DEFAULT_SH_MEM_BASES | (DEFAULT_SH_MEM_BASES << 16);
+
+	sh_mem_config = SH_MEM_ADDRESS_MODE_HSA64 <<
+			SH_MEM_CONFIG__ADDRESS_MODE__SHIFT |
+			SH_MEM_ALIGNMENT_MODE_UNALIGNED <<
+			SH_MEM_CONFIG__ALIGNMENT_MODE__SHIFT |
+			MTYPE_CC << SH_MEM_CONFIG__DEFAULT_MTYPE__SHIFT |
+			SH_MEM_CONFIG__PRIVATE_ATC_MASK;
+
+	mutex_lock(&adev->srbm_mutex);
+	for (i = FIRST_COMPUTE_VMID; i < LAST_COMPUTE_VMID; i++) {
+		vi_srbm_select(adev, 0, 0, 0, i);
+		/* CP and shaders */
+		WREG32(mmSH_MEM_CONFIG, sh_mem_config);
+		WREG32(mmSH_MEM_APE1_BASE, 1);
+		WREG32(mmSH_MEM_APE1_LIMIT, 0);
+		WREG32(mmSH_MEM_BASES, sh_mem_bases);
+	}
+	vi_srbm_select(adev, 0, 0, 0, 0);
+	mutex_unlock(&adev->srbm_mutex);
+}
+
 static void gfx_v8_0_gpu_init(struct amdgpu_device *adev)
 {
 	u32 gb_addr_config;
@@ -1931,9 +1985,43 @@ static void gfx_v8_0_gpu_init(struct amdgpu_device *adev)
 	case CHIP_CARRIZO:
 		adev->gfx.config.max_shader_engines = 1;
 		adev->gfx.config.max_tile_pipes = 2;
-		adev->gfx.config.max_cu_per_sh = 8;
 		adev->gfx.config.max_sh_per_se = 1;
-		adev->gfx.config.max_backends_per_se = 2;
+
+		switch (adev->pdev->revision) {
+		case 0xc4:
+		case 0x84:
+		case 0xc8:
+		case 0xcc:
+			/* B10 */
+			adev->gfx.config.max_cu_per_sh = 8;
+			adev->gfx.config.max_backends_per_se = 2;
+			break;
+		case 0xc5:
+		case 0x81:
+		case 0x85:
+		case 0xc9:
+		case 0xcd:
+			/* B8 */
+			adev->gfx.config.max_cu_per_sh = 6;
+			adev->gfx.config.max_backends_per_se = 2;
+			break;
+		case 0xc6:
+		case 0xca:
+		case 0xce:
+			/* B6 */
+			adev->gfx.config.max_cu_per_sh = 6;
+			adev->gfx.config.max_backends_per_se = 2;
+			break;
+		case 0xc7:
+		case 0x87:
+		case 0xcb:
+		default:
+			/* B4 */
+			adev->gfx.config.max_cu_per_sh = 4;
+			adev->gfx.config.max_backends_per_se = 1;
+			break;
+		}
+
 		adev->gfx.config.max_texture_channel_caches = 2;
 		adev->gfx.config.max_gprs = 256;
 		adev->gfx.config.max_gs_threads = 32;
@@ -2069,6 +2157,8 @@ static void gfx_v8_0_gpu_init(struct amdgpu_device *adev)
 	}
 	vi_srbm_select(adev, 0, 0, 0, 0);
 	mutex_unlock(&adev->srbm_mutex);
+
+	gmc_v8_0_init_compute_vmid(adev);
 
 	mutex_lock(&adev->grbm_idx_mutex);
 	/*
@@ -2277,6 +2367,9 @@ static int gfx_v8_0_cp_gfx_load_microcode(struct amdgpu_device *adev)
 	adev->gfx.pfp_fw_version = le32_to_cpu(pfp_hdr->header.ucode_version);
 	adev->gfx.ce_fw_version = le32_to_cpu(ce_hdr->header.ucode_version);
 	adev->gfx.me_fw_version = le32_to_cpu(me_hdr->header.ucode_version);
+	adev->gfx.me_feature_version = le32_to_cpu(me_hdr->ucode_feature_version);
+	adev->gfx.ce_feature_version = le32_to_cpu(ce_hdr->ucode_feature_version);
+	adev->gfx.pfp_feature_version = le32_to_cpu(pfp_hdr->ucode_feature_version);
 
 	gfx_v8_0_cp_gfx_enable(adev, false);
 
@@ -3035,7 +3128,7 @@ static int gfx_v8_0_cp_compute_resume(struct amdgpu_device *adev)
 				WREG32(mmCP_MEC_DOORBELL_RANGE_LOWER,
 				       AMDGPU_DOORBELL_KIQ << 2);
 				WREG32(mmCP_MEC_DOORBELL_RANGE_UPPER,
-				       AMDGPU_DOORBELL_MEC_RING7 << 2);
+						0x7FFFF << 2);
 			}
 			tmp = RREG32(mmCP_HQD_PQ_DOORBELL_CONTROL);
 			tmp = REG_SET_FIELD(tmp, CP_HQD_PQ_DOORBELL_CONTROL,
@@ -3050,6 +3143,12 @@ static int gfx_v8_0_cp_compute_resume(struct amdgpu_device *adev)
 		}
 		WREG32(mmCP_HQD_PQ_DOORBELL_CONTROL,
 		       mqd->cp_hqd_pq_doorbell_control);
+
+		/* reset read and write pointers, similar to CP_RB0_WPTR/_RPTR */
+		ring->wptr = 0;
+		mqd->cp_hqd_pq_wptr = ring->wptr;
+		WREG32(mmCP_HQD_PQ_WPTR, mqd->cp_hqd_pq_wptr);
+		mqd->cp_hqd_pq_rptr = RREG32(mmCP_HQD_PQ_RPTR);
 
 		/* set the vmid for the queue */
 		mqd->cp_hqd_vmid = 0;
@@ -3708,8 +3807,11 @@ static void gfx_v8_0_ring_emit_ib(struct amdgpu_ring *ring,
 }
 
 static void gfx_v8_0_ring_emit_fence_gfx(struct amdgpu_ring *ring, u64 addr,
-					 u64 seq, bool write64bit)
+					 u64 seq, unsigned flags)
 {
+	bool write64bit = flags & AMDGPU_FENCE_FLAG_64BIT;
+	bool int_sel = flags & AMDGPU_FENCE_FLAG_INT;
+
 	/* EVENT_WRITE_EOP - flush caches, send int */
 	amdgpu_ring_write(ring, PACKET3(PACKET3_EVENT_WRITE_EOP, 4));
 	amdgpu_ring_write(ring, (EOP_TCL1_ACTION_EN |
@@ -3718,7 +3820,7 @@ static void gfx_v8_0_ring_emit_fence_gfx(struct amdgpu_ring *ring, u64 addr,
 				 EVENT_INDEX(5)));
 	amdgpu_ring_write(ring, addr & 0xfffffffc);
 	amdgpu_ring_write(ring, (upper_32_bits(addr) & 0xffff) | 
-			  DATA_SEL(write64bit ? 2 : 1) | INT_SEL(2));
+			  DATA_SEL(write64bit ? 2 : 1) | INT_SEL(int_sel ? 2 : 0));
 	amdgpu_ring_write(ring, lower_32_bits(seq));
 	amdgpu_ring_write(ring, upper_32_bits(seq));
 }
@@ -3741,11 +3843,10 @@ static bool gfx_v8_0_ring_emit_semaphore(struct amdgpu_ring *ring,
 	unsigned sel = emit_wait ? PACKET3_SEM_SEL_WAIT : PACKET3_SEM_SEL_SIGNAL;
 
 	if (ring->adev->asic_type == CHIP_TOPAZ ||
-	    ring->adev->asic_type == CHIP_TONGA) {
-		amdgpu_ring_write(ring, PACKET3(PACKET3_MEM_SEMAPHORE, 1));
-		amdgpu_ring_write(ring, lower_32_bits(addr));
-		amdgpu_ring_write(ring, (upper_32_bits(addr) & 0xffff) | sel);
-	} else {
+	    ring->adev->asic_type == CHIP_TONGA)
+		/* we got a hw semaphore bug in VI TONGA, return false to switch back to sw fence wait */
+		return false;
+	else {
 		amdgpu_ring_write(ring, PACKET3(PACKET3_MEM_SEMAPHORE, 2));
 		amdgpu_ring_write(ring, lower_32_bits(addr));
 		amdgpu_ring_write(ring, upper_32_bits(addr));
@@ -3875,15 +3976,18 @@ static void gfx_v8_0_ring_set_wptr_compute(struct amdgpu_ring *ring)
 
 static void gfx_v8_0_ring_emit_fence_compute(struct amdgpu_ring *ring,
 					     u64 addr, u64 seq,
-					     bool write64bits)
+					     unsigned flags)
 {
+	bool write64bit = flags & AMDGPU_FENCE_FLAG_64BIT;
+	bool int_sel = flags & AMDGPU_FENCE_FLAG_INT;
+
 	/* RELEASE_MEM - flush caches, send int */
 	amdgpu_ring_write(ring, PACKET3(PACKET3_RELEASE_MEM, 5));
 	amdgpu_ring_write(ring, (EOP_TCL1_ACTION_EN |
 				 EOP_TC_ACTION_EN |
 				 EVENT_TYPE(CACHE_FLUSH_AND_INV_TS_EVENT) |
 				 EVENT_INDEX(5)));
-	amdgpu_ring_write(ring, DATA_SEL(write64bits ? 2 : 1) | INT_SEL(2));
+	amdgpu_ring_write(ring, DATA_SEL(write64bit ? 2 : 1) | INT_SEL(int_sel ? 2 : 0));
 	amdgpu_ring_write(ring, addr & 0xfffffffc);
 	amdgpu_ring_write(ring, upper_32_bits(addr));
 	amdgpu_ring_write(ring, lower_32_bits(seq));

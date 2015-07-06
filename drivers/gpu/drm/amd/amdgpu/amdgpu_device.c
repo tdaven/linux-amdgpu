@@ -1191,7 +1191,9 @@ static int amdgpu_early_init(struct amdgpu_device *adev)
 		return -EINVAL;
 	}
 
-
+	adev->ip_block_enabled = kcalloc(adev->num_ip_blocks, sizeof(bool), GFP_KERNEL);
+	if (adev->ip_block_enabled == NULL)
+		return -ENOMEM;
 
 	if (adev->ip_blocks == NULL) {
 		DRM_ERROR("No IP blocks found!\n");
@@ -1388,9 +1390,9 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 	adev->audio_endpt_rreg = &amdgpu_block_invalid_rreg;
 	adev->audio_endpt_wreg = &amdgpu_block_invalid_wreg;
 
-	DRM_INFO("initializing kernel modesetting (%s 0x%04X:0x%04X 0x%04X:0x%04X).\n",
-		amdgpu_asic_name[adev->asic_type], pdev->vendor, pdev->device,
-		pdev->subsystem_vendor, pdev->subsystem_device);
+	DRM_INFO("initializing kernel modesetting (%s 0x%04X:0x%04X 0x%04X:0x%04X 0x%02X).\n",
+		 amdgpu_asic_name[adev->asic_type], pdev->vendor, pdev->device,
+		 pdev->subsystem_vendor, pdev->subsystem_device, pdev->revision);
 
 	/* mutex initialization are all done here so we
 	 * can recall function without having locking issues */
@@ -1575,8 +1577,7 @@ void amdgpu_device_fini(struct amdgpu_device *adev)
 	amdgpu_fence_driver_fini(adev);
 	amdgpu_fbdev_fini(adev);
 	r = amdgpu_fini(adev);
-	if (adev->ip_block_enabled)
-		kfree(adev->ip_block_enabled);
+	kfree(adev->ip_block_enabled);
 	adev->ip_block_enabled = NULL;
 	adev->accel_working = false;
 	/* free i2c buses */
@@ -1737,7 +1738,15 @@ int amdgpu_resume_kms(struct drm_device *dev, bool resume, bool fbcon)
 
 	/* blat the mode back in */
 	if (fbcon) {
+#ifdef CONFIG_DRM_AMD_DAL
+	if (adev->asic_type != CHIP_CARRIZO || amdgpu_dal == 0) {
+			/* pre DCE11 */
+			drm_helper_resume_force_mode(dev);
+		}
+#else
 		drm_helper_resume_force_mode(dev);
+#endif
+
 		/* turn on display hw */
 		list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
 			drm_helper_connector_dpms(connector, DRM_MODE_DPMS_ON);

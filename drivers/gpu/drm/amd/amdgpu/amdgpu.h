@@ -42,6 +42,7 @@
 #include <ttm/ttm_module.h>
 #include <ttm/ttm_execbuf_util.h>
 
+#include <drm/drmP.h>
 #include <drm/drm_gem.h>
 #include <drm/amdgpu_drm.h>
 
@@ -52,6 +53,8 @@
 #include "amdgpu_irq.h"
 #include "amdgpu_ucode.h"
 #include "amdgpu_gds.h"
+#include "amdgpu_acp.h"
+#include "amdgpu_dm.h"
 
 /*
  * Modules parameters.
@@ -77,6 +80,7 @@ extern int amdgpu_bapm;
 extern int amdgpu_deep_color;
 extern int amdgpu_vm_size;
 extern int amdgpu_vm_block_size;
+extern int amdgpu_dal;
 
 #define AMDGPU_MAX_USEC_TIMEOUT			100000	/* 100 ms */
 #define AMDGPU_FENCE_JIFFIES_TIMEOUT		(HZ / 2)
@@ -317,7 +321,7 @@ struct amdgpu_ring_funcs {
 	void (*emit_ib)(struct amdgpu_ring *ring,
 			struct amdgpu_ib *ib);
 	void (*emit_fence)(struct amdgpu_ring *ring, uint64_t addr,
-			   uint64_t seq, bool write64bit);
+			   uint64_t seq, unsigned flags);
 	bool (*emit_semaphore)(struct amdgpu_ring *ring,
 			       struct amdgpu_semaphore *semaphore,
 			       bool emit_wait);
@@ -392,6 +396,9 @@ struct amdgpu_fence_driver {
 #define AMDGPU_FENCE_OWNER_VM		((void*)1ul)
 #define AMDGPU_FENCE_OWNER_MOVE		((void*)2ul)
 
+#define AMDGPU_FENCE_FLAG_64BIT         (1 << 0)
+#define AMDGPU_FENCE_FLAG_INT           (1 << 1)
+
 struct amdgpu_fence {
 	struct fence base;
 
@@ -422,6 +429,8 @@ int amdgpu_fence_driver_start_ring(struct amdgpu_ring *ring,
 				   unsigned irq_type);
 int amdgpu_fence_emit(struct amdgpu_ring *ring, void *owner,
 		      struct amdgpu_fence **fence);
+int amdgpu_fence_recreate(struct amdgpu_ring *ring, void *owner,
+			  uint64_t seq, struct amdgpu_fence **fence);
 void amdgpu_fence_process(struct amdgpu_ring *ring);
 int amdgpu_fence_wait_next(struct amdgpu_ring *ring);
 int amdgpu_fence_wait_empty(struct amdgpu_ring *ring);
@@ -432,9 +441,6 @@ int amdgpu_fence_wait(struct amdgpu_fence *fence, bool interruptible);
 int amdgpu_fence_wait_any(struct amdgpu_device *adev,
 			  struct amdgpu_fence **fences,
 			  bool intr);
-long amdgpu_fence_wait_seq_timeout(struct amdgpu_device *adev,
-				   u64 *target_seq, bool intr,
-				   long timeout);
 struct amdgpu_fence *amdgpu_fence_ref(struct amdgpu_fence *fence);
 void amdgpu_fence_unref(struct amdgpu_fence **fence);
 
@@ -767,7 +773,7 @@ struct amdgpu_mc {
 	const struct firmware   *fw;	/* MC firmware */
 	uint32_t                fw_version;
 	struct amdgpu_irq_src	vm_fault;
-	bool                    is_gddr5;
+	uint32_t		vram_type;
 };
 
 /*
@@ -1125,6 +1131,9 @@ struct amdgpu_gfx {
 	uint32_t			mec_fw_version;
 	const struct firmware		*mec2_fw; /* MEC2 firmware */
 	uint32_t			mec2_fw_version;
+	uint32_t			me_feature_version;
+	uint32_t			ce_feature_version;
+	uint32_t			pfp_feature_version;
 	struct amdgpu_ring		gfx_ring[AMDGPU_MAX_GFX_RINGS];
 	unsigned			num_gfx_rings;
 	struct amdgpu_ring		compute_ring[AMDGPU_MAX_COMPUTE_RINGS];
@@ -1136,6 +1145,8 @@ struct amdgpu_gfx {
 	uint32_t gfx_current_status;
 	/* sync signal for const engine */
 	unsigned ce_sync_offs;
+	/* ce ram size*/
+	unsigned ce_ram_size;
 };
 
 int amdgpu_ib_get(struct amdgpu_ring *ring, struct amdgpu_vm *vm,
@@ -1186,7 +1197,6 @@ struct amdgpu_cs_parser {
 	struct amdgpu_cs_chunk	*chunks;
 	/* relocations */
 	struct amdgpu_bo_list_entry	*vm_bos;
-	struct amdgpu_bo_list_entry	*ib_bos;
 	struct list_head	validated;
 
 	struct amdgpu_ib	*ibs;
@@ -1502,6 +1512,7 @@ struct amdgpu_dpm_funcs {
 	int (*force_performance_level)(struct amdgpu_device *adev, enum amdgpu_dpm_forced_level level);
 	bool (*vblank_too_short)(struct amdgpu_device *adev);
 	void (*powergate_uvd)(struct amdgpu_device *adev, bool gate);
+	void (*powergate_vce)(struct amdgpu_device *adev, bool gate);
 	void (*enable_bapm)(struct amdgpu_device *adev, bool enable);
 	void (*set_fan_control_mode)(struct amdgpu_device *adev, u32 mode);
 	u32 (*get_fan_control_mode)(struct amdgpu_device *adev);
@@ -1614,6 +1625,7 @@ struct amdgpu_vce {
 	unsigned		fb_version;
 	atomic_t		handles[AMDGPU_MAX_VCE_HANDLES];
 	struct drm_file		*filp[AMDGPU_MAX_VCE_HANDLES];
+	uint32_t		img_size[AMDGPU_MAX_VCE_HANDLES];
 	struct delayed_work	idle_work;
 	const struct firmware	*fw;	/* VCE firmware */
 	struct amdgpu_ring	ring[AMDGPU_MAX_VCE_RINGS];
@@ -1844,6 +1856,12 @@ int amdgpu_ctx_put(struct amdgpu_ctx *ctx);
 
 extern int amdgpu_ctx_ioctl(struct drm_device *dev, void *data,
 						 struct drm_file *filp);
+/*
+ * CGS
+ */
+void *amdgpu_cgs_create_device(struct amdgpu_device *adev);
+void amdgpu_cgs_destroy_device(void *cgs_device);
+
 
 /*
  * Core structure, functions and helpers.
@@ -1859,6 +1877,10 @@ struct amdgpu_device {
 	struct drm_device		*ddev;
 	struct pci_dev			*pdev;
 	struct rw_semaphore		exclusive_lock;
+
+#ifdef CONFIG_DRM_AMD_ACP
+	struct amdgpu_acp		acp;
+#endif
 
 	/* ASIC */
 	enum amdgpu_asic_type           asic_type;
@@ -1948,6 +1970,7 @@ struct amdgpu_device {
 
 	/* display */
 	struct amdgpu_mode_info		mode_info;
+	/* For pre-DCE11. DCE11 and later are in "struct amdgpu_device->dm" */
 	struct work_struct		hotplug_work;
 	struct amdgpu_irq_src		crtc_irq;
 	struct amdgpu_irq_src		pageflip_irq;
@@ -1993,6 +2016,9 @@ struct amdgpu_device {
 
 	/* GDS */
 	struct amdgpu_gds		gds;
+
+	/* display related functionality */
+	struct amdgpu_display_manager dm;
 
 	const struct amdgpu_ip_block_version *ip_blocks;
 	int				num_ip_blocks;
@@ -2138,7 +2164,7 @@ static inline void amdgpu_ring_write(struct amdgpu_ring *ring, uint32_t v)
 #define amdgpu_ring_set_wptr(r) (r)->funcs->set_wptr((r))
 #define amdgpu_ring_emit_ib(r, ib) (r)->funcs->emit_ib((r), (ib))
 #define amdgpu_ring_emit_vm_flush(r, vmid, addr) (r)->funcs->emit_vm_flush((r), (vmid), (addr))
-#define amdgpu_ring_emit_fence(r, addr, seq, write64bit) (r)->funcs->emit_fence((r), (addr), (seq), (write64bit))
+#define amdgpu_ring_emit_fence(r, addr, seq, flags) (r)->funcs->emit_fence((r), (addr), (seq), (flags))
 #define amdgpu_ring_emit_semaphore(r, semaphore, emit_wait) (r)->funcs->emit_semaphore((r), (semaphore), (emit_wait))
 #define amdgpu_ring_emit_gds_switch(r, v, db, ds, wb, ws, ab, as) (r)->funcs->emit_gds_switch((r), (v), (db), (ds), (wb), (ws), (ab), (as))
 #define amdgpu_ring_emit_hdp_flush(r) (r)->funcs->emit_hdp_flush((r))
@@ -2175,6 +2201,7 @@ static inline void amdgpu_ring_write(struct amdgpu_ring *ring, uint32_t v)
 #define amdgpu_dpm_force_performance_level(adev, l) (adev)->pm.funcs->force_performance_level((adev), (l))
 #define amdgpu_dpm_vblank_too_short(adev) (adev)->pm.funcs->vblank_too_short((adev))
 #define amdgpu_dpm_powergate_uvd(adev, g) (adev)->pm.funcs->powergate_uvd((adev), (g))
+#define amdgpu_dpm_powergate_vce(adev, g) (adev)->pm.funcs->powergate_vce((adev), (g))
 #define amdgpu_dpm_enable_bapm(adev, e) (adev)->pm.funcs->enable_bapm((adev), (e))
 #define amdgpu_dpm_set_fan_control_mode(adev, m) (adev)->pm.funcs->set_fan_control_mode((adev), (m))
 #define amdgpu_dpm_get_fan_control_mode(adev) (adev)->pm.funcs->get_fan_control_mode((adev))

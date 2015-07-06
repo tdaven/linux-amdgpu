@@ -35,6 +35,10 @@
 
 #include <linux/pm_runtime.h>
 
+#ifdef CONFIG_DRM_AMD_DAL
+#include "amdgpu_dm_irq.h"
+#endif
+
 #define AMDGPU_WAIT_IDLE_TIMEOUT 200
 
 /*
@@ -229,7 +233,18 @@ int amdgpu_irq_init(struct amdgpu_device *adev)
 		}
 	}
 
-	INIT_WORK(&adev->hotplug_work, amdgpu_hotplug_work_func);
+#ifdef CONFIG_DRM_AMD_DAL
+	if (adev->asic_type != CHIP_CARRIZO || amdgpu_dal == 0) {
+		/* pre DCE11 */
+		INIT_WORK(&adev->hotplug_work,
+				amdgpu_hotplug_work_func);
+	}
+#else
+	INIT_WORK(&adev->hotplug_work,
+			amdgpu_hotplug_work_func);
+#endif
+
+
 	INIT_WORK(&adev->reset_work, amdgpu_irq_reset_work_func);
 
 	adev->irq.installed = true;
@@ -272,6 +287,11 @@ void amdgpu_irq_fini(struct amdgpu_device *adev)
 
 		kfree(src->enabled_types);
 		src->enabled_types = NULL;
+		if (src->data) {
+			kfree(src->data);
+			kfree(src);
+			adev->irq.sources[i] = NULL;
+		}
 	}
 }
 
