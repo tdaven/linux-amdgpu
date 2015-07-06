@@ -44,6 +44,7 @@ enum amdgpu_asic_type {
 	CHIP_TOPAZ,
 	CHIP_TONGA,
 	CHIP_CARRIZO,
+	CHIP_STONEY,
 	CHIP_LAST,
 };
 

@@ -56,6 +56,7 @@ static const char *amdgpu_asic_name[] = {
 	"TOPAZ",
 	"TONGA",
 	"CARRIZO",
+	"STONEY"
 	"LAST",
 };
 
