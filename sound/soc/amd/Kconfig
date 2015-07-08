@@ -1,0 +1,5 @@
+config SND_SOC_AMD_ACP
+	tristate "AMD Audio Coprocessor support"
+	depends on MFD_CORE
+	help
+	 This option enables ACP support (DMA,I2S) on AMD platforms.
