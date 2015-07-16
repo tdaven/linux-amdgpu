@@ -126,6 +126,7 @@ void amdgpu_ctx_fini(struct amdgpu_fpriv *fpriv)
 			DRM_ERROR("ctx (id=%ul) is still alive\n",ctx->id);
 	}
 
+	idr_destroy(&mgr->ctx_handles);
 	mutex_destroy(&mgr->lock);
 }
 
