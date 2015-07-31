@@ -7,7 +7,7 @@ AMDDALPATH = $(RELATIVE_AMD_DAL_PATH)
 
 subdir-ccflags-y += -I$(AMDDALPATH)/ -I$(AMDDALPATH)/include -DDAL_CZ_BRINGUP
 
-DAL_LIBS = amdgpu_dm basics
+DAL_LIBS = amdgpu_dm asic_capability basics
 
 AMD_DAL = $(addsuffix /Makefile, $(addprefix $(FULL_AMD_DAL_PATH)/,$(DAL_LIBS)))
 
