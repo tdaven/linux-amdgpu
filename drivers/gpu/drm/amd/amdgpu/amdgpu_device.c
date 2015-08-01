@@ -1356,6 +1356,28 @@ static int amdgpu_resume(struct amdgpu_device *adev)
 	return 0;
 }
 
+
+/**
+ * amdgpu_device_has_dal_support - check if dal is supported
+ *
+ * @adev: amdgpu_device_pointer
+ *
+ * Returns true for supported, false for not supported
+ */
+bool amdgpu_device_has_dal_support(struct amdgpu_device *adev)
+{
+
+	switch(adev->asic_type) {
+	case CHIP_CARRIZO:
+#ifdef CONFIG_DRM_AMD_DAL && CONFIG_DRM_AMD_DAL_DCE11_0
+		return true;
+#endif
+	default:
+		return false;
+	}
+}
+
+
 /**
  * amdgpu_device_init - initialize the driver
  *
@@ -1500,8 +1522,10 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 	r = amdgpu_atombios_get_clock_info(adev);
 	if (r)
 		return r;
+
 	/* init i2c buses */
-	amdgpu_atombios_i2c_init(adev);
+	if (amdgpu_dal == 0 || (amdgpu_dal != 0 && !amdgpu_device_has_dal_support(adev)))
+		amdgpu_atombios_i2c_init(adev);
 
 	/* Fence driver */
 	r = amdgpu_fence_driver_init(adev);
@@ -1602,7 +1626,8 @@ void amdgpu_device_fini(struct amdgpu_device *adev)
 	adev->ip_block_status = NULL;
 	adev->accel_working = false;
 	/* free i2c buses */
-	amdgpu_i2c_fini(adev);
+	if (amdgpu_dal == 0 || (amdgpu_dal != 0 && !amdgpu_device_has_dal_support(adev)))
+		amdgpu_i2c_fini(adev);
 	amdgpu_atombios_fini(adev);
 	kfree(adev->bios);
 	adev->bios = NULL;
@@ -1746,7 +1771,11 @@ int amdgpu_resume_kms(struct drm_device *dev, bool resume, bool fbcon)
 
 	/* blat the mode back in */
 	if (fbcon) {
-		drm_helper_resume_force_mode(dev);
+		if (amdgpu_dal == 0 || (amdgpu_dal != 0 && !amdgpu_device_has_dal_support(adev))) {
+			/* pre DCE11 */
+			drm_helper_resume_force_mode(dev);
+		}
+
 		/* turn on display hw */
 		list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
 			drm_helper_connector_dpms(connector, DRM_MODE_DPMS_ON);
