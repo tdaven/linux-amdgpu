@@ -9,7 +9,7 @@ subdir-ccflags-y += -I$(AMDDALPATH)/ -I$(AMDDALPATH)/include -DDAL_CZ_BRINGUP
 
 DAL_LIBS = adapter amdgpu_dm audio asic_capability basics bios connector \
 	controller dcs display_path encoder gpio gpu hw_sequencer i2caux irq \
-	link_service timing_service
+	link_service mode_manager timing_service
 
 AMD_DAL = $(addsuffix /Makefile, $(addprefix $(FULL_AMD_DAL_PATH)/,$(DAL_LIBS)))
 
