@@ -7,8 +7,8 @@ AMDDALPATH = $(RELATIVE_AMD_DAL_PATH)
 
 subdir-ccflags-y += -I$(AMDDALPATH)/ -I$(AMDDALPATH)/include -DDAL_CZ_BRINGUP
 
-DAL_LIBS = adapter amdgpu_dm asic_capability basics bios connector gpio i2caux
-	irq
+DAL_LIBS = adapter amdgpu_dm asic_capability basics bios connector gpio gpu
+	i2caux irq
 
 AMD_DAL = $(addsuffix /Makefile, $(addprefix $(FULL_AMD_DAL_PATH)/,$(DAL_LIBS)))
 
