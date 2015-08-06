@@ -126,6 +126,13 @@ static const u32 cz_mgcg_cgcg_init[] =
 	mmXDMA_MEM_POWER_CNTL, 0x00000101, 0x00000000,
 };
 
+static const u32 stoney_golden_settings_a11[] =
+{
+	mmCRTC_DOUBLE_BUFFER_CONTROL, 0x00010101, 0x00010000,
+	mmFBC_MISC, 0x1f311fff, 0x14302000,
+};
+
+
 static void dce_v11_0_init_golden_registers(struct amdgpu_device *adev)
 {
 	switch (adev->asic_type) {
@@ -135,6 +142,11 @@ static void dce_v11_0_init_golden_registers(struct amdgpu_device *adev)
 						 (const u32)ARRAY_SIZE(cz_mgcg_cgcg_init));
 		amdgpu_program_register_sequence(adev,
 						 cz_golden_settings_a11,
+						 (const u32)ARRAY_SIZE(cz_golden_settings_a11));
+		break;
+	case CHIP_STONEY:
+		amdgpu_program_register_sequence(adev,
+						 stoney_golden_settings_a11,
 						 (const u32)ARRAY_SIZE(cz_golden_settings_a11));
 		break;
 	default:

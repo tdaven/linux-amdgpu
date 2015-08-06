@@ -421,6 +421,45 @@ static const u32 cz_mgcg_cgcg_init[] =
 	mmCP_MEM_SLP_CNTL, 0x00000001, 0x00000001,
 };
 
+static const u32 stoney_golden_settings_a11[] =
+{
+	mmCB_HW_CONTROL_3, 0x00000040, 0x00000040,
+	mmDB_DEBUG2, 0xf00fffff, 0x00000400,
+	mmGB_GPU_ID, 0x0000000f, 0x00000000,
+	mmPA_SC_ENHANCE, 0xffffffff, 0x00000001,
+	mmPA_SC_LINE_STIPPLE_STATE, 0x0000ff0f, 0x00000000,
+	mmTA_CNTL_AUX, 0x000f000f, 0x00010000,
+	mmTCC_EXE_DISABLE, 0x00000002, 0x00000002,
+	mmTCP_ADDR_CONFIG, 0x0000000f, 0x000000f3,
+	mmTCP_CHAN_STEER_LO, 0xffffffff, 0x00001302,
+};
+
+static const u32 stoney_golden_common_all[] =
+{
+	mmGRBM_GFX_INDEX, 0xffffffff, 0xe0000000}, \
+	mmPA_SC_RASTER_CONFIG, 0xffffffff, 0x00000000}, \
+	mmPA_SC_RASTER_CONFIG_1, 0xffffffff, 0x00000000}, \
+	mmGB_ADDR_CONFIG, 0xffffffff, 0x12010001}, \
+	mmSPI_RESOURCE_RESERVE_CU_0, 0xffffffff, 0x00000800}, \
+	mmSPI_RESOURCE_RESERVE_CU_1, 0xffffffff, 0x00000800}, \
+	mmSPI_RESOURCE_RESERVE_EN_CU_0, 0xffffffff, 0x00007FBF}, \
+	mmSPI_RESOURCE_RESERVE_EN_CU_1, 0xffffffff, 0x00007FAF}
+};
+
+static const u32 stoney_mgcg_cgcg_init[] =
+{
+	mmGRBM_GFX_INDEX, 0xffffffff, 0xe0000000}, \
+	mmRLC_CGCG_CGLS_CTRL, 0xffffffff, 0x0020003f}, \
+	mmCP_MEM_SLP_CNTL, 0xffffffff, 0x00020201}, \
+	mmRLC_MEM_SLP_CNTL, 0xffffffff, 0x00020201}, \
+	mmCGTS_SM_CTRL_REG, 0xffffffff, 0x96940200}, \
+	mmMC_MEM_POWER_LS, 0xffffffff, 0x00000104}, \
+	mmATC_MISC_CG, 0xffffffff, 0x000c0200}, \
+	mmCGTT_DRM_CLK_CTRL0, 0xffffffff, 0x00000100}, \
+	mmHDP_XDP_CGTT_BLK_CTRL, 0xffffffff, 0x00000104}, \
+	mmHDP_HOST_PATH_CNTL, 0xffffffff, 0x0f000027}
+};
+
 static void gfx_v8_0_set_ring_funcs(struct amdgpu_device *adev);
 static void gfx_v8_0_set_irq_funcs(struct amdgpu_device *adev);
 static void gfx_v8_0_set_gds_init(struct amdgpu_device *adev);
@@ -460,6 +499,17 @@ static void gfx_v8_0_init_golden_registers(struct amdgpu_device *adev)
 		amdgpu_program_register_sequence(adev,
 						 cz_golden_common_all,
 						 (const u32)ARRAY_SIZE(cz_golden_common_all));
+		break;
+	case CHIP_STONEY:
+		amdgpu_program_register_sequence(adev,
+						 stoney_mgcg_cgcg_init,
+						 (const u32)ARRAY_SIZE(stoney_mgcg_cgcg_init));
+		amdgpu_program_register_sequence(adev,
+						 stoney_golden_settings_a11,
+						 (const u32)ARRAY_SIZE(stoney_golden_settings_a11));
+		amdgpu_program_register_sequence(adev,
+						 stoney_golden_common_all,
+						 (const u32)ARRAY_SIZE(stoney_golden_common_all));
 		break;
 	default:
 		break;
