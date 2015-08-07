@@ -2567,6 +2567,10 @@ static int gfx_v8_0_cp_gfx_start(struct amdgpu_device *adev)
 		amdgpu_ring_write(ring, 0x00000002);
 		amdgpu_ring_write(ring, 0x00000000);
 		break;
+	case CHIP_STONEY:
+		amdgpu_ring_write(ring, 0x00000000);
+		amdgpu_ring_write(ring, 0x00000000);
+		break;
 	default:
 		BUG();
 	}
