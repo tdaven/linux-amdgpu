@@ -2017,6 +2017,7 @@ struct amdgpu_device {
 	struct amdgpu_sdma		sdma[2];
 	struct amdgpu_irq_src		sdma_trap_irq;
 	struct amdgpu_irq_src		sdma_illegal_inst_irq;
+	int num_sdma;
 
 	/* uvd */
 	bool				has_uvd;

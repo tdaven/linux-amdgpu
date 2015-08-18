@@ -53,6 +53,7 @@ MODULE_FIRMWARE("amdgpu/tonga_sdma.bin");
 MODULE_FIRMWARE("amdgpu/tonga_sdma1.bin");
 MODULE_FIRMWARE("amdgpu/carrizo_sdma.bin");
 MODULE_FIRMWARE("amdgpu/carrizo_sdma1.bin");
+MODULE_FIRMWARE("amdgpu/stoney_sdma.bin");
 
 static const u32 sdma_offsets[SDMA_MAX_INSTANCE] =
 {
@@ -191,10 +192,13 @@ static int sdma_v3_0_init_microcode(struct amdgpu_device *adev)
 	case CHIP_CARRIZO:
 		chip_name = "carrizo";
 		break;
+	case CHIP_STONEY:
+		chip_name = "stoney";
+		break;
 	default: BUG();
 	}
 
-	for (i = 0; i < SDMA_MAX_INSTANCE; i++) {
+	for (i = 0; i < adev->num_sdma; i++) {
 		if (i == 0)
 			snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_sdma.bin", chip_name);
 		else
@@ -220,7 +224,7 @@ out:
 		printk(KERN_ERR
 		       "sdma_v3_0: Failed to load firmware \"%s\"\n",
 		       fw_name);
-		for (i = 0; i < SDMA_MAX_INSTANCE; i++) {
+		for (i = 0; i < adev->num_sdma; i++) {
 			release_firmware(adev->sdma[i].fw);
 			adev->sdma[i].fw = NULL;
 		}
@@ -436,7 +440,7 @@ static void sdma_v3_0_gfx_stop(struct amdgpu_device *adev)
 	    (adev->mman.buffer_funcs_ring == sdma1))
 		amdgpu_ttm_set_active_vram_size(adev, adev->mc.visible_vram_size);
 
-	for (i = 0; i < SDMA_MAX_INSTANCE; i++) {
+	for (i = 0; i < adev->num_sdma; i++) {
 		rb_cntl = RREG32(mmSDMA0_GFX_RB_CNTL + sdma_offsets[i]);
 		rb_cntl = REG_SET_FIELD(rb_cntl, SDMA0_GFX_RB_CNTL, RB_ENABLE, 0);
 		WREG32(mmSDMA0_GFX_RB_CNTL + sdma_offsets[i], rb_cntl);
@@ -473,7 +477,7 @@ static void sdma_v3_0_ctx_switch_enable(struct amdgpu_device *adev, bool enable)
 	u32 f32_cntl;
 	int i;
 
-	for (i = 0; i < SDMA_MAX_INSTANCE; i++) {
+	for (i = 0; i < adev->num_sdma; i++) {
 		f32_cntl = RREG32(mmSDMA0_CNTL + sdma_offsets[i]);
 		if (enable)
 			f32_cntl = REG_SET_FIELD(f32_cntl, SDMA0_CNTL,
@@ -503,7 +507,7 @@ static void sdma_v3_0_enable(struct amdgpu_device *adev, bool enable)
 		sdma_v3_0_rlc_stop(adev);
 	}
 
-	for (i = 0; i < SDMA_MAX_INSTANCE; i++) {
+	for (i = 0; i < adev->num_sdma; i++) {
 		f32_cntl = RREG32(mmSDMA0_F32_CNTL + sdma_offsets[i]);
 		if (enable)
 			f32_cntl = REG_SET_FIELD(f32_cntl, SDMA0_F32_CNTL, HALT, 0);
@@ -530,7 +534,7 @@ static int sdma_v3_0_gfx_resume(struct amdgpu_device *adev)
 	u32 doorbell;
 	int i, j, r;
 
-	for (i = 0; i < SDMA_MAX_INSTANCE; i++) {
+	for (i = 0; i < adev->num_sdma; i++) {
 		ring = &adev->sdma[i].ring;
 		wb_offset = (ring->rptr_offs * 4);
 
@@ -648,7 +652,7 @@ static int sdma_v3_0_load_microcode(struct amdgpu_device *adev)
 	/* halt the MEs */
 	sdma_v3_0_enable(adev, false);
 
-	for (i = 0; i < SDMA_MAX_INSTANCE; i++) {
+	for (i = 0; i < adev->num_sdma; i++) {
 		hdr = (const struct sdma_firmware_header_v1_0 *)adev->sdma[i].fw->data;
 		amdgpu_ucode_print_sdma_hdr(&hdr->header);
 		fw_size = le32_to_cpu(hdr->header.ucode_size_bytes) / 4;
@@ -1034,6 +1038,15 @@ static int sdma_v3_0_early_init(void *handle)
 {
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
+	switch (adev->asic_type) {
+	case CHIP_STONEY:
+		adev->num_sdma = 1;
+		break;
+	default:
+		adev->num_sdma = SDMA_MAX_INSTANCE;
+		break;
+	}
+
 	sdma_v3_0_set_ring_funcs(adev);
 	sdma_v3_0_set_buffer_funcs(adev);
 	sdma_v3_0_set_vm_pte_funcs(adev);
@@ -1185,7 +1198,7 @@ static void sdma_v3_0_print_status(void *handle)
 	dev_info(adev->dev, "VI SDMA registers\n");
 	dev_info(adev->dev, "  SRBM_STATUS2=0x%08X\n",
 		 RREG32(mmSRBM_STATUS2));
-	for (i = 0; i < SDMA_MAX_INSTANCE; i++) {
+	for (i = 0; i < adev->num_sdma; i++) {
 		dev_info(adev->dev, "  SDMA%d_STATUS_REG=0x%08X\n",
 			 i, RREG32(mmSDMA0_STATUS_REG + sdma_offsets[i]));
 		dev_info(adev->dev, "  SDMA%d_F32_CNTL=0x%08X\n",

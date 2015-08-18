@@ -73,6 +73,12 @@ MODULE_FIRMWARE("amdgpu/carrizo_mec.bin");
 MODULE_FIRMWARE("amdgpu/carrizo_mec2.bin");
 MODULE_FIRMWARE("amdgpu/carrizo_rlc.bin");
 
+MODULE_FIRMWARE("amdgpu/stoney_ce.bin");
+MODULE_FIRMWARE("amdgpu/stoney_pfp.bin");
+MODULE_FIRMWARE("amdgpu/stoney_me.bin");
+MODULE_FIRMWARE("amdgpu/stoney_mec.bin");
+MODULE_FIRMWARE("amdgpu/stoney_rlc.bin");
+
 MODULE_FIRMWARE("amdgpu/tonga_ce.bin");
 MODULE_FIRMWARE("amdgpu/tonga_pfp.bin");
 MODULE_FIRMWARE("amdgpu/tonga_me.bin");
@@ -453,7 +459,6 @@ static const u32 stoney_mgcg_cgcg_init[] =
 	mmCP_MEM_SLP_CNTL, 0xffffffff, 0x00020201}, \
 	mmRLC_MEM_SLP_CNTL, 0xffffffff, 0x00020201}, \
 	mmCGTS_SM_CTRL_REG, 0xffffffff, 0x96940200}, \
-	mmMC_MEM_POWER_LS, 0xffffffff, 0x00000104}, \
 	mmATC_MISC_CG, 0xffffffff, 0x000c0200}, \
 	mmCGTT_DRM_CLK_CTRL0, 0xffffffff, 0x00000100}, \
 	mmHDP_XDP_CGTT_BLK_CTRL, 0xffffffff, 0x00000104}, \
@@ -649,6 +654,9 @@ static int gfx_v8_0_init_microcode(struct amdgpu_device *adev)
 		break;
 	case CHIP_CARRIZO:
 		chip_name = "carrizo";
+		break;
+	case CHIP_STONEY:
+		chip_name = "stoney";
 		break;
 	default:
 		BUG();
@@ -2339,7 +2347,7 @@ static void gfx_v8_0_rlc_start(struct amdgpu_device *adev)
 	WREG32(mmRLC_CNTL, tmp);
 
 	/* carrizo do enable cp interrupt after cp inited */
-	if (adev->asic_type != CHIP_CARRIZO)
+	if (adev->asic_type != CHIP_CARRIZO && adev->asic_type != CHIP_STONEY)
 		gfx_v8_0_enable_gui_idle_interrupt(adev, true);
 
 	udelay(50);
