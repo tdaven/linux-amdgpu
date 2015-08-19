@@ -2923,6 +2923,11 @@ static int dce_v11_0_early_init(void *handle)
 		adev->mode_info.num_hpd = 6;
 		adev->mode_info.num_dig = 9;
 		break;
+	case CHIP_STONEY:
+		adev->mode_info.num_crtc = 2;
+		adev->mode_info.num_hpd = 6;
+		adev->mode_info.num_dig = 9;
+		break;
 	default:
 		/* FIXME: not supported yet */
 		return -EINVAL;
