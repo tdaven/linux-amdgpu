@@ -700,15 +700,17 @@ static int gfx_v8_0_init_microcode(struct amdgpu_device *adev)
 	if (err)
 		goto out;
 
-	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_mec2.bin", chip_name);
-	err = request_firmware(&adev->gfx.mec2_fw, fw_name, adev->dev);
-	if (!err) {
-		err = amdgpu_ucode_validate(adev->gfx.mec2_fw);
-		if (err)
-			goto out;
-	} else {
-		err = 0;
-		adev->gfx.mec2_fw = NULL;
+	if (adev->asic_type != CHIP_STONEY) {
+		snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_mec2.bin", chip_name);
+		err = request_firmware(&adev->gfx.mec2_fw, fw_name, adev->dev);
+		if (!err) {
+			err = amdgpu_ucode_validate(adev->gfx.mec2_fw);
+			if (err)
+				goto out;
+		} else {
+			err = 0;
+			adev->gfx.mec2_fw = NULL;
+		}
 	}
 
 	if (adev->firmware.smu_load) {

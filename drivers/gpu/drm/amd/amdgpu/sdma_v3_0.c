@@ -646,13 +646,12 @@ static int sdma_v3_0_load_microcode(struct amdgpu_device *adev)
 	u32 fw_size;
 	int i, j;
 
-	if (!adev->sdma[0].fw || !adev->sdma[1].fw)
-		return -EINVAL;
-
 	/* halt the MEs */
 	sdma_v3_0_enable(adev, false);
 
 	for (i = 0; i < adev->num_sdma; i++) {
+		if (!adev->sdma[i].fw)
+			return -EINVAL;
 		hdr = (const struct sdma_firmware_header_v1_0 *)adev->sdma[i].fw->data;
 		amdgpu_ucode_print_sdma_hdr(&hdr->header);
 		fw_size = le32_to_cpu(hdr->header.ucode_size_bytes) / 4;
@@ -1087,11 +1086,6 @@ static int sdma_v3_0_sw_init(void *handle)
 	ring->use_doorbell = false;
 	ring->doorbell_index = AMDGPU_DOORBELL_sDMA_ENGINE0;
 
-	ring = &adev->sdma[1].ring;
-	ring->ring_obj = NULL;
-	ring->use_doorbell = false;
-	ring->doorbell_index = AMDGPU_DOORBELL_sDMA_ENGINE1;
-
 	ring = &adev->sdma[0].ring;
 	sprintf(ring->name, "sdma0");
 	r = amdgpu_ring_init(adev, ring, 256 * 1024,
@@ -1101,14 +1095,21 @@ static int sdma_v3_0_sw_init(void *handle)
 	if (r)
 		return r;
 
-	ring = &adev->sdma[1].ring;
-	sprintf(ring->name, "sdma1");
-	r = amdgpu_ring_init(adev, ring, 256 * 1024,
-			     SDMA_PKT_NOP_HEADER_OP(SDMA_OP_NOP), 0xf,
-			     &adev->sdma_trap_irq, AMDGPU_SDMA_IRQ_TRAP1,
-			     AMDGPU_RING_TYPE_SDMA);
-	if (r)
-		return r;
+	if (adev->asic_type != CHIP_STONEY) {
+		ring = &adev->sdma[1].ring;
+		ring->ring_obj = NULL;
+		ring->use_doorbell = false;
+		ring->doorbell_index = AMDGPU_DOORBELL_sDMA_ENGINE1;
+
+		ring = &adev->sdma[1].ring;
+		sprintf(ring->name, "sdma1");
+		r = amdgpu_ring_init(adev, ring, 256 * 1024,
+				SDMA_PKT_NOP_HEADER_OP(SDMA_OP_NOP), 0xf,
+				&adev->sdma_trap_irq, AMDGPU_SDMA_IRQ_TRAP1,
+				AMDGPU_RING_TYPE_SDMA);
+		if (r)
+			return r;
+	}
 
 	return r;
 }
@@ -1118,7 +1119,8 @@ static int sdma_v3_0_sw_fini(void *handle)
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
 	amdgpu_ring_fini(&adev->sdma[0].ring);
-	amdgpu_ring_fini(&adev->sdma[1].ring);
+	if (adev->asic_type != CHIP_STONEY)
+		amdgpu_ring_fini(&adev->sdma[1].ring);
 
 	return 0;
 }
@@ -1444,7 +1446,8 @@ static const struct amdgpu_ring_funcs sdma_v3_0_ring_funcs = {
 static void sdma_v3_0_set_ring_funcs(struct amdgpu_device *adev)
 {
 	adev->sdma[0].ring.funcs = &sdma_v3_0_ring_funcs;
-	adev->sdma[1].ring.funcs = &sdma_v3_0_ring_funcs;
+	if (adev->asic_type != CHIP_STONEY)
+		adev->sdma[1].ring.funcs = &sdma_v3_0_ring_funcs;
 }
 
 static const struct amdgpu_irq_src_funcs sdma_v3_0_trap_irq_funcs = {
