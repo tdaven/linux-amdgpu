@@ -1325,11 +1325,18 @@ int vi_set_ip_blocks(struct amdgpu_device *adev)
 	return 0;
 }
 
+#define ATI_REV_ID_FUSE_MACRO__ADDRESS      0xC0014044
+#define ATI_REV_ID_FUSE_MACRO__SHIFT        9
+#define ATI_REV_ID_FUSE_MACRO__MASK         0x00001E00
+
 static uint32_t vi_get_rev_id(struct amdgpu_device *adev)
 {
 	if (adev->asic_type == CHIP_TOPAZ)
 		return (RREG32(mmPCIE_EFUSE4) & PCIE_EFUSE4__STRAP_BIF_ATI_REV_ID_MASK)
 			>> PCIE_EFUSE4__STRAP_BIF_ATI_REV_ID__SHIFT;
+	else if (adev->asic_type == CHIP_CARRIZO || adev->asic_type == CHIP_STONEY)
+		return (RREG32_SMC(ATI_REV_ID_FUSE_MACRO__ADDRESS) & ATI_REV_ID_FUSE_MACRO__MASK)
+			>> ATI_REV_ID_FUSE_MACRO__SHIFT;
 	else
 		return (RREG32(mmCC_DRM_ID_STRAPS) & CC_DRM_ID_STRAPS__ATI_REV_ID_MASK)
 			>> CC_DRM_ID_STRAPS__ATI_REV_ID__SHIFT;
