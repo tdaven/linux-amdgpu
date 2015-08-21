@@ -225,6 +225,13 @@ static const u32 cz_mgcg_cgcg_init[] =
 	mmHDP_XDP_CGTT_BLK_CTRL, 0xc0000fff, 0x00000104,
 };
 
+static const u32 stoney_mgcg_cgcg_init[] =
+{
+	mmCGTT_DRM_CLK_CTRL0, 0xffffffff, 0x00000100,
+	mmHDP_XDP_CGTT_BLK_CTRL, 0xffffffff, 0x00000104,
+	mmHDP_HOST_PATH_CNTL, 0xffffffff, 0x0f000027,
+};
+
 static void vi_init_golden_registers(struct amdgpu_device *adev)
 {
 	/* Some of the registers might be dependent on GRBM_GFX_INDEX */

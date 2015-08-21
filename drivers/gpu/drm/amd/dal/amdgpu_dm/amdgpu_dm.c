@@ -439,7 +439,7 @@ int amdgpu_dm_init(struct amdgpu_device *adev)
 		adev->mode_info.atom_context->bios;
 	init_data.asic_id.runtime_flags.bits.SKIP_POWER_DOWN_ON_RESUME = 1;
 
-	if (adev->asic_type == CHIP_CARRIZO)
+	if (adev->asic_type == CHIP_CARRIZO || adev->asic_type == CHIP_STONEY )
 		init_data.asic_id.runtime_flags.bits.GNB_WAKEUP_SUPPORTED = 1;
 
 	init_data.driver = adev;
@@ -1058,6 +1058,11 @@ static int dm_early_init(void *handle)
 	switch (adev->asic_type) {
 	case CHIP_CARRIZO:
 		adev->mode_info.num_crtc = 3;
+		adev->mode_info.num_hpd = 6;
+		adev->mode_info.num_dig = 9;
+		break;
+	case CHIP_STONEY:
+		adev->mode_info.num_crtc = 2;
 		adev->mode_info.num_hpd = 6;
 		adev->mode_info.num_dig = 9;
 		break;

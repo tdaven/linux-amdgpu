@@ -113,8 +113,8 @@ static const u32 stoney_golden_settings_a11[] =
 
 static const u32 stoney_mgcg_cgcg_init[] =
 {
-	mmSDMA0_CLK_CTRL, 0xffffffff, 0x00000100}, \
-	mmSDMA1_CLK_CTRL, 0xffffffff, 0x00000100}
+	mmSDMA0_CLK_CTRL, 0xffffffff, 0x00000100,
+	mmSDMA1_CLK_CTRL, 0xffffffff, 0x00000100,
 };
 
 /*

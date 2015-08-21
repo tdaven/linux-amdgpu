@@ -442,27 +442,24 @@ static const u32 stoney_golden_settings_a11[] =
 
 static const u32 stoney_golden_common_all[] =
 {
-	mmGRBM_GFX_INDEX, 0xffffffff, 0xe0000000}, \
-	mmPA_SC_RASTER_CONFIG, 0xffffffff, 0x00000000}, \
-	mmPA_SC_RASTER_CONFIG_1, 0xffffffff, 0x00000000}, \
-	mmGB_ADDR_CONFIG, 0xffffffff, 0x12010001}, \
-	mmSPI_RESOURCE_RESERVE_CU_0, 0xffffffff, 0x00000800}, \
-	mmSPI_RESOURCE_RESERVE_CU_1, 0xffffffff, 0x00000800}, \
-	mmSPI_RESOURCE_RESERVE_EN_CU_0, 0xffffffff, 0x00007FBF}, \
-	mmSPI_RESOURCE_RESERVE_EN_CU_1, 0xffffffff, 0x00007FAF}
+	mmGRBM_GFX_INDEX, 0xffffffff, 0xe0000000,
+	mmPA_SC_RASTER_CONFIG, 0xffffffff, 0x00000000,
+	mmPA_SC_RASTER_CONFIG_1, 0xffffffff, 0x00000000,
+	mmGB_ADDR_CONFIG, 0xffffffff, 0x12010001,
+	mmSPI_RESOURCE_RESERVE_CU_0, 0xffffffff, 0x00000800,
+	mmSPI_RESOURCE_RESERVE_CU_1, 0xffffffff, 0x00000800,
+	mmSPI_RESOURCE_RESERVE_EN_CU_0, 0xffffffff, 0x00007FBF,
+	mmSPI_RESOURCE_RESERVE_EN_CU_1, 0xffffffff, 0x00007FAF,
 };
 
 static const u32 stoney_mgcg_cgcg_init[] =
 {
-	mmGRBM_GFX_INDEX, 0xffffffff, 0xe0000000}, \
-	mmRLC_CGCG_CGLS_CTRL, 0xffffffff, 0x0020003f}, \
-	mmCP_MEM_SLP_CNTL, 0xffffffff, 0x00020201}, \
-	mmRLC_MEM_SLP_CNTL, 0xffffffff, 0x00020201}, \
-	mmCGTS_SM_CTRL_REG, 0xffffffff, 0x96940200}, \
-	mmATC_MISC_CG, 0xffffffff, 0x000c0200}, \
-	mmCGTT_DRM_CLK_CTRL0, 0xffffffff, 0x00000100}, \
-	mmHDP_XDP_CGTT_BLK_CTRL, 0xffffffff, 0x00000104}, \
-	mmHDP_HOST_PATH_CNTL, 0xffffffff, 0x0f000027}
+	mmGRBM_GFX_INDEX, 0xffffffff, 0xe0000000,
+	mmRLC_CGCG_CGLS_CTRL, 0xffffffff, 0x0020003f,
+	mmCP_MEM_SLP_CNTL, 0xffffffff, 0x00020201,
+	mmRLC_MEM_SLP_CNTL, 0xffffffff, 0x00020201,
+	mmCGTS_SM_CTRL_REG, 0xffffffff, 0x96940200,
+	mmATC_MISC_CG, 0xffffffff, 0x000c0200,
 };
 
 static void gfx_v8_0_set_ring_funcs(struct amdgpu_device *adev);
@@ -3483,7 +3480,7 @@ static int gfx_v8_0_cp_compute_resume(struct amdgpu_device *adev)
 
 		/* enable the doorbell if requested */
 		if (use_doorbell) {
-			if (adev->asic_type == CHIP_CARRIZO) {
+			if (adev->asic_type == CHIP_CARRIZO || adev->asic_type == CHIP_STONEY) {
 				WREG32(mmCP_MEC_DOORBELL_RANGE_LOWER,
 				       AMDGPU_DOORBELL_KIQ << 2);
 				WREG32(mmCP_MEC_DOORBELL_RANGE_UPPER,
@@ -3555,7 +3552,7 @@ static int gfx_v8_0_cp_resume(struct amdgpu_device *adev)
 {
 	int r;
 
-	if (adev->asic_type != CHIP_CARRIZO)
+	if (adev->asic_type != CHIP_CARRIZO && adev->asic_type != CHIP_STONEY)
 		gfx_v8_0_enable_gui_idle_interrupt(adev, false);
 
 	if (!adev->firmware.smu_load) {

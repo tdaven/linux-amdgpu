@@ -1746,7 +1746,7 @@ int amdgpu_resume_kms(struct drm_device *dev, bool resume, bool fbcon)
 	/* blat the mode back in */
 	if (fbcon) {
 #ifdef CONFIG_DRM_AMD_DAL
-	if (adev->asic_type != CHIP_CARRIZO || amdgpu_dal == 0) {
+	if (adev->asic_type != CHIP_CARRIZO && adev->asic_type != CHIP_STONEY || amdgpu_dal == 0) {
 			/* pre DCE11 */
 			drm_helper_resume_force_mode(dev);
 		}

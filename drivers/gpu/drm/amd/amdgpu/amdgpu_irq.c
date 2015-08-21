@@ -234,7 +234,7 @@ int amdgpu_irq_init(struct amdgpu_device *adev)
 	}
 
 #ifdef CONFIG_DRM_AMD_DAL
-	if (adev->asic_type != CHIP_CARRIZO || amdgpu_dal == 0) {
+	if (adev->asic_type != CHIP_CARRIZO && adev->asic_type != CHIP_STONEY || amdgpu_dal == 0) {
 		/* pre DCE11 */
 		INIT_WORK(&adev->hotplug_work,
 				amdgpu_hotplug_work_func);
