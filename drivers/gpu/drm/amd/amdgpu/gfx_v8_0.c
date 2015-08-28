@@ -429,15 +429,15 @@ static const u32 cz_mgcg_cgcg_init[] =
 
 static const u32 stoney_golden_settings_a11[] =
 {
-	mmCB_HW_CONTROL_3, 0x00000040, 0x00000040,
 	mmDB_DEBUG2, 0xf00fffff, 0x00000400,
 	mmGB_GPU_ID, 0x0000000f, 0x00000000,
-	mmPA_SC_ENHANCE, 0xffffffff, 0x00000001,
+	mmPA_SC_ENHANCE, 0xffffffff, 0x20000001,
 	mmPA_SC_LINE_STIPPLE_STATE, 0x0000ff0f, 0x00000000,
-	mmTA_CNTL_AUX, 0x000f000f, 0x00010000,
+	mmRLC_CGCG_CGLS_CTRL, 0x00000003, 0x0001003c,
+	mmTA_CNTL_AUX, 0x000f000f, 0x000b0000,
 	mmTCC_EXE_DISABLE, 0x00000002, 0x00000002,
-	mmTCP_ADDR_CONFIG, 0x0000000f, 0x000000f3,
-	mmTCP_CHAN_STEER_LO, 0xffffffff, 0x00001302,
+	mmTCP_ADDR_CONFIG, 0x0000000f, 0x000000f1,
+	mmTCP_CHAN_STEER_LO, 0xffffffff, 0x10101010,
 };
 
 static const u32 stoney_golden_common_all[] =

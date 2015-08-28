@@ -147,7 +147,7 @@ static void dce_v11_0_init_golden_registers(struct amdgpu_device *adev)
 	case CHIP_STONEY:
 		amdgpu_program_register_sequence(adev,
 						 stoney_golden_settings_a11,
-						 (const u32)ARRAY_SIZE(cz_golden_settings_a11));
+						 (const u32)ARRAY_SIZE(stoney_golden_settings_a11));
 		break;
 	default:
 		break;
