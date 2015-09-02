@@ -517,8 +517,10 @@ static void vi_print_gpu_status_regs(struct amdgpu_device *adev)
 		RREG32(mmSRBM_STATUS2));
 	dev_info(adev->dev, "  SDMA0_STATUS_REG   = 0x%08X\n",
 		RREG32(mmSDMA0_STATUS_REG + SDMA0_REGISTER_OFFSET));
-	dev_info(adev->dev, "  SDMA1_STATUS_REG   = 0x%08X\n",
-		 RREG32(mmSDMA0_STATUS_REG + SDMA1_REGISTER_OFFSET));
+	if (adev->asic_type != CHIP_STONEY) {
+		dev_info(adev->dev, "  SDMA1_STATUS_REG   = 0x%08X\n",
+			RREG32(mmSDMA0_STATUS_REG + SDMA1_REGISTER_OFFSET));
+	}
 	dev_info(adev->dev, "  CP_STAT = 0x%08x\n", RREG32(mmCP_STAT));
 	dev_info(adev->dev, "  CP_STALLED_STAT1 = 0x%08x\n",
 		 RREG32(mmCP_STALLED_STAT1));
@@ -613,9 +615,11 @@ u32 vi_gpu_check_soft_reset(struct amdgpu_device *adev)
 		reset_mask |= AMDGPU_RESET_DMA;
 
 	/* SDMA1_STATUS_REG */
-	tmp = RREG32(mmSDMA0_STATUS_REG + SDMA1_REGISTER_OFFSET);
-	if (!(tmp & SDMA0_STATUS_REG__IDLE_MASK))
-		reset_mask |= AMDGPU_RESET_DMA1;
+	if (adev->asic_type != CHIP_STONEY) {
+		tmp = RREG32(mmSDMA0_STATUS_REG + SDMA1_REGISTER_OFFSET);
+		if (!(tmp & SDMA0_STATUS_REG__IDLE_MASK))
+			reset_mask |= AMDGPU_RESET_DMA1;
+	}
 #if 0
 	/* VCE_STATUS */
 	if (adev->asic_type != CHIP_TOPAZ) {

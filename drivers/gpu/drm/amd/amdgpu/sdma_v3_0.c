@@ -690,8 +690,10 @@ static int sdma_v3_0_start(struct amdgpu_device *adev)
 						AMDGPU_UCODE_ID_SDMA0);
 		if (r)
 			return -EINVAL;
-		r = adev->smu.smumgr_funcs->check_fw_load_finish(adev,
+		if (adev->asic_type != CHIP_STONEY) {
+			r = adev->smu.smumgr_funcs->check_fw_load_finish(adev,
 						AMDGPU_UCODE_ID_SDMA1);
+		}
 		if (r)
 			return -EINVAL;
 	}
