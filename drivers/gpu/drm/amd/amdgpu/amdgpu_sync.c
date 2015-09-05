@@ -175,6 +175,20 @@ int amdgpu_sync_wait(struct amdgpu_sync *sync)
 		fence_put(e->fence);
 		kfree(e);
 	}
+
+	if (amdgpu_enable_semaphores)
+		return 0;
+
+	for (i = 0; i < AMDGPU_MAX_RINGS; ++i) {
+		struct amdgpu_fence *fence = sync->sync_to[i];
+		if (!fence)
+			continue;
+
+		r = fence_wait(&fence->base, false);
+		if (r)
+			return r;
+	}
+
 	return 0;
 }
 
@@ -209,7 +223,7 @@ int amdgpu_sync_rings(struct amdgpu_sync *sync,
 			return -EINVAL;
 		}
 
-		if (count >= AMDGPU_NUM_SYNCS) {
+		if (!amdgpu_enable_semaphores || count >= AMDGPU_NUM_SYNCS) {
 			/* not enough room, wait manually */
 			r = amdgpu_fence_wait(fence, false);
 			if (r)
