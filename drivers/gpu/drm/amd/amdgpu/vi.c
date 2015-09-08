@@ -253,6 +253,11 @@ static void vi_init_golden_registers(struct amdgpu_device *adev)
 						 cz_mgcg_cgcg_init,
 						 (const u32)ARRAY_SIZE(cz_mgcg_cgcg_init));
 		break;
+	case CHIP_STONEY:
+		amdgpu_program_register_sequence(adev,
+						 stoney_mgcg_cgcg_init,
+						 (const u32)ARRAY_SIZE(stoney_mgcg_cgcg_init));
+		break;
 	default:
 		break;
 	}
@@ -462,6 +467,7 @@ static int vi_read_register(struct amdgpu_device *adev, u32 se_num,
 		break;
 	case CHIP_TONGA:
 	case CHIP_CARRIZO:
+	case CHIP_STONEY:
 		asic_register_table = cz_allowed_read_registers;
 		size = ARRAY_SIZE(cz_allowed_read_registers);
 		break;
@@ -1421,7 +1427,6 @@ static int vi_common_early_init(void *handle)
 		if (amdgpu_smc_load_fw && smc_enabled)
 			adev->firmware.smu_load = true;
 		break;
-	//stoney: todo
 	case CHIP_STONEY:
 		adev->has_uvd = true;
 		adev->cg_flags = 0;
