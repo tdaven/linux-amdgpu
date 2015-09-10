@@ -223,7 +223,14 @@ int amdgpu_sync_rings(struct amdgpu_sync *sync,
 			return -EINVAL;
 		}
 
-		if (!amdgpu_enable_semaphores || count >= AMDGPU_NUM_SYNCS) {
+		if (!amdgpu_enable_semaphores) {
+			r = amdgpu_fence_wait(fence, true);
+			if (r)
+				return r;
+			continue;
+		}
+
+		if (count >= AMDGPU_NUM_SYNCS) {
 			/* not enough room, wait manually */
 			r = amdgpu_fence_wait(fence, false);
 			if (r)
