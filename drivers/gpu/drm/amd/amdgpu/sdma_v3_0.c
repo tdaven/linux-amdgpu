@@ -1049,12 +1049,12 @@ static int sdma_v3_0_sw_init(void *handle)
 
 	ring = &adev->sdma[0].ring;
 	ring->ring_obj = NULL;
-	ring->use_doorbell = true;
+	ring->use_doorbell = false;
 	ring->doorbell_index = AMDGPU_DOORBELL_sDMA_ENGINE0;
 
 	ring = &adev->sdma[1].ring;
 	ring->ring_obj = NULL;
-	ring->use_doorbell = true;
+	ring->use_doorbell = false;
 	ring->doorbell_index = AMDGPU_DOORBELL_sDMA_ENGINE1;
 
 	ring = &adev->sdma[0].ring;
