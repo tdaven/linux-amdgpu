@@ -2963,7 +2963,14 @@ static void tm_update_on_connection_change(struct topology_mgr *tm,
 	tm_update_connection_state_and_timing(tm, display_path,
 			detection_status->connected, update_timing_list);
 
-	/* TODO: update clock sharing category */
+	dal_display_path_set_clock_sharing_group(
+			display_path,
+			tm_get_default_clock_sharing_group(
+				tm,
+				dal_display_path_get_query_signal(
+					display_path,
+					ASIC_LINK_INDEX),
+				false));
 
 	if (dal_display_path_is_target_connected(display_path)) {
 		/* Recalculate cofunctional sets the next time
