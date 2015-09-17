@@ -264,7 +264,7 @@ static inline struct amdgpu_connector *find_connector_by_display_index(
 	return aconnector;
 }
 
-static void amdgpu_dm_hpd_low_irq(void *interrupt_params)
+void amdgpu_dm_hpd_low_irq(void *interrupt_params)
 {
 	struct amdgpu_device *adev = interrupt_params;
 	struct dal *dal = adev->dm.dal;

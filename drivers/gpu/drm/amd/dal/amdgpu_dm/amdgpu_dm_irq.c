@@ -254,6 +254,8 @@ static void dm_timer_work_func(
 	/* We support only "single shot" timers. That means we must delete
 	 * the handler after it was called. */
 	remove_timer_handler(handler_data->hcd.dm->adev, handler_data);
+
+	amdgpu_dm_hpd_low_irq(handler_data->hcd.dm->adev);
 }
 
 /******************************************************************************
