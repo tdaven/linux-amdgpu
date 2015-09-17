@@ -167,6 +167,8 @@ bool amdgpu_dm_acquire_dal_lock(struct amdgpu_display_manager *dm);
 
 bool amdgpu_dm_release_dal_lock(struct amdgpu_display_manager *dm);
 
+void amdgpu_dm_hpd_low_irq(void *interrupt_params);
+
 extern const struct amd_ip_funcs amdgpu_dm_funcs;
 
 #endif /* __AMDGPU_DM_H__ */
