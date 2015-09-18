@@ -1318,6 +1318,11 @@ int amdgpu_display_manager_fill_modes(struct drm_connector *connector,
 				mt->mode_info.flags.INTERLACE)
 				continue;
 
+			if (mt->mode_info.pixel_width >= 3840 &&
+				mt->mode_info.pixel_height >= 2160 &&
+				mt->mode_info.field_rate >= 60)
+				continue;
+
 			if (dm_add_mode(connector, mt, rm, rr) == 0)
 				++non_filtered_modes_num;
 
