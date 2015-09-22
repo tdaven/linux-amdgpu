@@ -6,7 +6,8 @@ ccflags-y := -Iinclude/drm -Idrivers/gpu/drm/amd/include/asic_reg \
 	-Idrivers/gpu/drm/amd/include \
 	-Idrivers/gpu/drm/amd/amdgpu \
 	-Idrivers/gpu/drm/amd/scheduler \
-	-Idrivers/gpu/drm/amd/powerplay/inc
+	-Idrivers/gpu/drm/amd/powerplay/inc \
+	-Idrivers/gpu/drm/amd/acp/include
 
 amdgpu-y := amdgpu_drv.o
 
@@ -90,6 +91,16 @@ amdgpu-y += \
 	../scheduler/gpu_scheduler.o \
 	../scheduler/sched_fence.o \
 	amdgpu_sched.o
+
+# ACP componet
+ifneq ($(CONFIG_DRM_AMD_ACP),)
+amdgpu-y += amdgpu_acp.o
+
+AMDACPPATH := ../acp
+include drivers/gpu/drm/amd/acp/Makefile
+
+amdgpu-y += $(AMD_ACP_FILES)
+endif
 
 amdgpu-$(CONFIG_COMPAT) += amdgpu_ioc32.o
 amdgpu-$(CONFIG_VGA_SWITCHEROO) += amdgpu_atpx_handler.o
