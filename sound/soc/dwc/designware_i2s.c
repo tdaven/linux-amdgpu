@@ -89,11 +89,14 @@ union dw_i2s_snd_dma_data {
 };
 
 struct dw_i2s_dev {
-	void __iomem *i2s_base;
+	void __iomem *i2s_pbase;
+	void __iomem *i2s_cbase;
 	struct clk *clk;
 	int active;
 	unsigned int capability;
 	struct device *dev;
+	u32 ccr;
+	u32 xfer_resolution;
 
 	/* data related to DMA transfers b/w i2s and DMAC */
 	union dw_i2s_snd_dma_data play_dma_data;
@@ -118,10 +121,10 @@ static inline void i2s_disable_channels(struct dw_i2s_dev *dev, u32 stream)
 
 	if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		for (i = 0; i < 4; i++)
-			i2s_write_reg(dev->i2s_base, TER(i), 0);
+			i2s_write_reg(dev->i2s_pbase, TER(i), 0);
 	} else {
 		for (i = 0; i < 4; i++)
-			i2s_write_reg(dev->i2s_base, RER(i), 0);
+			i2s_write_reg(dev->i2s_cbase, RER(i), 0);
 	}
 }
 
@@ -131,25 +134,25 @@ static inline void i2s_clear_irqs(struct dw_i2s_dev *dev, u32 stream)
 
 	if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		for (i = 0; i < 4; i++)
-			i2s_write_reg(dev->i2s_base, TOR(i), 0);
+			i2s_write_reg(dev->i2s_pbase, TOR(i), 0);
 	} else {
 		for (i = 0; i < 4; i++)
-			i2s_write_reg(dev->i2s_base, ROR(i), 0);
+			i2s_write_reg(dev->i2s_cbase, ROR(i), 0);
 	}
 }
 
 static void i2s_start(struct dw_i2s_dev *dev,
 		      struct snd_pcm_substream *substream)
 {
-
-	i2s_write_reg(dev->i2s_base, IER, 1);
-
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		i2s_write_reg(dev->i2s_base, ITER, 1);
-	else
-		i2s_write_reg(dev->i2s_base, IRER, 1);
-
-	i2s_write_reg(dev->i2s_base, CER, 1);
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		i2s_write_reg(dev->i2s_pbase, IER, 1);
+		i2s_write_reg(dev->i2s_pbase, ITER, 1);
+		i2s_write_reg(dev->i2s_pbase, CER, 1);
+	} else {
+		i2s_write_reg(dev->i2s_cbase, IER, 1);
+		i2s_write_reg(dev->i2s_cbase, IRER, 1);
+		i2s_write_reg(dev->i2s_cbase, CER, 1);
+	}
 }
 
 static void i2s_stop(struct dw_i2s_dev *dev,
@@ -157,26 +160,40 @@ static void i2s_stop(struct dw_i2s_dev *dev,
 {
 	u32 i = 0, irq;
 
+	const struct i2s_platform_data *pdata = dev_get_platdata(dev->dev);
+
 	i2s_clear_irqs(dev, substream->stream);
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		i2s_write_reg(dev->i2s_base, ITER, 0);
-
+		i2s_write_reg(dev->i2s_pbase, ITER, 0);
 		for (i = 0; i < 4; i++) {
-			irq = i2s_read_reg(dev->i2s_base, IMR(i));
-			i2s_write_reg(dev->i2s_base, IMR(i), irq | 0x30);
+			irq = i2s_read_reg(dev->i2s_pbase, IMR(i));
+			i2s_write_reg(dev->i2s_pbase, IMR(i),
+						irq | 0x30);
 		}
 	} else {
-		i2s_write_reg(dev->i2s_base, IRER, 0);
+		i2s_write_reg(dev->i2s_cbase, IRER, 0);
 
 		for (i = 0; i < 4; i++) {
-			irq = i2s_read_reg(dev->i2s_base, IMR(i));
-			i2s_write_reg(dev->i2s_base, IMR(i), irq | 0x03);
+			irq = i2s_read_reg(dev->i2s_cbase, IMR(i));
+			i2s_write_reg(dev->i2s_cbase, IMR(i),
+						irq | 0x03);
 		}
 	}
 
-	if (!dev->active) {
-		i2s_write_reg(dev->i2s_base, CER, 0);
-		i2s_write_reg(dev->i2s_base, IER, 0);
+	if (pdata->quirks & DW_I2S_VENDOR_AMD) {
+		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+			i2s_write_reg(dev->i2s_pbase, CER, 0);
+			i2s_write_reg(dev->i2s_pbase, IER, 0);
+		} else {
+			i2s_write_reg(dev->i2s_cbase, CER, 0);
+			i2s_write_reg(dev->i2s_cbase, IER, 0);
+		}
+
+	} else {
+		if (!dev->active) {
+			i2s_write_reg(dev->i2s_pbase, CER, 0);
+			i2s_write_reg(dev->i2s_pbase, IER, 0);
+		}
 	}
 }
 
@@ -204,32 +221,60 @@ static int dw_i2s_startup(struct snd_pcm_substream *substream,
 	return 0;
 }
 
+static void dw_i2s_config(struct dw_i2s_dev *dev, int stream)
+{
+	u32 ch_reg, irq;
+	struct i2s_clk_config_data *config = &dev->config;
+
+
+	i2s_disable_channels(dev, stream);
+
+	for (ch_reg = 0; ch_reg < (config->chan_nr / 2); ch_reg++) {
+		if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
+			i2s_write_reg(dev->i2s_pbase, TCR(ch_reg),
+				      dev->xfer_resolution);
+			i2s_write_reg(dev->i2s_pbase, TFCR(ch_reg), 0x02);
+			irq = i2s_read_reg(dev->i2s_pbase, IMR(ch_reg));
+			i2s_write_reg(dev->i2s_pbase, IMR(ch_reg), irq & ~0x30);
+			i2s_write_reg(dev->i2s_pbase, TER(ch_reg), 1);
+		} else {
+			i2s_write_reg(dev->i2s_cbase, RCR(ch_reg),
+				      dev->xfer_resolution);
+			i2s_write_reg(dev->i2s_cbase, RFCR(ch_reg), 0x07);
+			irq = i2s_read_reg(dev->i2s_cbase, IMR(ch_reg));
+			i2s_write_reg(dev->i2s_cbase, IMR(ch_reg), irq & ~0x03);
+			i2s_write_reg(dev->i2s_cbase, RER(ch_reg), 1);
+		}
+
+	}
+}
+
 static int dw_i2s_hw_params(struct snd_pcm_substream *substream,
 		struct snd_pcm_hw_params *params, struct snd_soc_dai *dai)
 {
 	struct dw_i2s_dev *dev = snd_soc_dai_get_drvdata(dai);
 	struct i2s_clk_config_data *config = &dev->config;
 	const struct i2s_platform_data *pdata = dev_get_platdata(dai->dev);
-	u32 ccr, xfer_resolution, ch_reg, irq;
+
 	int ret;
 
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S16_LE:
 		config->data_width = 16;
-		ccr = 0x00;
-		xfer_resolution = 0x02;
+		dev->ccr = 0x00;
+		dev->xfer_resolution = 0x02;
 		break;
 
 	case SNDRV_PCM_FORMAT_S24_LE:
 		config->data_width = 24;
-		ccr = 0x08;
-		xfer_resolution = 0x04;
+		dev->ccr = 0x08;
+		dev->xfer_resolution = 0x04;
 		break;
 
 	case SNDRV_PCM_FORMAT_S32_LE:
 		config->data_width = 32;
-		ccr = 0x10;
-		xfer_resolution = 0x05;
+		dev->ccr = 0x10;
+		dev->xfer_resolution = 0x05;
 		break;
 
 	default:
@@ -250,31 +295,13 @@ static int dw_i2s_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
-	i2s_disable_channels(dev, substream->stream);
-
-	for (ch_reg = 0; ch_reg < (config->chan_nr / 2); ch_reg++) {
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-			i2s_write_reg(dev->i2s_base, TCR(ch_reg),
-				      xfer_resolution);
-			i2s_write_reg(dev->i2s_base, TFCR(ch_reg), 0x02);
-			irq = i2s_read_reg(dev->i2s_base, IMR(ch_reg));
-			i2s_write_reg(dev->i2s_base, IMR(ch_reg), irq & ~0x30);
-			i2s_write_reg(dev->i2s_base, TER(ch_reg), 1);
-		} else {
-			i2s_write_reg(dev->i2s_base, RCR(ch_reg),
-				      xfer_resolution);
-			i2s_write_reg(dev->i2s_base, RFCR(ch_reg), 0x07);
-			irq = i2s_read_reg(dev->i2s_base, IMR(ch_reg));
-			i2s_write_reg(dev->i2s_base, IMR(ch_reg), irq & ~0x03);
-			i2s_write_reg(dev->i2s_base, RER(ch_reg), 1);
-		}
-	}
-
-	i2s_write_reg(dev->i2s_base, CCR, ccr);
+	dw_i2s_config(dev, substream->stream);
 
 	config->sample_rate = params_rate(params);
 
 	if (!(pdata->cap & DW_I2S_SLAVE)) {
+		i2s_write_reg(dev->i2s_pbase, CCR, dev->ccr);
+
 		if (dev->i2s_clk_cfg) {
 			ret = dev->i2s_clk_cfg(config);
 			if (ret < 0) {
@@ -288,7 +315,7 @@ static int dw_i2s_hw_params(struct snd_pcm_substream *substream,
 			ret = clk_set_rate(dev->clk, bitclk);
 			if (ret) {
 				dev_err(dev->dev, "Can't set I2S clock rate: %d\n",
-					ret);
+				ret);
 				return ret;
 			}
 		}
@@ -308,9 +335,9 @@ static int dw_i2s_prepare(struct snd_pcm_substream *substream,
 	struct dw_i2s_dev *dev = snd_soc_dai_get_drvdata(dai);
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		i2s_write_reg(dev->i2s_base, TXFFR, 1);
+		i2s_write_reg(dev->i2s_pbase, TXFFR, 1);
 	else
-		i2s_write_reg(dev->i2s_base, RXFFR, 1);
+		i2s_write_reg(dev->i2s_cbase, RXFFR, 1);
 
 	return 0;
 }
@@ -373,6 +400,13 @@ static int dw_i2s_resume(struct snd_soc_dai *dai)
 
 	if (!(pdata->cap & DW_I2S_SLAVE))
 		clk_enable(dev->clk);
+
+	if (pdata->quirks & DW_I2S_VENDOR_AMD) {
+		if (dai->playback_active)
+			dw_i2s_config(dev, SNDRV_PCM_STREAM_PLAYBACK);
+		if (dai->capture_active)
+			dw_i2s_config(dev, SNDRV_PCM_STREAM_CAPTURE);
+	}
 	return 0;
 }
 
@@ -422,9 +456,16 @@ static int dw_configure_dai(struct dw_i2s_dev *dev,
 	 * Read component parameter registers to extract
 	 * the I2S block's configuration.
 	 */
-	u32 comp1 = i2s_read_reg(dev->i2s_base, I2S_COMP_PARAM_1);
-	u32 comp2 = i2s_read_reg(dev->i2s_base, I2S_COMP_PARAM_2);
-	u32 idx;
+	u32 comp1, comp2, idx;
+	const struct i2s_platform_data *pdata = dev->dev->platform_data;
+
+	if (pdata->quirks & DW_I2S_VENDOR_AMD) {
+		comp1 = i2s_read_reg(dev->i2s_pbase, 0x124);
+		comp2 = i2s_read_reg(dev->i2s_pbase, 0x120);
+	} else {
+		comp1 = i2s_read_reg(dev->i2s_pbase, I2S_COMP_PARAM_1);
+		comp2 = i2s_read_reg(dev->i2s_pbase, I2S_COMP_PARAM_2);
+	}
 
 	if (COMP1_TX_ENABLED(comp1)) {
 		dev_dbg(dev->dev, " designware: play supported\n");
@@ -458,9 +499,15 @@ static int dw_configure_dai_by_pd(struct dw_i2s_dev *dev,
 				   struct resource *res,
 				   const struct i2s_platform_data *pdata)
 {
-	u32 comp1 = i2s_read_reg(dev->i2s_base, I2S_COMP_PARAM_1);
-	u32 idx = COMP1_APB_DATA_WIDTH(comp1);
+	u32 comp1, idx;
 	int ret;
+
+	if (pdata->quirks & DW_I2S_VENDOR_AMD)
+		comp1 = i2s_read_reg(dev->i2s_pbase, 0x6c);
+	else
+		comp1 = i2s_read_reg(dev->i2s_pbase, I2S_COMP_PARAM_1);
+
+	idx = COMP1_APB_DATA_WIDTH(comp1);
 
 	if (WARN_ON(idx >= ARRAY_SIZE(bus_widths)))
 		return -EINVAL;
@@ -468,6 +515,9 @@ static int dw_configure_dai_by_pd(struct dw_i2s_dev *dev,
 	ret = dw_configure_dai(dev, dw_i2s_dai, pdata->snd_rates);
 	if (ret < 0)
 		return ret;
+
+	if (pdata->quirks & DW_I2S_VENDOR_AMD)
+		goto end;
 
 	/* Set DMA slaves info */
 	dev->play_dma_data.pd.data = pdata->play_dma_data;
@@ -480,7 +530,7 @@ static int dw_configure_dai_by_pd(struct dw_i2s_dev *dev,
 	dev->capture_dma_data.pd.addr_width = bus_widths[idx];
 	dev->play_dma_data.pd.filter = pdata->filter;
 	dev->capture_dma_data.pd.filter = pdata->filter;
-
+end:
 	return 0;
 }
 
@@ -488,8 +538,8 @@ static int dw_configure_dai_by_dt(struct dw_i2s_dev *dev,
 				   struct snd_soc_dai_driver *dw_i2s_dai,
 				   struct resource *res)
 {
-	u32 comp1 = i2s_read_reg(dev->i2s_base, I2S_COMP_PARAM_1);
-	u32 comp2 = i2s_read_reg(dev->i2s_base, I2S_COMP_PARAM_2);
+	u32 comp1 = i2s_read_reg(dev->i2s_pbase, I2S_COMP_PARAM_1);
+	u32 comp2 = i2s_read_reg(dev->i2s_pbase, I2S_COMP_PARAM_2);
 	u32 fifo_depth = 1 << (1 + COMP1_FIFO_DEPTH_GLOBAL(comp1));
 	u32 idx = COMP1_APB_DATA_WIDTH(comp1);
 	u32 idx2;
@@ -553,10 +603,18 @@ static int dw_i2s_probe(struct platform_device *pdev)
 	dw_i2s_dai->resume = dw_i2s_resume;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	dev->i2s_base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(dev->i2s_base))
-		return PTR_ERR(dev->i2s_base);
+	dev->i2s_pbase = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(dev->i2s_pbase))
+		return PTR_ERR(dev->i2s_pbase);
 
+	dev->i2s_cbase = dev->i2s_pbase;
+
+	if (pdata->quirks & DW_I2S_VENDOR_AMD) {
+		res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+		dev->i2s_cbase = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(dev->i2s_cbase))
+			return PTR_ERR(dev->i2s_cbase);
+	}
 	dev->dev = &pdev->dev;
 
 	if (pdata) {
