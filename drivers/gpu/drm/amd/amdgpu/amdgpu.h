@@ -52,6 +52,7 @@
 #include "amdgpu_irq.h"
 #include "amdgpu_ucode.h"
 #include "amdgpu_gds.h"
+#include "amdgpu_acp.h"
 
 #include "gpu_scheduler.h"
 
@@ -1930,6 +1931,13 @@ void amdgpu_cgs_destroy_device(void *cgs_device);
 
 
 /*
+ * CGS
+ */
+void *amdgpu_cgs_create_device(struct amdgpu_device *adev);
+void amdgpu_cgs_destroy_device(void *cgs_device);
+
+
+/*
  * Core structure, functions and helpers.
  */
 typedef uint32_t (*amdgpu_rreg_t)(struct amdgpu_device*, uint32_t);
@@ -1949,6 +1957,10 @@ struct amdgpu_device {
 	struct drm_device		*ddev;
 	struct pci_dev			*pdev;
 	struct rw_semaphore		exclusive_lock;
+
+#ifdef CONFIG_DRM_AMD_ACP
+	struct amdgpu_acp		acp;
+#endif
 
 	/* ASIC */
 	enum amd_asic_type		asic_type;
