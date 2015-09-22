@@ -209,6 +209,7 @@ static int dw_i2s_hw_params(struct snd_pcm_substream *substream,
 {
 	struct dw_i2s_dev *dev = snd_soc_dai_get_drvdata(dai);
 	struct i2s_clk_config_data *config = &dev->config;
+	const struct i2s_platform_data *pdata = dev_get_platdata(dai->dev);
 	u32 ccr, xfer_resolution, ch_reg, irq;
 	int ret;
 
@@ -273,23 +274,25 @@ static int dw_i2s_hw_params(struct snd_pcm_substream *substream,
 
 	config->sample_rate = params_rate(params);
 
-	if (dev->i2s_clk_cfg) {
-		ret = dev->i2s_clk_cfg(config);
-		if (ret < 0) {
-			dev_err(dev->dev, "runtime audio clk config fail\n");
-			return ret;
+	if (!(pdata->cap & DW_I2S_SLAVE)) {
+		if (dev->i2s_clk_cfg) {
+			ret = dev->i2s_clk_cfg(config);
+			if (ret < 0) {
+				dev_err(dev->dev, "runtime audio clk config fail\n");
+				return ret;
 		}
-	} else {
-		u32 bitclk = config->sample_rate * config->data_width * 2;
+		} else {
+			u32 bitclk = config->sample_rate *
+					config->data_width * 2;
 
-		ret = clk_set_rate(dev->clk, bitclk);
-		if (ret) {
-			dev_err(dev->dev, "Can't set I2S clock rate: %d\n",
-				ret);
-			return ret;
+			ret = clk_set_rate(dev->clk, bitclk);
+			if (ret) {
+				dev_err(dev->dev, "Can't set I2S clock rate: %d\n",
+					ret);
+				return ret;
+			}
 		}
 	}
-
 	return 0;
 }
 
@@ -356,16 +359,20 @@ static const struct snd_soc_component_driver dw_i2s_component = {
 static int dw_i2s_suspend(struct snd_soc_dai *dai)
 {
 	struct dw_i2s_dev *dev = snd_soc_dai_get_drvdata(dai);
+	const struct i2s_platform_data *pdata = dev_get_platdata(dai->dev);
 
-	clk_disable(dev->clk);
+	if (!(pdata->cap & DW_I2S_SLAVE))
+		clk_disable(dev->clk);
 	return 0;
 }
 
 static int dw_i2s_resume(struct snd_soc_dai *dai)
 {
 	struct dw_i2s_dev *dev = snd_soc_dai_get_drvdata(dai);
+	const struct i2s_platform_data *pdata = dev_get_platdata(dai->dev);
 
-	clk_enable(dev->clk);
+	if (!(pdata->cap & DW_I2S_SLAVE))
+		clk_enable(dev->clk);
 	return 0;
 }
 
@@ -529,6 +536,7 @@ static int dw_i2s_probe(struct platform_device *pdev)
 	struct resource *res;
 	int ret;
 	struct snd_soc_dai_driver *dw_i2s_dai;
+	const char *clk_id;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
 	if (!dev) {
@@ -550,32 +558,35 @@ static int dw_i2s_probe(struct platform_device *pdev)
 		return PTR_ERR(dev->i2s_base);
 
 	dev->dev = &pdev->dev;
+
 	if (pdata) {
+		clk_id = NULL;
 		ret = dw_configure_dai_by_pd(dev, dw_i2s_dai, res, pdata);
-		if (ret < 0)
-			return ret;
-
 		dev->capability = pdata->cap;
-		dev->i2s_clk_cfg = pdata->i2s_clk_cfg;
-		if (!dev->i2s_clk_cfg) {
-			dev_err(&pdev->dev, "no clock configure method\n");
-			return -ENODEV;
-		}
-
-		dev->clk = devm_clk_get(&pdev->dev, NULL);
 	} else {
+		clk_id = "i2sclk";
 		ret = dw_configure_dai_by_dt(dev, dw_i2s_dai, res);
-		if (ret < 0)
-			return ret;
-
-		dev->clk = devm_clk_get(&pdev->dev, "i2sclk");
 	}
-	if (IS_ERR(dev->clk))
-		return PTR_ERR(dev->clk);
-
-	ret = clk_prepare_enable(dev->clk);
 	if (ret < 0)
 		return ret;
+
+	if (!(pdata->cap & DW_I2S_SLAVE)) {
+		if (pdata) {
+			dev->i2s_clk_cfg = pdata->i2s_clk_cfg;
+			if (!dev->i2s_clk_cfg) {
+				dev_err(&pdev->dev, "no clock configure method\n");
+				return -ENODEV;
+			}
+		}
+		dev->clk = devm_clk_get(&pdev->dev, clk_id);
+
+		if (IS_ERR(dev->clk))
+			return PTR_ERR(dev->clk);
+
+		ret = clk_prepare_enable(dev->clk);
+		if (ret < 0)
+			return ret;
+	}
 
 	dev_set_drvdata(&pdev->dev, dev);
 	ret = devm_snd_soc_register_component(&pdev->dev, &dw_i2s_component,
@@ -597,15 +608,18 @@ static int dw_i2s_probe(struct platform_device *pdev)
 	return 0;
 
 err_clk_disable:
-	clk_disable_unprepare(dev->clk);
+	if (!(pdata->cap & DW_I2S_SLAVE))
+		clk_disable_unprepare(dev->clk);
 	return ret;
 }
 
 static int dw_i2s_remove(struct platform_device *pdev)
 {
+	const struct i2s_platform_data *pdata = pdev->dev.platform_data;
 	struct dw_i2s_dev *dev = dev_get_drvdata(&pdev->dev);
 
-	clk_disable_unprepare(dev->clk);
+	if (!(pdata->cap & DW_I2S_SLAVE))
+		clk_disable_unprepare(dev->clk);
 
 	return 0;
 }
