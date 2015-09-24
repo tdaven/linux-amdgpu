@@ -673,8 +673,8 @@ static int sdma_v3_0_start(struct amdgpu_device *adev)
 
 	/* unhalt the MEs */
 	sdma_v3_0_enable(adev, true);
-	/* enable sdma ring preemption */
-	sdma_v3_0_ctx_switch_enable(adev, true);
+	/* enable sdma ring preemption for HSA only. It is for user queue feature. */
+		sdma_v3_0_ctx_switch_enable(adev, false);
 
 	/* start the gfx rings and rlc compute queues */
 	r = sdma_v3_0_gfx_resume(adev);
