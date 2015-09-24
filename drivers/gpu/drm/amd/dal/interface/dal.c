@@ -1663,3 +1663,25 @@ enum dal_irq_source dal_interrupt_to_irq_source(
 {
 	return dal_irq_service_to_irq_source(dal->irqs, src_id, ext_id);
 }
+
+struct bestview_options dal_get_bestview_options(
+	struct dal *dal,
+	uint32_t display_index)
+{
+	return dal_mode_manager_get_bestview_options(dal->mm, display_index);
+}
+
+void dal_set_bestview_options(
+	struct dal *dal,
+	uint32_t display_index,
+	const struct bestview_options *bv_options)
+{
+	dal_mode_manager_set_bestview_options(
+		dal->mm,
+		display_index,
+		bv_options,
+		true,
+		dal_timing_service_get_mode_timing_list_for_path(
+			dal->timing_srv,
+			display_index));
+}
