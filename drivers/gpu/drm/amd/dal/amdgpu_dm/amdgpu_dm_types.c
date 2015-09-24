@@ -1211,6 +1211,12 @@ static void amdgpu_dm_encoder_disable(struct drm_encoder *encoder)
 	DRM_DEBUG_KMS("NOT IMPLEMENTED\n");
 }
 
+enum {
+	DAL_MAX_RESOLUTION_HEIGHT = 2160,
+	DAL_MAX_RESOLUTION_WIDTH = 3840,
+	DAL_MAX_RESOLUTION_RR = 60
+};
+
 /**
  * amdgpu_display_manager_fill_modes - get complete set of
  * display timing modes per drm_connector
@@ -1268,7 +1274,6 @@ int amdgpu_display_manager_fill_modes(struct drm_connector *connector,
 	if (connector->status == connector_status_disconnected) {
 		DRM_DEBUG_KMS("[CONNECTOR:%d] disconnected\n",
 			connector->connector_type_id);
-		drm_mode_connector_update_edid_property(connector, NULL);
 		goto prune;
 	}
 
@@ -1318,9 +1323,9 @@ int amdgpu_display_manager_fill_modes(struct drm_connector *connector,
 				mt->mode_info.flags.INTERLACE)
 				continue;
 
-			if (mt->mode_info.pixel_width >= 3840 &&
-				mt->mode_info.pixel_height >= 2160 &&
-				mt->mode_info.field_rate >= 60)
+			if (mt->mode_info.pixel_width >= DAL_MAX_RESOLUTION_WIDTH &&
+				mt->mode_info.pixel_height >= DAL_MAX_RESOLUTION_HEIGHT &&
+				mt->mode_info.field_rate >= DAL_MAX_RESOLUTION_RR)
 				continue;
 
 			if (dm_add_mode(connector, mt, rm, rr) == 0)
@@ -1534,6 +1539,86 @@ static int to_drm_connector_type(enum signal_type st)
 	}
 }
 
+static void dm_connector_update_mode_enumeration_property(
+	struct amdgpu_display_manager *dm,
+	uint32_t display_index)
+{
+	const struct path_mode_set *pms;
+	const struct path_mode *pm;
+	struct topology tp;
+	const struct mode_timing *mt;
+	struct mode_query *mq;
+	struct dal *dal = dm->dal;
+	struct bestview_options bv_options =
+		dal_get_bestview_options(dal, display_index);
+
+	/*
+	 * these options will enable GPU scaling by default
+	 */
+	bv_options.base_timing_select = TIMING_SELECT_NATIVE_ONLY;
+	bv_options.ENABLE_SCALING = true;
+	bv_options.MAINTAIN_ASPECT_RATIO = true;
+
+	dal_set_bestview_options(dal, display_index, &bv_options);
+
+	init_dal_topology(dm, &tp, display_index);
+	mq = dal_get_mode_query(dal, &tp, dm->mode_query_option);
+
+	if (!mq)
+		return;
+
+	dal_pin_active_path_modes(dal, mq, display_index, add_to_mq_helper);
+
+	if (!dal_mode_query_select_first(mq))
+		return;
+
+	pms = dal_mode_query_get_current_path_mode_set(mq);
+
+	pm = dal_pms_get_path_mode_for_display_index(pms, display_index);
+
+	mt = pm->mode_timing;
+
+	if (mt->mode_info.pixel_width >= DAL_MAX_RESOLUTION_WIDTH &&
+		mt->mode_info.pixel_height >= DAL_MAX_RESOLUTION_HEIGHT &&
+		mt->mode_info.field_rate >= DAL_MAX_RESOLUTION_RR) {
+		/*
+		 * this is the case when native timing is bigger
+		 * then 3840x2160x60 which is not currently
+		 * supported. So disabling scaling here and
+		 * later filter out not supported modes
+		 */
+
+		bv_options.base_timing_select =
+			TIMING_SELECT_DEFAULT;
+		bv_options.ENABLE_SCALING = false;
+		bv_options.MAINTAIN_ASPECT_RATIO = false;
+
+		dal_set_bestview_options(dal, display_index, &bv_options);
+	}
+}
+
+void amdgpu_dm_connector_update(
+	struct amdgpu_display_manager *dm,
+	struct amdgpu_connector *aconnector,
+	bool is_connected)
+{
+	if (is_connected) {
+		uint32_t display_index = aconnector->connector_id;
+		dm_connector_update_mode_enumeration_property(
+			dm, display_index);
+
+		drm_mode_connector_update_edid_property(
+			&aconnector->base,
+			(struct edid *)
+			dal_get_display_edid(
+				dm->dal,
+				display_index,
+				NULL));
+	} else
+		drm_mode_connector_update_edid_property(
+			&aconnector->base, NULL);
+}
+
 int amdgpu_dm_connector_init(
 	struct amdgpu_display_manager *dm,
 	struct amdgpu_connector *aconnector,
@@ -1592,23 +1677,12 @@ int amdgpu_dm_connector_init(
 		break;
 	}
 
-	/* TODO: Don't do this manually anymore
-	aconnector->base.encoder = &aencoder->base;
-	*/
-
 	drm_mode_connector_attach_encoder(
 		&aconnector->base, &aencoder->base);
 
-	/*drm_sysfs_connector_add(&dm_connector->base);*/
-
 	/* TODO: this switch should be updated during hotplug/unplug*/
-	if (dm->dal != NULL && is_connected) {
-		DRM_DEBUG_KMS("Connector is connected\n");
-		drm_mode_connector_update_edid_property(
-			&aconnector->base,
-			(struct edid *)
-			dal_get_display_edid(dm->dal, display_idx, NULL));
-	}
+	if (dm->dal != NULL)
+		amdgpu_dm_connector_update(dm, aconnector, is_connected);
 
 	drm_connector_register(&aconnector->base);
 
