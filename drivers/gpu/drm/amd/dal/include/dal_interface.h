@@ -260,10 +260,21 @@ enum dal_irq_source dal_interrupt_to_irq_source(
 		uint32_t src_id,
 		uint32_t ext_id);
 
-void dal_stop_mc_access(struct amdgpu_device *adev,
-				     struct amdgpu_mode_mc_save *save);
+void dal_stop_mc_access(
+	struct amdgpu_device *adev,
+	struct amdgpu_mode_mc_save *save);
 
-void dal_resume_mc_access(struct amdgpu_device *adev,
-				       struct amdgpu_mode_mc_save *save);
+void dal_resume_mc_access(
+	struct amdgpu_device *adev,
+	struct amdgpu_mode_mc_save *save);
+
+struct bestview_options dal_get_bestview_options(
+	struct dal *dal,
+	uint32_t display_index);
+
+void dal_set_bestview_options(
+	struct dal *dal,
+	uint32_t display_index,
+	const struct bestview_options *bv_options);
 
 #endif
