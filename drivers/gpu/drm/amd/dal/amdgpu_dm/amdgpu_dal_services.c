@@ -33,6 +33,7 @@
 #include "amdgpu.h"
 #include "dal_services.h"
 #include "amdgpu_dm.h"
+#include "amdgpu_dm_types.h"
 #include "amdgpu_dm_irq.h"
 #include "include/dal_interface.h"
 
@@ -205,17 +206,7 @@ void dal_notify_hotplug(
 		if (aconnector->connector_id != display_index)
 			continue;
 
-		if (is_connected) {
-			drm_mode_connector_update_edid_property(
-				connector,
-				(struct edid *)
-				dal_get_display_edid(
-					adev->dm.dal,
-					display_index,
-					NULL));
-		} else
-			drm_mode_connector_update_edid_property(
-				connector, NULL);
+		amdgpu_dm_connector_update(&adev->dm, aconnector, is_connected);
 
 		break;
 	}
@@ -240,15 +231,11 @@ void dal_notify_capability_change(
 		aconnector = to_amdgpu_connector(connector);
 
 		/*aconnector->connector_id means display_index*/
-		if (aconnector->connector_id == display_index) {
-			drm_mode_connector_update_edid_property(
-				connector,
-				(struct edid *)
-				dal_get_display_edid(
-					adev->dm.dal,
-					display_index,
-					NULL));
-		}
+		if (aconnector->connector_id == display_index)
+			amdgpu_dm_connector_update(
+				&adev->dm,
+				aconnector,
+				true);
 	}
 
 	drm_kms_helper_hotplug_event(dev);

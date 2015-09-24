@@ -454,21 +454,6 @@ int amdgpu_dm_init(struct amdgpu_device *adev)
 
 	init_data.cgs_device = adev->dm.cgs_device;
 
-	adev->dm.dal = NULL;
-
-	/* enable gpu scaling in DAL */
-	init_data.display_param.bool_param_enable_mask |=
-		1 << DAL_PARAM_ENABLE_GPU_SCALING;
-	init_data.display_param.bool_param_values |=
-		1 << DAL_PARAM_ENABLE_GPU_SCALING;
-
-	/*TODO: check if needed  Initialize display related interrupts */
-	/*if (amdgpu_dm_irq_init(adev)) {
-		DRM_ERROR(
-		"amdgpu: failed to initialize irq for display support.\n");
-		return -1;
-	}*/
-
 	adev->dm.dal = dal_create(&init_data);
 
 	if (!adev->dm.dal) {
@@ -865,6 +850,8 @@ int amdgpu_dm_initialize_drm_device(struct amdgpu_display_manager *dm)
 	}
 #endif
 
+	dm->mode_query_option = QUERY_OPTION_NO_PAN;
+
 	/* loops over all the connected displays*/
 	for (; total_supported_displays_vector != 0;
 				total_supported_displays_vector >>= 1,
@@ -919,7 +906,6 @@ int amdgpu_dm_initialize_drm_device(struct amdgpu_display_manager *dm)
 	}
 
 	dm->display_indexes_num = current_display_index;
-	dm->mode_query_option = QUERY_OPTION_NO_PAN;
 
 	return 0;
 

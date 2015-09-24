@@ -33,15 +33,20 @@ struct plane_addr_flip_info;
 struct amdgpu_framebuffer;
 struct amdgpu_display_manager;
 
-/*TODO Jodan Hersen use the one in amdgpu_dm*/
 int amdgpu_dm_crtc_init(struct amdgpu_display_manager *dm,
 			struct amdgpu_crtc *amdgpu_crtc,
 			int display_idx);
+
 int amdgpu_dm_connector_init(struct amdgpu_display_manager *dm,
 			struct amdgpu_connector *amdgpu_connector,
 			int display_idx,
 			bool is_connected,
 			struct amdgpu_encoder *amdgpu_encoder);
+void amdgpu_dm_connector_update(
+	struct amdgpu_display_manager *dm,
+	struct amdgpu_connector *aconnector,
+	bool is_connected);
+
 int amdgpu_dm_encoder_init(struct drm_device *dev,
 			struct amdgpu_encoder *amdgpu_encoder,
 			int display_idx,
