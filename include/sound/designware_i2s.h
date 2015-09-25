@@ -44,6 +44,9 @@ struct i2s_platform_data {
 	int channel;
 	u32 snd_fmts;
 	u32 snd_rates;
+	#define DW_I2S_VENDOR_AMD (1 << 0)
+	unsigned int quirks;
+
 
 	void *play_dma_data;
 	void *capture_dma_data;
