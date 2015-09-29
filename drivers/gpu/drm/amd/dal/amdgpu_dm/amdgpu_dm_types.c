@@ -1132,6 +1132,8 @@ static inline void fill_drm_mode_info(
 
 	drm_mode->clock = mode_timing->crtc_timing.pix_clk_khz;
 	drm_mode->vrefresh = rr->field_rate;
+	if(rr->VIDEO_OPTIMIZED_RATE)
+		drm_mode->private_flags|=DAL_MODE_FLAG_VIDEO_OPTIMIZED;/*we read this flag back in amdgpu_dm_mode_set*/
 	if (mode_timing->crtc_timing.flags.HSYNC_POSITIVE_POLARITY)
 		drm_mode->flags |= DRM_MODE_FLAG_PHSYNC;
 	if (mode_timing->crtc_timing.flags.VSYNC_POSITIVE_POLARITY)
