@@ -506,23 +506,9 @@ static int amdgpu_bo_vm_update_pte(struct amdgpu_cs_parser *p,
 			if (r)
 				return r;
 		}
-
 	}
 
-	r = amdgpu_vm_clear_invalids(adev, vm, &p->ibs[0].sync);
-
-	if (p->bo_list) {
-		for (i = 0; i < p->bo_list->num_entries; i++) {
-			/* ignore duplicates */
-			bo = p->bo_list->array[i].robj;
-			if (!bo)
-				continue;
-
-			amdgpu_vm_bo_invalidate(adev, bo);
-		}
-	}
-
-	return r;
+	return amdgpu_vm_clear_invalids(adev, vm, &p->ibs[0].sync);
 }
 
 static int amdgpu_cs_ib_vm_chunk(struct amdgpu_device *adev,
