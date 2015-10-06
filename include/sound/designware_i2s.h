@@ -45,8 +45,11 @@ struct i2s_platform_data {
 	u32 snd_fmts;
 	u32 snd_rates;
 
-	#define DW_I2S_QUIRK_MULTI_DWC	(1 << 0)
+	#define DW_I2S_QUIRK_MULTI_DWC		(1 << 0)
+	#define DW_I2S_QUIRK_COMP_REG_OFFSET	(1 << 1)
 	unsigned int quirks;
+	unsigned int i2s_reg_comp1;
+	unsigned int i2s_reg_comp2;
 
 	void *play_dma_data;
 	void *capture_dma_data;
