@@ -95,6 +95,8 @@ struct dw_i2s_dev {
 	int active;
 	unsigned int capability;
 	unsigned int quirks;
+	unsigned int i2s_reg_comp1;
+	unsigned int i2s_reg_comp2;
 	struct device *dev;
 
 	/* data related to DMA transfers b/w i2s and DMAC */
@@ -464,8 +466,8 @@ static int dw_configure_dai(struct dw_i2s_dev *dev,
 	 * Read component parameter registers to extract
 	 * the I2S block's configuration.
 	 */
-	u32 comp1 = i2s_read_reg(dev->i2s_pbase, I2S_COMP_PARAM_1);
-	u32 comp2 = i2s_read_reg(dev->i2s_pbase, I2S_COMP_PARAM_2);
+	u32 comp1 = i2s_read_reg(dev->i2s_pbase, dev->i2s_reg_comp1);
+	u32 comp2 = i2s_read_reg(dev->i2s_pbase, dev->i2s_reg_comp2);
 	u32 idx;
 
 	if (COMP1_TX_ENABLED(comp1)) {
@@ -508,7 +510,7 @@ static int dw_configure_dai_by_pd(struct dw_i2s_dev *dev,
 				   struct resource *res,
 				   const struct i2s_platform_data *pdata)
 {
-	u32 comp1 = i2s_read_reg(dev->i2s_pbase, I2S_COMP_PARAM_1);
+	u32 comp1 = i2s_read_reg(dev->i2s_pbase, dev->i2s_reg_comp1);
 	u32 idx = COMP1_APB_DATA_WIDTH(comp1);
 	int ret;
 
@@ -610,9 +612,16 @@ static int dw_i2s_probe(struct platform_device *pdev)
 	dev->i2s_cbase = dev->i2s_pbase;
 
 	if (pdata) {
+		clk_id = NULL;
 		dev->capability = pdata->cap;
 		dev->quirks = pdata->quirks;
-		clk_id = NULL;
+		if (dev->quirks & DW_I2S_QUIRK_COMP_REG_OFFSET) {
+			dev->i2s_reg_comp1 = pdata->i2s_reg_comp1;
+			dev->i2s_reg_comp2 = pdata->i2s_reg_comp2;
+		} else {
+			dev->i2s_reg_comp1 = I2S_COMP_PARAM_1;
+			dev->i2s_reg_comp2 = I2S_COMP_PARAM_2;
+		}
 		ret = dw_configure_dai_by_pd(dev, dw_i2s_dai, res, pdata);
 	} else {
 		clk_id = "i2sclk";
