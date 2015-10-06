@@ -94,6 +94,7 @@ struct dw_i2s_dev {
 	struct clk *clk;
 	int active;
 	unsigned int capability;
+	unsigned int quirks;
 	struct device *dev;
 
 	/* data related to DMA transfers b/w i2s and DMAC */
@@ -186,9 +187,20 @@ static void i2s_stop(struct dw_i2s_dev *dev,
 		}
 	}
 
-	if (!dev->active) {
-		i2s_write_reg(dev->i2s_pbase, CER, 0);
-		i2s_write_reg(dev->i2s_pbase, IER, 0);
+	if (dev->quirks & DW_I2S_QUIRK_MULTI_DWC) {
+		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+			i2s_write_reg(dev->i2s_pbase, CER, 0);
+			i2s_write_reg(dev->i2s_pbase, IER, 0);
+		} else {
+			i2s_write_reg(dev->i2s_cbase, CER, 0);
+			i2s_write_reg(dev->i2s_cbase, IER, 0);
+		}
+
+	} else {
+		if (!dev->active) {
+			i2s_write_reg(dev->i2s_pbase, CER, 0);
+			i2s_write_reg(dev->i2s_pbase, IER, 0);
+		}
 	}
 }
 
@@ -609,6 +621,7 @@ static int dw_i2s_probe(struct platform_device *pdev)
 
 	if (pdata) {
 		dev->capability = pdata->cap;
+		dev->quirks = pdata->quirks;
 		clk_id = NULL;
 		ret = dw_configure_dai_by_pd(dev, dw_i2s_dai, res, pdata);
 	} else {
@@ -617,6 +630,13 @@ static int dw_i2s_probe(struct platform_device *pdev)
 	}
 	if (ret < 0)
 		return ret;
+
+	if (dev->quirks & DW_I2S_QUIRK_MULTI_DWC) {
+		res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+		dev->i2s_cbase = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(dev->i2s_cbase))
+			return PTR_ERR(dev->i2s_cbase);
+	}
 
 	if (dev->capability & DW_I2S_MASTER) {
 		if (pdata) {
