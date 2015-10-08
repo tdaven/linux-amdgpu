@@ -555,8 +555,10 @@ bool amdgpu_dm_mode_set(
 	amdgpu_dm_fill_surface_address(crtc, &addr_flip_info, afb, old_fb);
 
 	dal_set_blanking(adev->dm.dal, acrtc->crtc_id, false);
-	/* Turn vblank on after reset */
+	/* Turn vblank and pflip on after reset */
 	drm_crtc_vblank_on(crtc);
+	amdgpu_irq_get(adev, &adev->pageflip_irq,
+		       amdgpu_crtc_idx_to_irq_type(adev, acrtc->crtc_id));
 
 	if (ret) {
 		/* Store real post-adjustment hardware mode. */
@@ -588,8 +590,10 @@ bool amdgpu_dm_mode_reset(struct drm_crtc *crtc)
 	struct amdgpu_crtc *acrtc = to_amdgpu_crtc(crtc);
 	uint32_t display_index = acrtc->crtc_id;
 
-	/* Turn vblank off before reset */
+	/* Turn vblank and pflip off before reset */
 	drm_crtc_vblank_off(crtc);
+	amdgpu_irq_put(adev, &adev->pageflip_irq,
+		       amdgpu_crtc_idx_to_irq_type(adev, acrtc->crtc_id));
 
 	/* When we will get called from drm asking to reset mode
 	 * when fb is null, it will lead us reset mode unnecessarily.
@@ -1431,16 +1435,23 @@ static const struct drm_connector_funcs amdgpu_dm_connector_funcs = {
 
 static void dm_crtc_helper_dpms(struct drm_crtc *crtc, int mode)
 {
+	struct drm_device *dev = crtc->dev;
+	struct amdgpu_device *adev = dev->dev_private;
+	struct amdgpu_crtc *acrtc = to_amdgpu_crtc(crtc);
 
 	switch (mode) {
 	case DRM_MODE_DPMS_ON:
 		drm_crtc_vblank_on(crtc);
+		amdgpu_irq_get(adev, &adev->pageflip_irq,
+			       amdgpu_crtc_idx_to_irq_type(adev, acrtc->crtc_id));
 		break;
 	case DRM_MODE_DPMS_OFF:
 	case DRM_MODE_DPMS_SUSPEND:
 	case DRM_MODE_DPMS_STANDBY:
 	default:
 		drm_crtc_vblank_off(crtc);
+		amdgpu_irq_put(adev, &adev->pageflip_irq,
+			       amdgpu_crtc_idx_to_irq_type(adev, acrtc->crtc_id));
 		break;
 	}
 

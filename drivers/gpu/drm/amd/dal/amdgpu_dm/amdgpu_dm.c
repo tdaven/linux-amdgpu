@@ -218,7 +218,6 @@ static void amdgpu_dm_pflip_high_irq(void *interrupt_params)
 	spin_unlock_irqrestore(&adev->ddev->event_lock, flags);
 
 	drm_vblank_put(adev->ddev, amdgpu_crtc->crtc_id);
-	amdgpu_irq_put(adev, &adev->pageflip_irq, amdgpu_crtc->crtc_id);
 	queue_work(amdgpu_crtc->pflip_queue, &works->unpin_work);
 }
 
