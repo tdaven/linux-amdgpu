@@ -113,7 +113,7 @@ static int vce_v3_0_start(struct amdgpu_device *adev)
 	int idx, i, j, r;
 
 	mutex_lock(&adev->grbm_idx_mutex);
-	for (idx = 0; idx < 2; ++idx) {
+	for (idx = 0; idx < adev->vce.num_pipe; ++idx) {
 
 		if (adev->vce.harvest_config & (1 << idx))
 			continue;
@@ -241,6 +241,15 @@ static int vce_v3_0_early_init(void *handle)
 	     (AMDGPU_VCE_HARVEST_VCE0 | AMDGPU_VCE_HARVEST_VCE1)) ==
 	    (AMDGPU_VCE_HARVEST_VCE0 | AMDGPU_VCE_HARVEST_VCE1))
 		return -ENOENT;
+
+	switch (adev->asic_type) {
+	case CHIP_STONEY:
+		adev->vce.num_pipe = 1;
+		break;
+	default:
+		adev->vce.num_pipe = VCE_MAX_INSTANCE;
+		break;
+	}
 
 	vce_v3_0_set_ring_funcs(adev);
 	vce_v3_0_set_irq_funcs(adev);
