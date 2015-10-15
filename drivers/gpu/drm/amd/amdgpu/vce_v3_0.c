@@ -205,6 +205,11 @@ static unsigned vce_v3_0_get_harvest_config(struct amdgpu_device *adev)
 	u32 tmp;
 	unsigned ret;
 
+	if (adev->asic_type == CHIP_STONEY) {
+ 		ret = AMDGPU_VCE_HARVEST_VCE1;
+ 		return ret;
+ 	}
+
 	if (adev->flags & AMDGPU_IS_APU)
 		tmp = (RREG32_SMC(ixVCE_HARVEST_FUSE_MACRO__ADDRESS) &
 		       VCE_HARVEST_FUSE_MACRO__MASK) >>
