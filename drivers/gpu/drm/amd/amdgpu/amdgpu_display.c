@@ -80,13 +80,12 @@ static void amdgpu_flip_work_func(struct work_struct *__work)
 
 	/* We borrow the event spin lock for protecting flip_status */
 	spin_lock_irqsave(&crtc->dev->event_lock, flags);
-
-	/* do the flip (mmio) */
-	adev->mode_info.funcs->page_flip(adev, work->crtc_id, work->base);
-	/* set the flip status */
+	/* Set the flip status */
 	amdgpuCrtc->pflip_status = AMDGPU_FLIP_SUBMITTED;
-
 	spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
+
+	/* Do the flip (mmio) */
+	adev->mode_info.funcs->page_flip(adev, work->crtc_id, work->base);
 }
 
 /*
