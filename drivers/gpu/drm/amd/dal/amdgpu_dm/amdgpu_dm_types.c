@@ -466,6 +466,7 @@ bool amdgpu_dm_mode_set(
 	int num_planes = 1;
 	struct mode_query *mq;
 	const struct path_mode_set *pms;
+	enum dal_irq_source src;
 
 	DRM_DEBUG_KMS("amdgpu_dm_mode_set called\n");
 
@@ -557,8 +558,14 @@ bool amdgpu_dm_mode_set(
 	dal_set_blanking(adev->dm.dal, acrtc->crtc_id, false);
 	/* Turn vblank and pflip on after reset */
 	drm_crtc_vblank_on(crtc);
-	amdgpu_irq_get(adev, &adev->pageflip_irq,
-		       amdgpu_crtc_idx_to_irq_type(adev, acrtc->crtc_id));
+
+	/* Turn pageflip on */
+	src = dal_get_pflip_irq_src_from_display_index(
+			adev->dm.dal,
+			acrtc->crtc_id,	/* this is the display_index because passed
+				 * via work->crtc_id*/
+			0	/* plane_no */);
+	dal_interrupt_set(adev->dm.dal, src, true);
 
 	if (ret) {
 		/* Store real post-adjustment hardware mode. */
@@ -589,11 +596,15 @@ bool amdgpu_dm_mode_reset(struct drm_crtc *crtc)
 	struct amdgpu_device *adev = crtc->dev->dev_private;
 	struct amdgpu_crtc *acrtc = to_amdgpu_crtc(crtc);
 	uint32_t display_index = acrtc->crtc_id;
+	enum dal_irq_source src = dal_get_pflip_irq_src_from_display_index(
+			adev->dm.dal,
+			acrtc->crtc_id,	/* this is the display_index because passed
+				 * via work->crtc_id*/
+			0	/* plane_no */);
 
 	/* Turn vblank and pflip off before reset */
 	drm_crtc_vblank_off(crtc);
-	amdgpu_irq_put(adev, &adev->pageflip_irq,
-		       amdgpu_crtc_idx_to_irq_type(adev, acrtc->crtc_id));
+	dal_interrupt_set(adev->dm.dal, src, false);
 
 	/* When we will get called from drm asking to reset mode
 	 * when fb is null, it will lead us reset mode unnecessarily.
@@ -1438,20 +1449,23 @@ static void dm_crtc_helper_dpms(struct drm_crtc *crtc, int mode)
 	struct drm_device *dev = crtc->dev;
 	struct amdgpu_device *adev = dev->dev_private;
 	struct amdgpu_crtc *acrtc = to_amdgpu_crtc(crtc);
+	enum dal_irq_source src = dal_get_pflip_irq_src_from_display_index(
+			adev->dm.dal,
+			acrtc->crtc_id,	/* this is the display_index because passed
+				 * via work->crtc_id*/
+			0	/* plane_no */);
 
 	switch (mode) {
 	case DRM_MODE_DPMS_ON:
 		drm_crtc_vblank_on(crtc);
-		amdgpu_irq_get(adev, &adev->pageflip_irq,
-			       amdgpu_crtc_idx_to_irq_type(adev, acrtc->crtc_id));
+		dal_interrupt_set(adev->dm.dal, src, true);
 		break;
 	case DRM_MODE_DPMS_OFF:
 	case DRM_MODE_DPMS_SUSPEND:
 	case DRM_MODE_DPMS_STANDBY:
 	default:
 		drm_crtc_vblank_off(crtc);
-		amdgpu_irq_put(adev, &adev->pageflip_irq,
-			       amdgpu_crtc_idx_to_irq_type(adev, acrtc->crtc_id));
+		dal_interrupt_set(adev->dm.dal, src, false);
 		break;
 	}
 
