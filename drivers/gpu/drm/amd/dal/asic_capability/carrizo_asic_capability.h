@@ -30,6 +30,7 @@
 struct asic_capability;
 
 /* Create and initialize Carrizo data */
-void carrizo_asic_capability_create(struct asic_capability *cap);
+void carrizo_asic_capability_create(struct asic_capability *cap,
+		struct hw_asic_id *init);
 
 #endif /* __DAL_CARRIZO_ASIC_CAPABILITY_H__ */

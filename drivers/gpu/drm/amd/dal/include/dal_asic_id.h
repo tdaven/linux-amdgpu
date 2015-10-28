@@ -77,7 +77,11 @@
 
 /* DCE11 */
 #define CZ_CARRIZO_A0 0x01
+#define STONEY_A0 0x61
 #define CZ_UNKNOWN 0xFF
+
+#define ASIC_REV_IS_STONEY(rev) \
+	((rev >= STONEY_A0) && (rev < CZ_UNKNOWN))
 
 
 /*

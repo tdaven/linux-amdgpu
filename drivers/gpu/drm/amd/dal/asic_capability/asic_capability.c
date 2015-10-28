@@ -89,7 +89,7 @@ static bool construct(
 
 	case FAMILY_CZ:
 #if defined(CONFIG_DRM_AMD_DAL_DCE11_0)
-		carrizo_asic_capability_create(cap);
+		carrizo_asic_capability_create(cap, init);
 		asic_supported = true;
 #endif
 		break;

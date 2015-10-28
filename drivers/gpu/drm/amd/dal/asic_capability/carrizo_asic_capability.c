@@ -33,13 +33,15 @@
 #include "dce/dce_11_0_d.h"
 #include "smu/smu_8_0_d.h"
 #include "dce/dce_11_0_sh_mask.h"
+#include "dal_asic_id.h"
 
 /*
  * carrizo_asic_capability_create
  *
  * Create and initiate Carrizo capability.
  */
-void carrizo_asic_capability_create(struct asic_capability *cap)
+void carrizo_asic_capability_create(struct asic_capability *cap,
+		struct hw_asic_id *init)
 {
 	uint32_t e_fuse_setting;
 	/* ASIC data */
@@ -123,6 +125,17 @@ void carrizo_asic_capability_create(struct asic_capability *cap)
 
 	default:
 		break;
+	}
+
+	if (ASIC_REV_IS_STONEY(init->chip_id))
+	{
+		// Stoney is the same DCE11, but only two pipes, three  digs. and HW added 64bit back for non SG.
+		cap->data[ASIC_DATA_CONTROLLERS_NUM] = 2;
+		cap->data[ASIC_DATA_FUNCTIONAL_CONTROLLERS_NUM] = 2;
+		cap->data[ASIC_DATA_LINEBUFFER_NUM] = 2;
+
+		cap->data[ASIC_DATA_PATH_NUM_PER_DPMST_CONNECTOR] = 2; //3 DP MST per connector, limited by number of pipe and number of Dig.
+
 	}
 
 }
