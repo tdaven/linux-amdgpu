@@ -71,6 +71,7 @@
 #include "uvd_v5_0.h"
 #include "uvd_v6_0.h"
 #include "vce_v3_0.h"
+#include "amdgpu_powerplay.h"
 
 /*
  * Indirect registers accessor
@@ -1098,7 +1099,7 @@ static const struct amdgpu_ip_block_version topaz_ip_blocks[] =
 		.major = 7,
 		.minor = 1,
 		.rev = 0,
-		.funcs = &iceland_dpm_ip_funcs,
+		.funcs = &amdgpu_pp_ip_funcs,
 	},
 	{
 		.type = AMD_IP_BLOCK_TYPE_GFX,
@@ -1145,7 +1146,7 @@ static const struct amdgpu_ip_block_version tonga_ip_blocks[] =
 		.major = 7,
 		.minor = 1,
 		.rev = 0,
-		.funcs = &tonga_dpm_ip_funcs,
+		.funcs = &amdgpu_pp_ip_funcs,
 	},
 	{
 		.type = AMD_IP_BLOCK_TYPE_DCE,
@@ -1281,7 +1282,7 @@ static const struct amdgpu_ip_block_version cz_ip_blocks[] =
 		.major = 8,
 		.minor = 0,
 		.rev = 0,
-		.funcs = &cz_dpm_ip_funcs,
+		.funcs = &amdgpu_pp_ip_funcs
 	},
 	{
 		.type = AMD_IP_BLOCK_TYPE_DCE,

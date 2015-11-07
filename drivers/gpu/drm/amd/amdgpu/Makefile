@@ -5,7 +5,8 @@
 ccflags-y := -Iinclude/drm -Idrivers/gpu/drm/amd/include/asic_reg \
 	-Idrivers/gpu/drm/amd/include \
 	-Idrivers/gpu/drm/amd/amdgpu \
-	-Idrivers/gpu/drm/amd/scheduler
+	-Idrivers/gpu/drm/amd/scheduler \
+	-Idrivers/gpu/drm/amd/powerplay/inc
 
 amdgpu-y := amdgpu_drv.o
 
@@ -44,6 +45,7 @@ amdgpu-y += \
 # add SMC block
 amdgpu-y += \
 	amdgpu_dpm.o \
+	amdgpu_powerplay.o \
 	cz_smc.o cz_dpm.o \
 	tonga_smc.o tonga_dpm.o \
 	fiji_smc.o fiji_dpm.o \
@@ -93,6 +95,14 @@ amdgpu-$(CONFIG_COMPAT) += amdgpu_ioc32.o
 amdgpu-$(CONFIG_VGA_SWITCHEROO) += amdgpu_atpx_handler.o
 amdgpu-$(CONFIG_ACPI) += amdgpu_acpi.o
 amdgpu-$(CONFIG_MMU_NOTIFIER) += amdgpu_mn.o
+
+ifneq ($(CONFIG_DRM_AMD_POWERPLAY),)
+
+include drivers/gpu/drm/amd/powerplay/Makefile
+
+amdgpu-y += $(AMD_POWERPLAY_FILES)
+
+endif
 
 obj-$(CONFIG_DRM_AMDGPU)+= amdgpu.o
 
