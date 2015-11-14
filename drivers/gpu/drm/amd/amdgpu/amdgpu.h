@@ -1213,6 +1213,7 @@ struct amdgpu_cs_parser {
 	/* relocations */
 	struct amdgpu_bo_list_entry	*vm_bos;
 	struct list_head	validated;
+	struct fence		*fence;
 
 	struct amdgpu_ib	*ibs;
 	uint32_t		num_ibs;
