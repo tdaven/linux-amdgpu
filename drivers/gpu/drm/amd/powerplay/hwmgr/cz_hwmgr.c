@@ -1570,6 +1570,14 @@ int cz_set_cpu_power_state(struct pp_hwmgr *hwmgr)
 						PPSMC_MSG_SetDisplaySizePowerParams,
 						data);
 
+		/* 4k@60 wa - start */
+		smum_send_msg_to_smc_with_parameter(hwmgr->smumgr,
+				PPSMC_MSG_SetMinDeepSleepSclk, 0x10D8);
+
+		smum_send_msg_to_smc_with_parameter(hwmgr->smumgr,
+				PPSMC_MSG_DisableLowMemoryPstate, 0x1);
+		/* 4k@60 wa - end */
+
 		hw_data->cc6_setting_changed = false;
 	}
 
