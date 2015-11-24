@@ -263,7 +263,7 @@ int phm_store_dal_configuration_data(struct pp_hwmgr *hwmgr,
 
 int phm_set_cpu_power_state(struct pp_hwmgr *hwmgr)
 {
-	if (hwmgr != NULL || hwmgr->hwmgr_func->set_cpu_power_state != NULL)
+	if (hwmgr != NULL && hwmgr->hwmgr_func->set_cpu_power_state != NULL)
 		return hwmgr->hwmgr_func->set_cpu_power_state(hwmgr);
 
 	return 0;
