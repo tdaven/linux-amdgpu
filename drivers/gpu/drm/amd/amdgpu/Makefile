@@ -2,12 +2,14 @@
 # Makefile for the drm device driver.  This driver provides support for the
 # Direct Rendering Infrastructure (DRI) in XFree86 4.1.0 and higher.
 
-ccflags-y := -Iinclude/drm -Idrivers/gpu/drm/amd/include/asic_reg \
-	-Idrivers/gpu/drm/amd/include \
-	-Idrivers/gpu/drm/amd/amdgpu \
-	-Idrivers/gpu/drm/amd/scheduler \
-	-Idrivers/gpu/drm/amd/powerplay/inc \
-	-Idrivers/gpu/drm/amd/acp/include
+FULL_AMD_PATH=$(src)/..
+
+ccflags-y := -Iinclude/drm -I$(FULL_AMD_PATH)/include/asic_reg \
+	-I$(FULL_AMD_PATH)/include \
+	-I$(FULL_AMD_PATH)/amdgpu \
+	-I$(FULL_AMD_PATH)/scheduler \
+	-I$(FULL_AMD_PATH)/powerplay/inc \
+	-I$(FULL_AMD_PATH)/acp/include
 
 amdgpu-y := amdgpu_drv.o
 
@@ -97,7 +99,7 @@ ifneq ($(CONFIG_DRM_AMD_ACP),)
 amdgpu-y += amdgpu_acp.o
 
 AMDACPPATH := ../acp
-include drivers/gpu/drm/amd/acp/Makefile
+include $(FULL_AMD_PATH)/acp/Makefile
 
 amdgpu-y += $(AMD_ACP_FILES)
 endif
@@ -109,7 +111,7 @@ amdgpu-$(CONFIG_MMU_NOTIFIER) += amdgpu_mn.o
 
 ifneq ($(CONFIG_DRM_AMD_POWERPLAY),)
 
-include drivers/gpu/drm/amd/powerplay/Makefile
+include $(FULL_AMD_PATH)/powerplay/Makefile
 
 amdgpu-y += $(AMD_POWERPLAY_FILES)
 
