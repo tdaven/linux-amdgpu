@@ -1,0 +1,457 @@
+/*
+ * Copyright 2015 Advanced Micro Devices, Inc.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * Authors: AMD
+ *
+ */
+
+#include <linux/string.h>
+#include <linux/acpi.h>
+
+#include <drm/drmP.h>
+#include <drm/drm_crtc_helper.h>
+#include <drm/amdgpu_drm.h>
+#include "dm_services.h"
+#include "amdgpu.h"
+#include "amdgpu_dm.h"
+#include "amdgpu_dm_irq.h"
+#include "amdgpu_dm_types.h"
+#include "amdgpu_pm.h"
+
+/*
+#include "logger_interface.h"
+#include "acpimethod_atif.h"
+#include "amdgpu_powerplay.h"
+#include "amdgpu_notifications.h"
+*/
+
+/* if the pointer is not NULL, the allocated memory is zeroed */
+void *dm_alloc(struct dc_context *ctx, uint32_t size)
+{
+	return kzalloc(size, GFP_KERNEL);
+}
+
+/* Reallocate memory. The contents will remain unchanged.*/
+void *dm_realloc(struct dc_context *ctx, const void *ptr, uint32_t size)
+{
+	return krealloc(ptr, size, GFP_KERNEL);
+}
+
+void dm_memmove(void *dst, const void *src, uint32_t size)
+{
+	memmove(dst, src, size);
+}
+
+void dm_free(struct dc_context *ctx, void *p)
+{
+	kfree(p);
+}
+
+void dm_memset(void *p, int32_t c, uint32_t count)
+{
+	memset(p, c, count);
+}
+
+int32_t dm_memcmp(const void *p1, const void *p2, uint32_t count)
+{
+	return memcmp(p1, p2, count);
+}
+
+int32_t dm_strncmp(const int8_t *p1, const int8_t *p2, uint32_t count)
+{
+	return strncmp(p1, p2, count);
+}
+
+void dm_sleep_in_milliseconds(struct dc_context *ctx, uint32_t milliseconds)
+{
+	if (milliseconds >= 20)
+		msleep(milliseconds);
+	else
+		usleep_range(milliseconds*1000, milliseconds*1000+1);
+}
+
+void dal_delay_in_nanoseconds(uint32_t nanoseconds)
+{
+	ndelay(nanoseconds);
+}
+
+void dm_delay_in_microseconds(struct dc_context *ctx, uint32_t microseconds)
+{
+	udelay(microseconds);
+}
+
+/******************************************************************************
+ * IRQ Interfaces.
+ *****************************************************************************/
+
+void dal_register_timer_interrupt(
+	struct dc_context *ctx,
+	struct dc_timer_interrupt_params *int_params,
+	interrupt_handler ih,
+	void *args)
+{
+	struct amdgpu_device *adev = ctx->driver_context;
+
+	if (!adev || !int_params) {
+		DRM_ERROR("DM_IRQ: invalid input!\n");
+		return;
+	}
+
+	if (int_params->int_context != INTERRUPT_LOW_IRQ_CONTEXT) {
+		/* only low irq ctx is supported. */
+		DRM_ERROR("DM_IRQ: invalid context: %d!\n",
+				int_params->int_context);
+		return;
+	}
+
+	amdgpu_dm_irq_register_timer(adev, int_params, ih, args);
+}
+
+void dal_isr_acquire_lock(struct dc_context *ctx)
+{
+	/*TODO*/
+}
+
+void dal_isr_release_lock(struct dc_context *ctx)
+{
+	/*TODO*/
+}
+
+/******************************************************************************
+ * End-of-IRQ Interfaces.
+ *****************************************************************************/
+
+bool dm_get_platform_info(struct dc_context *ctx,
+			struct platform_info_params *params)
+{
+	/*TODO*/
+	return false;
+}
+
+/**** power component interfaces ****/
+
+bool dm_pp_pre_dce_clock_change(
+		struct dc_context *ctx,
+		struct dal_to_power_info *input,
+		struct power_to_dal_info *output)
+{
+	/*TODO*/
+	return false;
+}
+
+bool dm_pp_apply_safe_state(
+		const struct dc_context *ctx)
+{
+#ifdef CONFIG_DRM_AMD_POWERPLAY
+	struct amdgpu_device *adev = ctx->driver_context;
+
+	if (adev->pm.dpm_enabled) {
+		/* TODO: Does this require PreModeChange event to PPLIB? */
+	}
+
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool dm_pp_apply_display_requirements(
+		const struct dc_context *ctx,
+		const struct dc_pp_display_configuration *pp_display_cfg)
+{
+#ifdef CONFIG_DRM_AMD_POWERPLAY
+	struct amdgpu_device *adev = ctx->driver_context;
+
+	if (adev->pm.dpm_enabled) {
+
+		memset(&adev->pm.pm_display_cfg, 0,
+				sizeof(adev->pm.pm_display_cfg));
+
+		adev->pm.pm_display_cfg.cpu_cc6_disable =
+			pp_display_cfg->cpu_cc6_disable;
+
+		adev->pm.pm_display_cfg.cpu_pstate_disable =
+			pp_display_cfg->cpu_pstate_disable;
+
+		adev->pm.pm_display_cfg.cpu_pstate_separation_time =
+			pp_display_cfg->cpu_pstate_separation_time;
+
+		adev->pm.pm_display_cfg.nb_pstate_switch_disable =
+			pp_display_cfg->nb_pstate_switch_disable;
+
+		adev->pm.pm_display_cfg.num_display =
+				pp_display_cfg->display_count;
+		adev->pm.pm_display_cfg.num_path_including_non_display =
+				pp_display_cfg->display_count;
+
+		adev->pm.pm_display_cfg.min_core_set_clock =
+				pp_display_cfg->min_engine_clock_khz/10;
+		adev->pm.pm_display_cfg.min_core_set_clock_in_sr =
+				pp_display_cfg->min_engine_clock_deep_sleep_khz/10;
+		adev->pm.pm_display_cfg.min_mem_set_clock =
+				pp_display_cfg->min_memory_clock_khz/10;
+
+		adev->pm.pm_display_cfg.multi_monitor_in_sync =
+				pp_display_cfg->all_displays_in_sync;
+		adev->pm.pm_display_cfg.min_vblank_time =
+				pp_display_cfg->avail_mclk_switch_time_us;
+
+		adev->pm.pm_display_cfg.display_clk =
+				pp_display_cfg->disp_clk_khz/10;
+
+		adev->pm.pm_display_cfg.dce_tolerable_mclk_in_active_latency =
+				pp_display_cfg->avail_mclk_switch_time_in_disp_active_us;
+
+		adev->pm.pm_display_cfg.crtc_index = pp_display_cfg->crtc_index;
+		adev->pm.pm_display_cfg.line_time_in_us =
+				pp_display_cfg->line_time_in_us;
+
+		adev->pm.pm_display_cfg.crossfire_display_index = -1;
+		adev->pm.pm_display_cfg.min_bus_bandwidth = 0;
+
+		/* TODO: complete implementation of
+		 * amd_powerplay_display_configuration_change().
+		 * Follow example of:
+		 * PHM_StoreDALConfigurationData - powerplay\hwmgr\hardwaremanager.c
+		 * PP_IRI_DisplayConfigurationChange - powerplay\eventmgr\iri.c */
+		amd_powerplay_display_configuration_change(
+				adev->powerplay.pp_handle,
+				&adev->pm.pm_display_cfg);
+
+		/* TODO: replace by a separate call to 'apply display cfg'? */
+		amdgpu_pm_compute_clocks(adev);
+	}
+
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool dc_service_get_system_clocks_range(
+		const struct dc_context *ctx,
+		struct dal_system_clock_range *sys_clks)
+{
+#ifdef CONFIG_DRM_AMD_POWERPLAY
+	struct amdgpu_device *adev = ctx->driver_context;
+#endif
+
+	/* Default values, in case PPLib is not compiled-in. */
+	sys_clks->max_mclk = 80000;
+	sys_clks->min_mclk = 80000;
+
+	sys_clks->max_sclk = 60000;
+	sys_clks->min_sclk = 30000;
+
+#ifdef CONFIG_DRM_AMD_POWERPLAY
+	if (adev->pm.dpm_enabled) {
+		sys_clks->max_mclk = amdgpu_dpm_get_mclk(adev, false);
+		sys_clks->min_mclk = amdgpu_dpm_get_mclk(adev, true);
+
+		sys_clks->max_sclk = amdgpu_dpm_get_sclk(adev, false);
+		sys_clks->min_sclk = amdgpu_dpm_get_sclk(adev, true);
+	}
+#endif
+
+	return true;
+}
+
+static void get_default_clock_levels(
+		enum dc_pp_clock_type clk_type,
+		struct dc_pp_clock_levels *clks)
+{
+	uint32_t disp_clks_in_khz[6] = {
+			300000, 400000, 496560, 626090, 685720, 757900 };
+	uint32_t sclks_in_khz[6] = {
+			300000, 360000, 423530, 514290, 626090, 720000 };
+	uint32_t mclks_in_khz[2] = { 333000, 800000 };
+
+	switch (clk_type) {
+	case DC_PP_CLOCK_TYPE_DISPLAY_CLK:
+		clks->num_levels = 6;
+		dm_memmove(clks->clocks_in_khz, disp_clks_in_khz,
+				sizeof(disp_clks_in_khz));
+		break;
+	case DC_PP_CLOCK_TYPE_ENGINE_CLK:
+		clks->num_levels = 6;
+		dm_memmove(clks->clocks_in_khz, sclks_in_khz,
+				sizeof(sclks_in_khz));
+		break;
+	case DC_PP_CLOCK_TYPE_MEMORY_CLK:
+		clks->num_levels = 2;
+		dm_memmove(clks->clocks_in_khz, mclks_in_khz,
+				sizeof(mclks_in_khz));
+		break;
+	default:
+		clks->num_levels = 0;
+		break;
+	}
+}
+
+#ifdef CONFIG_DRM_AMD_POWERPLAY
+static enum amd_pp_clock_type dc_to_pp_clock_type(
+		enum dc_pp_clock_type dc_pp_clk_type)
+{
+	enum amd_pp_clock_type amd_pp_clk_type = 0;
+
+	switch (dc_pp_clk_type) {
+	case DC_PP_CLOCK_TYPE_DISPLAY_CLK:
+		amd_pp_clk_type = amd_pp_disp_clock;
+		break;
+	case DC_PP_CLOCK_TYPE_ENGINE_CLK:
+		amd_pp_clk_type = amd_pp_sys_clock;
+		break;
+	case DC_PP_CLOCK_TYPE_MEMORY_CLK:
+		amd_pp_clk_type = amd_pp_mem_clock;
+		break;
+	default:
+		DRM_ERROR("DM_PPLIB: invalid clock type: %d!\n",
+				dc_pp_clk_type);
+		break;
+	}
+
+	return amd_pp_clk_type;
+}
+
+static void pp_to_dc_clock_levels(
+		const struct amd_pp_clocks *pp_clks,
+		struct dc_pp_clock_levels *dc_clks,
+		enum dc_pp_clock_type dc_clk_type)
+{
+	uint32_t i;
+
+	if (pp_clks->count > DC_PP_MAX_CLOCK_LEVELS) {
+		DRM_INFO("DM_PPLIB: Warning: %s clock: number of levels %d exceeds maximum of %d!\n",
+				DC_DECODE_PP_CLOCK_TYPE(dc_clk_type),
+				pp_clks->count,
+				DC_PP_MAX_CLOCK_LEVELS);
+
+		dc_clks->num_levels = DC_PP_MAX_CLOCK_LEVELS;
+	} else
+		dc_clks->num_levels = pp_clks->count;
+
+	DRM_INFO("DM_PPLIB: values for %s clock\n",
+			DC_DECODE_PP_CLOCK_TYPE(dc_clk_type));
+
+	for (i = 0; i < dc_clks->num_levels; i++) {
+		DRM_INFO("DM_PPLIB:\t %d\n", pp_clks->clock[i]);
+		/* translate 10kHz to kHz */
+		dc_clks->clocks_in_khz[i] = pp_clks->clock[i] * 10;
+	}
+}
+#endif
+
+bool dm_pp_get_clock_levels_by_type(
+		const struct dc_context *ctx,
+		enum dc_pp_clock_type clk_type,
+		struct dc_pp_clock_levels *dc_clks)
+{
+#ifdef CONFIG_DRM_AMD_POWERPLAY
+	struct amdgpu_device *adev = ctx->driver_context;
+	void *pp_handle = adev->powerplay.pp_handle;
+	struct amd_pp_clocks pp_clks = { 0 };
+	struct amd_pp_simple_clock_info validation_clks = { 0 };
+	uint32_t i;
+
+	if (amd_powerplay_get_clock_by_type(pp_handle,
+			dc_to_pp_clock_type(clk_type), &pp_clks)) {
+		/* Error in pplib. Provide default values. */
+		get_default_clock_levels(clk_type, dc_clks);
+		return true;
+	}
+
+	pp_to_dc_clock_levels(&pp_clks, dc_clks, clk_type);
+
+	if (amd_powerplay_get_display_mode_validation_clocks(pp_handle,
+			&validation_clks)) {
+		/* Error in pplib. Provide default values. */
+		DRM_INFO("DM_PPLIB: Warning: using default validation clocks!\n");
+		validation_clks.engine_max_clock = 72000;
+		validation_clks.memory_max_clock = 80000;
+		validation_clks.level = 0;
+	}
+
+	DRM_INFO("DM_PPLIB: Validation clocks:\n");
+	DRM_INFO("DM_PPLIB:    engine_max_clock: %d\n",
+			validation_clks.engine_max_clock);
+	DRM_INFO("DM_PPLIB:    memory_max_clock: %d\n",
+			validation_clks.memory_max_clock);
+	DRM_INFO("DM_PPLIB:    level           : %d\n",
+			validation_clks.level);
+
+	/* Translate 10 kHz to kHz. */
+	validation_clks.engine_max_clock *= 10;
+	validation_clks.memory_max_clock *= 10;
+
+	/* Determine the highest non-boosted level from the Validation Clocks */
+	if (clk_type == DC_PP_CLOCK_TYPE_ENGINE_CLK) {
+		for (i = 0; i < dc_clks->num_levels; i++) {
+			if (dc_clks->clocks_in_khz[i] > validation_clks.engine_max_clock) {
+				/* This clock is higher the validation clock.
+				 * Than means the previous one is the highest
+				 * non-boosted one. */
+				DRM_INFO("DM_PPLIB: reducing engine clock level from %d to %d\n",
+						dc_clks->num_levels, i + 1);
+				dc_clks->num_levels = i;
+				break;
+			}
+		}
+	} else if (clk_type == DC_PP_CLOCK_TYPE_MEMORY_CLK) {
+		for (i = 0; i < dc_clks->num_levels; i++) {
+			if (dc_clks->clocks_in_khz[i] > validation_clks.memory_max_clock) {
+				DRM_INFO("DM_PPLIB: reducing memory clock level from %d to %d\n",
+						dc_clks->num_levels, i + 1);
+				dc_clks->num_levels = i;
+				break;
+			}
+		}
+	}
+#else
+	get_default_clock_levels(clk_type, dc_clks);
+#endif
+	return true;
+}
+
+/**** end of power component interfaces ****/
+
+
+/* Calls to notification */
+
+void dal_notify_setmode_complete(struct dc_context *ctx,
+	uint32_t h_total,
+	uint32_t v_total,
+	uint32_t h_active,
+	uint32_t v_active,
+	uint32_t pix_clk_in_khz)
+{
+	/*TODO*/
+}
+/* End of calls to notification */
+
+long dm_get_pid(void)
+{
+	return current->pid;
+}
+
+long dm_get_tgid(void)
+{
+	return current->tgid;
+}
