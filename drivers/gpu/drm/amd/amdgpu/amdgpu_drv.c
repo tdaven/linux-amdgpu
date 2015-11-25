@@ -80,6 +80,7 @@ int amdgpu_exp_hw_support = 0;
 int amdgpu_sched_jobs = 32;
 int amdgpu_sched_hw_submission = 2;
 int amdgpu_powerplay = -1;
+int amdgpu_dal = -1;
 
 MODULE_PARM_DESC(vramlimit, "Restrict VRAM for testing, in megabytes");
 module_param_named(vramlimit, amdgpu_vram_limit, int, 0600);
@@ -157,6 +158,9 @@ module_param_named(sched_hw_submission, amdgpu_sched_hw_submission, int, 0444);
 MODULE_PARM_DESC(powerplay, "Powerplay component (1 = enable, 0 = disable, -1 = auto (default))");
 module_param_named(powerplay, amdgpu_powerplay, int, 0444);
 #endif
+
+MODULE_PARM_DESC(dal, "DAL display driver (1 = enable, 0 = disable, -1 = auto (default))");
+module_param_named(dal, amdgpu_dal, int, 0444);
 
 static struct pci_device_id pciidlist[] = {
 #ifdef CONFIG_DRM_AMDGPU_CIK

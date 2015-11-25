@@ -3,13 +3,19 @@
 # Direct Rendering Infrastructure (DRI) in XFree86 4.1.0 and higher.
 
 FULL_AMD_PATH=$(src)/..
+DAL_FOLDER_NAME=dal
+FULL_AMD_DAL_PATH = $(FULL_AMD_PATH)/$(DAL_FOLDER_NAME)
 
 ccflags-y := -Iinclude/drm -I$(FULL_AMD_PATH)/include/asic_reg \
 	-I$(FULL_AMD_PATH)/include \
 	-I$(FULL_AMD_PATH)/amdgpu \
 	-I$(FULL_AMD_PATH)/scheduler \
 	-I$(FULL_AMD_PATH)/powerplay/inc \
-	-I$(FULL_AMD_PATH)/acp/include
+	-I$(FULL_AMD_PATH)/acp/include \
+	-I$(FULL_AMD_DAL_PATH) \
+	-I$(FULL_AMD_DAL_PATH)/include \
+	-I$(FULL_AMD_DAL_PATH)/dc \
+	-I$(FULL_AMD_DAL_PATH)/amdgpu_dm
 
 amdgpu-y := amdgpu_drv.o
 
@@ -115,6 +121,15 @@ ifneq ($(CONFIG_DRM_AMD_POWERPLAY),)
 include $(FULL_AMD_PATH)/powerplay/Makefile
 
 amdgpu-y += $(AMD_POWERPLAY_FILES)
+
+endif
+
+ifneq ($(CONFIG_DRM_AMD_DAL),)
+
+RELATIVE_AMD_DAL_PATH = ../$(DAL_FOLDER_NAME)
+include $(FULL_AMD_DAL_PATH)/Makefile
+
+amdgpu-y += $(AMD_DAL_FILES)
 
 endif
 

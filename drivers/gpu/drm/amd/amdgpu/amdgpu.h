@@ -54,6 +54,7 @@
 #include "amdgpu_gds.h"
 #include "amd_powerplay.h"
 #include "amdgpu_acp.h"
+#include "amdgpu_dm.h"
 
 #include "gpu_scheduler.h"
 
@@ -85,6 +86,7 @@ extern int amdgpu_vm_debug;
 extern int amdgpu_sched_jobs;
 extern int amdgpu_sched_hw_submission;
 extern int amdgpu_powerplay;
+extern int amdgpu_dal;
 
 #define AMDGPU_WAIT_IDLE_TIMEOUT_IN_MS	        3000
 #define AMDGPU_MAX_USEC_TIMEOUT			100000	/* 100 ms */
@@ -2027,6 +2029,7 @@ struct amdgpu_device {
 
 	/* display */
 	struct amdgpu_mode_info		mode_info;
+	/* For pre-DCE11. DCE11 and later are in "struct amdgpu_device->dm" */
 	struct work_struct		hotplug_work;
 	struct amdgpu_irq_src		crtc_irq;
 	struct amdgpu_irq_src		pageflip_irq;
@@ -2073,6 +2076,9 @@ struct amdgpu_device {
 	/* GDS */
 	struct amdgpu_gds		gds;
 
+	/* display related functionality */
+	struct amdgpu_display_manager dm;
+
 	const struct amdgpu_ip_block_version *ip_blocks;
 	int				num_ip_blocks;
 	struct amdgpu_ip_block_status	*ip_block_status;
@@ -2106,7 +2112,7 @@ void amdgpu_io_wreg(struct amdgpu_device *adev, u32 reg, u32 v);
 
 u32 amdgpu_mm_rdoorbell(struct amdgpu_device *adev, u32 index);
 void amdgpu_mm_wdoorbell(struct amdgpu_device *adev, u32 index, u32 v);
-
+bool amdgpu_device_has_dal_support(struct amdgpu_device *adev);
 /*
  * Cast helper
  */
