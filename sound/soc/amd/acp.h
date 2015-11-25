@@ -135,5 +135,6 @@ extern void acp_enable_external_interrupts(void __iomem *acp_mmio,
 extern u32 acp_get_intr_flag(void __iomem *acp_mmio);
 extern u16 get_dscr_idx(void __iomem *acp_mmio, int direction);
 extern void acp_ext_stat_clear_dmaioc(void __iomem *acp_mmio, u8 ch_num);
-
+extern void acp_turnonoff_lower_sram_bank(void __iomem *acp_mmio, u16 bank,
+					bool turnon);
 #endif /*__ACP_HW_H */

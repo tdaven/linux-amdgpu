@@ -133,6 +133,7 @@ static irqreturn_t dma_irq_handler(int irq, void *arg)
 
 static int acp_dma_open(struct snd_pcm_substream *substream)
 {
+	u32 bank;
 	int ret = 0;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_soc_pcm_runtime *prtd = substream->private_data;
@@ -166,10 +167,17 @@ static int acp_dma_open(struct snd_pcm_substream *substream)
 	if (!intr_data->play_stream && !intr_data->capture_stream)
 		acp_enable_external_interrupts(adata->acp_mmio, 1);
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		intr_data->play_stream = substream;
-	else
+		for (bank = 1; bank <= 4; bank++)
+			acp_turnonoff_lower_sram_bank(intr_data->acp_mmio, bank,
+							true);
+	} else {
 		intr_data->capture_stream = substream;
+		for (bank = 5; bank <= 8; bank++)
+			acp_turnonoff_lower_sram_bank(intr_data->acp_mmio, bank,
+					true);
+	}
 
 	return 0;
 }
@@ -201,6 +209,7 @@ static int acp_dma_hw_params(struct snd_pcm_substream *substream,
 	pg = virt_to_page(substream->dma_buffer.area);
 
 	if (pg != NULL) {
+		acp_turnonoff_lower_sram_bank(rtd->acp_mmio, 0, true);
 		/* Save for runtime private data */
 		rtd->pg = pg;
 		rtd->order = get_order(size);
@@ -364,6 +373,7 @@ static int acp_dma_new(struct snd_soc_pcm_runtime *rtd)
 
 static int acp_dma_close(struct snd_pcm_substream *substream)
 {
+	u32 bank;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct audio_substream_data *rtd = runtime->private_data;
 	struct snd_soc_pcm_runtime *prtd = substream->private_data;
@@ -371,10 +381,17 @@ static int acp_dma_close(struct snd_pcm_substream *substream)
 
 	kfree(rtd);
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		adata->play_stream = NULL;
-	else
+		for (bank = 1; bank <= 4; bank++)
+			acp_turnonoff_lower_sram_bank(adata->acp_mmio, bank,
+							false);
+	} else {
 		adata->capture_stream = NULL;
+		for (bank = 5; bank <= 8; bank++)
+			acp_turnonoff_lower_sram_bank(adata->acp_mmio, bank,
+							false);
+	}
 
 	/* Disable ACP irq, when the current stream is being closed and
 	 * another stream is also not active.

@@ -462,10 +462,79 @@ int acp_dma_stop(void __iomem *acp_mmio, u8 ch_num)
 	return 0;
 }
 
+void acp_turnonoff_lower_sram_bank(void __iomem *acp_mmio, u16 bank,
+					bool turnon)
+{
+	u32 val;
+
+	val = acp_reg_read(acp_mmio, mmACP_MEM_SHUT_DOWN_REQ_LO);
+	if (val & (1 << bank)) {
+		/* bank is in off state */
+		if (turnon == true)
+			/* request to on */
+			val &= ~(1 << bank);
+		else
+			/* request to off */
+			return;
+	} else {
+		/* bank is in on state */
+		if (turnon == false)
+			/* request to off */
+			val |= 1 << bank;
+		else
+			/* request to on */
+			return;
+	}
+	 acp_reg_write(val, acp_mmio,
+				   mmACP_MEM_SHUT_DOWN_REQ_LO);
+	/* If ACP_MEM_SHUT_DOWN_STS_LO is 0xFFFFFFFF, then
+	 * shutdown sequence is complete.
+	 */
+	 while (acp_reg_read(acp_mmio,
+				      mmACP_MEM_SHUT_DOWN_STS_LO)
+				      != 0xFFFFFFFF)
+		cpu_relax();
+}
+
+void acp_turnonoff_higher_sram_bank(void __iomem *acp_mmio, u16 bank,
+					bool turnon)
+{
+	u32 val;
+
+	bank -= 32;
+	val = acp_reg_read(acp_mmio, mmACP_MEM_SHUT_DOWN_REQ_HI);
+	if (val & (1 << bank)) {
+		/* bank is in off state */
+		if (turnon == true)
+			/* request to on */
+			val &= ~(1 << bank);
+		else
+			/* request to off */
+			return;
+	} else {
+		/* bank is in on state */
+		if (turnon == false)
+			/* request to off */
+			val |= 1 << bank;
+		else
+			/* request to on */
+			return;
+	}
+	 acp_reg_write(val, acp_mmio,
+				   mmACP_MEM_SHUT_DOWN_REQ_HI);
+	/* If ACP_MEM_SHUT_DOWN_STS_LO is 0xFFFFFFFF, then
+	 * shutdown sequence is complete.
+	 */
+	 while (acp_reg_read(acp_mmio,
+				      mmACP_MEM_SHUT_DOWN_STS_HI)
+				      != 0x0000FFFF)
+		cpu_relax();
+}
+
 /* Initialize and bring ACP hardware to default state. */
 int acp_init(void __iomem *acp_mmio)
 {
-	u32 val;
+	u32 val, bank;
 	u32 count;
 
 	/* Assert Soft reset of ACP */
@@ -526,6 +595,16 @@ int acp_init(void __iomem *acp_mmio)
 	acp_reg_write(0x4, acp_mmio, mmACP_DMA_DESC_MAX_NUM_DSCR);
 	acp_reg_write(ACP_EXTERNAL_INTR_CNTL__DMAIOCMask_MASK,
 		acp_mmio, mmACP_EXTERNAL_INTR_CNTL);
+
+	/* When ACP_TILE_P1 is turned on, all SRAM banks get turned on.
+	 * Now, turn off all of them. This can't be done in 'poweron' of
+	 * ACP pm domain, as this requires ACP to be initialized.
+	 */
+	for (bank = 1; bank < 32; bank++)
+		acp_turnonoff_lower_sram_bank(acp_mmio, bank, false);
+
+	for (bank = 32; bank < 48; bank++)
+		acp_turnonoff_higher_sram_bank(acp_mmio, bank, false);
 
 	/* Designware I2S driver requries proper capabilities
 	 * from mmACP_I2SMICSP_COMP_PARAM_1 register. The register
