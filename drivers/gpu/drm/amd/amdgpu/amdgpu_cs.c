@@ -1024,6 +1024,7 @@ static int amdgpu_cs_wait_any_fence(struct amdgpu_device *adev,
 {
 	unsigned long timeout = amdgpu_gem_timeout(wait->in.timeout_ns);
 	uint32_t fence_count = wait->in.fence_count;
+	uint32_t first = ~0;
 	struct fence **array;
 	unsigned i;
 	long r;
@@ -1049,13 +1050,14 @@ static int amdgpu_cs_wait_any_fence(struct amdgpu_device *adev,
 		}
 	}
 
-	r = fence_wait_any_timeout(array, fence_count, true, timeout);
+	r = fence_wait_any_timeout(array, fence_count, true, timeout, &first);
 	if (r < 0)
 		goto err_free_fence_array;
 
 out:
 	memset(wait, 0, sizeof(*wait));
 	wait->out.status = (r > 0);
+	wait->out.first_signaled = first;
 	/* set return value 0 to indicate success */
 	r = 0;
 
