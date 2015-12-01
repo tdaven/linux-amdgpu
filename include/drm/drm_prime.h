@@ -57,6 +57,8 @@ struct drm_device;
 struct drm_gem_object;
 struct drm_file;
 
+extern const struct dma_buf_ops drm_gem_prime_dmabuf_ops;
+
 struct dma_buf *drm_gem_prime_export(struct drm_device *dev,
 				     struct drm_gem_object *obj,
 				     int flags);
