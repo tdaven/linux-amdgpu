@@ -859,6 +859,7 @@ struct amdgpu_vm {
 	struct list_head	cleared;
 
 	/* BO mappings freed, but not yet updated in the PT */
+	spinlock_t		freed_lock;
 	struct list_head	freed;
 
 	/* contains the page directory */
