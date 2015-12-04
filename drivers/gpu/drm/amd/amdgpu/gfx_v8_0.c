@@ -2207,7 +2207,6 @@ static void gfx_v8_0_tiling_mode_table_init(struct amdgpu_device *adev)
 				 BANK_HEIGHT(ADDR_SURF_BANK_HEIGHT_1) |
 				 MACRO_TILE_ASPECT(ADDR_SURF_MACRO_ASPECT_1) |
 				 NUM_BANKS(ADDR_SURF_8_BANK));
-				break;
 		mod2array[13] = (BANK_WIDTH(ADDR_SURF_BANK_WIDTH_1) |
 				 BANK_HEIGHT(ADDR_SURF_BANK_HEIGHT_1) |
 				 MACRO_TILE_ASPECT(ADDR_SURF_MACRO_ASPECT_1) |
