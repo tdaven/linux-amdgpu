@@ -273,7 +273,7 @@ bool dc_service_pp_get_clock_levels_by_type(
 		clk_type ==  DC_PP_CLOCK_TYPE_DISPLAY_CLK) {
 
 		struct amdgpu_device *adev = ctx->driver_context;
-		struct amd_pp_dal_clock_info info = {0};
+		struct amd_pp_simple_clock_info info = {0};
 
 		if (0 == amd_powerplay_get_display_power_level(
 				adev->powerplay.pp_handle, &info) &&
