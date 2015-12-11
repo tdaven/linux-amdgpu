@@ -2145,7 +2145,6 @@ int amdgpu_dm_atomic_commit(
 		switch (action) {
 		case DM_COMMIT_ACTION_DPMS_ON:
 		case DM_COMMIT_ACTION_SET: {
-			bool sem_up = false;
 			const struct drm_connector_helper_funcs *connector_funcs;
 			struct dc_target *new_target =
 				create_target_for_sink(
@@ -2178,7 +2177,6 @@ int amdgpu_dm_atomic_commit(
 				dc_target_release(acrtc->target);
 				acrtc->target = NULL;
 				up(&aconnector->mst_sem);
-				sem_up = true;
 			}
 
 			/*
@@ -2197,8 +2195,7 @@ int amdgpu_dm_atomic_commit(
 			aconnector->base.encoder =
 				connector_funcs->best_encoder(
 					&aconnector->base);
-			if (sem_up)
-				down(&aconnector->mst_sem);
+			down(&aconnector->mst_sem);
 			break;
 		}
 
