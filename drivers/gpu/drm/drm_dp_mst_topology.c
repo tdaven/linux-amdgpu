@@ -798,12 +798,19 @@ static struct drm_dp_mst_branch *drm_dp_add_mst_branch_device(u8 lct, u8 *rad)
 	return mstb;
 }
 
+static void drm_dp_free_mst_branch_device(struct kref *kref)
+{
+	struct drm_dp_mst_branch *mstb = container_of(kref, struct drm_dp_mst_branch, kref);
+	kfree(mstb);
+}
+
 static void drm_dp_destroy_mst_branch_device(struct kref *kref)
 {
 	struct drm_dp_mst_branch *mstb = container_of(kref, struct drm_dp_mst_branch, kref);
 	struct drm_dp_mst_port *port, *tmp;
 	bool wake_tx = false;
 
+	kref_init(kref);
 	/*
 	 * destroy all ports - don't need lock
 	 * as there are no more references to the mst branch
@@ -830,7 +837,8 @@ static void drm_dp_destroy_mst_branch_device(struct kref *kref)
 
 	if (wake_tx)
 		wake_up(&mstb->mgr->tx_waitq);
-	kfree(mstb);
+
+	kref_put(kref, drm_dp_free_mst_branch_device);
 }
 
 static void drm_dp_put_mst_branch_device(struct drm_dp_mst_branch *mstb)
@@ -878,6 +886,7 @@ static void drm_dp_destroy_port(struct kref *kref)
 			 * from an EDID retrieval */
 
 			mutex_lock(&mgr->destroy_connector_lock);
+			kref_get(&port->parent->kref);
 			list_add(&port->next, &mgr->destroy_connector_list);
 			mutex_unlock(&mgr->destroy_connector_lock);
 			schedule_work(&mgr->destroy_connector_work);
@@ -1607,6 +1616,38 @@ static int drm_dp_send_enum_path_resources(struct drm_dp_mst_topology_mgr *mgr,
 	return 0;
 }
 
+struct drm_dp_mst_port *drm_dp_get_last_connected_port_to_mstb(struct drm_dp_mst_branch *mstb)
+{
+	if (!mstb->port_parent)
+		return NULL;
+
+	if (mstb->port_parent->mstb != mstb)
+		return mstb->port_parent;
+
+	return drm_dp_get_last_connected_port_to_mstb(mstb->port_parent->parent);
+}
+
+struct drm_dp_mst_branch *drm_dp_get_last_connected_port_and_mstb(
+	struct drm_dp_mst_topology_mgr *mgr,
+	struct drm_dp_mst_branch *mstb,
+	int *port_num)
+{
+	struct drm_dp_mst_branch *rmstb = NULL;
+	struct drm_dp_mst_port *found_port;
+	mutex_lock(&mgr->lock);
+	if (mgr->mst_primary) {
+		found_port = drm_dp_get_last_connected_port_to_mstb(mstb);
+
+		if (found_port) {
+			rmstb = found_port->parent;
+			kref_get(&rmstb->kref);
+			*port_num = found_port->port_num;
+		}
+	}
+	mutex_unlock(&mgr->lock);
+	return rmstb;
+}
+
 static int drm_dp_payload_send_msg(struct drm_dp_mst_topology_mgr *mgr,
 				   struct drm_dp_mst_port *port,
 				   int id,
@@ -1614,11 +1655,16 @@ static int drm_dp_payload_send_msg(struct drm_dp_mst_topology_mgr *mgr,
 {
 	struct drm_dp_sideband_msg_tx *txmsg;
 	struct drm_dp_mst_branch *mstb;
-	int len, ret;
+	int len, ret, port_num;
 
+	port_num = port->port_num;
 	mstb = drm_dp_get_validated_mstb_ref(mgr, port->parent);
-	if (!mstb)
-		return -EINVAL;
+	if (!mstb) {
+		mstb = drm_dp_get_last_connected_port_and_mstb(mgr, port->parent, &port_num);
+
+		if (!mstb)
+			return -EINVAL;
+	}
 
 	txmsg = kzalloc(sizeof(*txmsg), GFP_KERNEL);
 	if (!txmsg) {
@@ -1627,7 +1673,7 @@ static int drm_dp_payload_send_msg(struct drm_dp_mst_topology_mgr *mgr,
 	}
 
 	txmsg->dst = mstb;
-	len = build_allocate_payload(txmsg, port->port_num,
+	len = build_allocate_payload(txmsg, port_num,
 				     id,
 				     pbn);
 
@@ -2778,6 +2824,9 @@ static void drm_dp_destroy_connector_work(struct work_struct *work)
 
 		if (!port->input && port->vcpi.vcpi > 0)
 			drm_dp_mst_put_payload_id(mgr, port->vcpi.vcpi);
+
+		kref_put(&port->parent->kref, drm_dp_free_mst_branch_device);
+
 		kfree(port);
 		send_hotplug = true;
 	}
