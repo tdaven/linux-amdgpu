@@ -1540,14 +1540,14 @@ cz_print_current_perforce_level(struct pp_hwmgr *hwmgr, struct seq_file *m)
 	}
 
 	result = smum_send_msg_to_smc(hwmgr->smumgr, PPSMC_MSG_GetAverageGraphicsActivity);
-	active_percent = cgs_read_register(hwmgr->device, mmSMU_MP1_SRBM2P_ARG_0);
-
-	if (0 == result)
+	if (0 == result) {
+		active_percent = cgs_read_register(hwmgr->device, mmSMU_MP1_SRBM2P_ARG_0);
 		active_percent = active_percent > 100 ? 100 : active_percent;
-	else
+	} else {
 		active_percent = 50;
+	}
 
-	seq_printf(m, "\n [GPU load]: %u %%\n\n", active_percent > 100 ? 100 : active_percent);
+	seq_printf(m, "\n [GPU load]: %u %%\n\n", active_percent);
 }
 
 static void cz_hw_print_display_cfg(
