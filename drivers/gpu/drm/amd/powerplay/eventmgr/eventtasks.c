@@ -422,7 +422,7 @@ int pem_task_initialize_thermal_controller(struct pp_eventmgr *eventmgr, struct 
 	range.max = TEMP_RANGE_MAX;
 	range.min = TEMP_RANGE_MIN;
 
-	if (eventmgr == NULL || eventmgr->platform_descriptor)
+	if (eventmgr == NULL || eventmgr->platform_descriptor == NULL)
 		return -EINVAL;
 
 	if (phm_cap_enabled(eventmgr->platform_descriptor->platformCaps, PHM_PlatformCaps_ThermalController))
