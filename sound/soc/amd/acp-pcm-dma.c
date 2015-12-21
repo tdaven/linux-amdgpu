@@ -375,9 +375,57 @@ static int acp_dma_stop(void __iomem *acp_mmio, u8 ch_num)
 	return 0;
 }
 
+static void acp_set_sram_bank_state(void __iomem *acp_mmio, u16 bank,
+					bool power_on)
+{
+	u32 val, req_reg, sts_reg, sts_reg_mask;
+	u32 loops = 1000;
+
+	if (bank < 32) {
+		req_reg = mmACP_MEM_SHUT_DOWN_REQ_LO;
+		sts_reg = mmACP_MEM_SHUT_DOWN_STS_LO;
+		sts_reg_mask = 0xFFFFFFFF;
+
+	} else {
+		bank -= 32;
+		req_reg = mmACP_MEM_SHUT_DOWN_REQ_HI;
+		sts_reg = mmACP_MEM_SHUT_DOWN_STS_HI;
+		sts_reg_mask = 0x0000FFFF;
+	}
+
+	val = acp_reg_read(acp_mmio, req_reg);
+	if (val & (1 << bank)) {
+		/* bank is in off state */
+		if (power_on == true)
+			/* request to on */
+			val &= ~(1 << bank);
+		else
+			/* request to off */
+			return;
+	} else {
+		/* bank is in on state */
+		if (power_on == false)
+			/* request to off */
+			val |= 1 << bank;
+		else
+			/* request to on */
+			return;
+	}
+	acp_reg_write(val, acp_mmio, req_reg);
+
+	while (acp_reg_read(acp_mmio, sts_reg) != sts_reg_mask) {
+		if (!loops--) {
+			pr_err("ACP SRAM bank %d state change failed\n", bank);
+			break;
+		}
+		cpu_relax();
+	}
+}
+
 /* Initialize and bring ACP hardware to default state. */
 static int acp_init(void __iomem *acp_mmio)
 {
+	u16 bank;
 	u32 val, count, sram_pte_offset;
 
 	/* Assert Soft reset of ACP */
@@ -444,6 +492,16 @@ static int acp_init(void __iomem *acp_mmio)
 	acp_reg_write(0x4, acp_mmio, mmACP_DMA_DESC_MAX_NUM_DSCR);
 	acp_reg_write(ACP_EXTERNAL_INTR_CNTL__DMAIOCMask_MASK,
 		acp_mmio, mmACP_EXTERNAL_INTR_CNTL);
+
+       /* When ACP_TILE_P1 is turned on, all SRAM banks get turned on.
+	* Now, turn off all of them. This can't be done in 'poweron' of
+	* ACP pm domain, as this requires ACP to be initialized.
+	*/
+	for (bank = 1; bank < 32; bank++)
+		acp_set_sram_bank_state(acp_mmio, bank, false);
+
+	for (bank = 32; bank < 48; bank++)
+		acp_set_sram_bank_state(acp_mmio, bank, false);
 
 	/* Designware I2S driver requries proper capabilities
 	 * from mmACP_I2SMICSP_COMP_PARAM_1 register. The register
@@ -569,6 +627,7 @@ static irqreturn_t dma_irq_handler(int irq, void *arg)
 
 static int acp_dma_open(struct snd_pcm_substream *substream)
 {
+	u16 bank;
 	int ret = 0;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_soc_pcm_runtime *prtd = substream->private_data;
@@ -602,10 +661,17 @@ static int acp_dma_open(struct snd_pcm_substream *substream)
 	if (!intr_data->play_stream && !intr_data->capture_stream)
 		acp_reg_write(1, adata->acp_mmio, mmACP_EXTERNAL_INTR_ENB);
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		intr_data->play_stream = substream;
-	else
+		for (bank = 1; bank <= 4; bank++)
+			acp_set_sram_bank_state(intr_data->acp_mmio, bank,
+						true);
+	} else {
 		intr_data->capture_stream = substream;
+		for (bank = 5; bank <= 8; bank++)
+			acp_set_sram_bank_state(intr_data->acp_mmio, bank,
+						true);
+	}
 
 	return 0;
 }
@@ -637,6 +703,7 @@ static int acp_dma_hw_params(struct snd_pcm_substream *substream,
 	pg = virt_to_page(substream->dma_buffer.area);
 
 	if (pg != NULL) {
+		acp_set_sram_bank_state(rtd->acp_mmio, 0, true);
 		/* Save for runtime private data */
 		rtd->pg = pg;
 		rtd->order = get_order(size);
@@ -812,6 +879,7 @@ static int acp_dma_new(struct snd_soc_pcm_runtime *rtd)
 
 static int acp_dma_close(struct snd_pcm_substream *substream)
 {
+	u16 bank;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct audio_substream_data *rtd = runtime->private_data;
 	struct snd_soc_pcm_runtime *prtd = substream->private_data;
@@ -819,10 +887,17 @@ static int acp_dma_close(struct snd_pcm_substream *substream)
 
 	kfree(rtd);
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		adata->play_stream = NULL;
-	else
+		for (bank = 1; bank <= 4; bank++)
+			acp_set_sram_bank_state(adata->acp_mmio, bank,
+						false);
+	} else {
 		adata->capture_stream = NULL;
+		for (bank = 5; bank <= 8; bank++)
+			acp_set_sram_bank_state(adata->acp_mmio, bank,
+						false);
+	}
 
 	/* Disable ACP irq, when the current stream is being closed and
 	 * another stream is also not active.
@@ -916,6 +991,7 @@ static int acp_audio_remove(struct platform_device *pdev)
 
 static int acp_pcm_resume(struct device *dev)
 {
+	u16 bank;
 	struct snd_pcm_substream *stream;
 	struct snd_pcm_runtime *rtd;
 	struct audio_substream_data *sdata;
@@ -927,6 +1003,9 @@ static int acp_pcm_resume(struct device *dev)
 	rtd = stream ? stream->runtime : NULL;
 	if (rtd != NULL) {
 		/* Resume playback stream from a suspended state */
+		for (bank = 1; bank <= 4; bank++)
+			acp_set_sram_bank_state(adata->acp_mmio, bank,
+						true);
 		sdata = rtd->private_data;
 		config_acp_dma(adata->acp_mmio, sdata);
 	}
@@ -935,6 +1014,9 @@ static int acp_pcm_resume(struct device *dev)
 	rtd =  stream ? stream->runtime : NULL;
 	if (rtd != NULL) {
 		/* Resume capture stream from a suspended state */
+		for (bank = 5; bank <= 8; bank++)
+			acp_set_sram_bank_state(adata->acp_mmio, bank,
+						true);
 		sdata = rtd->private_data;
 		config_acp_dma(adata->acp_mmio, sdata);
 	}
