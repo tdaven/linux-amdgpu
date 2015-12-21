@@ -15,6 +15,7 @@
 
 #include <linux/module.h>
 #include <linux/delay.h>
+#include <linux/pm_runtime.h>
 
 #include <sound/soc.h>
 
@@ -895,6 +896,10 @@ static int acp_audio_probe(struct platform_device *pdev)
 		return status;
 	}
 
+	pm_runtime_set_autosuspend_delay(&pdev->dev, 10000);
+	pm_runtime_use_autosuspend(&pdev->dev);
+	pm_runtime_enable(&pdev->dev);
+
 	return status;
 }
 
@@ -904,15 +909,70 @@ static int acp_audio_remove(struct platform_device *pdev)
 
 	acp_deinit(adata->acp_mmio);
 	snd_soc_unregister_platform(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
 
 	return 0;
 }
+
+static int acp_pcm_resume(struct device *dev)
+{
+	struct snd_pcm_substream *stream;
+	struct snd_pcm_runtime *rtd;
+	struct audio_substream_data *sdata;
+	struct audio_drv_data *adata = dev_get_drvdata(dev);
+
+	acp_init(adata->acp_mmio);
+
+	stream = adata->play_stream;
+	rtd = stream ? stream->runtime : NULL;
+	if (rtd != NULL) {
+		/* Resume playback stream from a suspended state */
+		sdata = rtd->private_data;
+		config_acp_dma(adata->acp_mmio, sdata);
+	}
+
+	stream = adata->capture_stream;
+	rtd =  stream ? stream->runtime : NULL;
+	if (rtd != NULL) {
+		/* Resume capture stream from a suspended state */
+		sdata = rtd->private_data;
+		config_acp_dma(adata->acp_mmio, sdata);
+	}
+
+	acp_reg_write(1, adata->acp_mmio, mmACP_EXTERNAL_INTR_ENB);
+	return 0;
+}
+
+static int acp_pcm_runtime_suspend(struct device *dev)
+{
+	struct audio_drv_data *adata = dev_get_drvdata(dev);
+
+	acp_deinit(adata->acp_mmio);
+	acp_reg_write(0, adata->acp_mmio, mmACP_EXTERNAL_INTR_ENB);
+	return 0;
+}
+
+static int acp_pcm_runtime_resume(struct device *dev)
+{
+	struct audio_drv_data *adata = dev_get_drvdata(dev);
+
+	acp_init(adata->acp_mmio);
+	acp_reg_write(1, adata->acp_mmio, mmACP_EXTERNAL_INTR_ENB);
+	return 0;
+}
+
+static const struct dev_pm_ops acp_pm_ops = {
+	.resume = acp_pcm_resume,
+	.runtime_suspend = acp_pcm_runtime_suspend,
+	.runtime_resume = acp_pcm_runtime_resume,
+};
 
 static struct platform_driver acp_dma_driver = {
 	.probe = acp_audio_probe,
 	.remove = acp_audio_remove,
 	.driver = {
 		.name = "acp_audio_dma",
+		.pm = &acp_pm_ops,
 	},
 };
 
