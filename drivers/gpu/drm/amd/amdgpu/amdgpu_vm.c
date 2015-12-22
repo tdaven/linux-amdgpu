@@ -106,19 +106,25 @@ void amdgpu_vm_get_pd_bo(struct amdgpu_vm *vm,
  * Add the page directory to the BO duplicates list
  * for command submission.
  */
-void amdgpu_vm_get_pt_bos(struct amdgpu_vm *vm, struct list_head *duplicates)
+void amdgpu_vm_get_pt_bos(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+			  struct list_head *duplicates)
 {
+	struct ttm_bo_global *glob = adev->mman.bdev.glob;
 	unsigned i;
 
-	/* add the vm page table to the list */
+	/* add the vm page table to the list and move them to the LRU tail */
+	spin_lock(&glob->lru_lock);
 	for (i = 0; i <= vm->max_pde_used; ++i) {
 		struct amdgpu_bo_list_entry *entry = &vm->page_tables[i].entry;
 
 		if (!entry->robj)
 			continue;
 
+		ttm_bo_move_to_lru_tail(&entry->robj->tbo);
 		list_add(&entry->tv.head, duplicates);
 	}
+
+	spin_unlock(&glob->lru_lock);
 }
 
 /**
