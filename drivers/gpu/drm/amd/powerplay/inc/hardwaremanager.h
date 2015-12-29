@@ -385,5 +385,7 @@ extern int phm_get_clock_by_type(struct pp_hwmgr *hwmgr, enum amd_pp_clock_type 
 
 extern int phm_get_max_high_clocks(struct pp_hwmgr *hwmgr, struct amd_pp_simple_clock_info *clocks);
 
+extern int phm_power_down_asic(struct pp_hwmgr *hwmgr);
+
 #endif /* _HARDWARE_MANAGER_H_ */
 

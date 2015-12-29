@@ -308,6 +308,7 @@ struct pp_hwmgr_func {
 				const struct pp_hw_power_state *state, struct pp_clock_info *clock_info);
 	int (*get_clock_by_type)(struct pp_hwmgr *hwmgr, enum amd_pp_clock_type type, struct amd_pp_clocks *clocks);
 	int (*get_max_high_clocks)(struct pp_hwmgr *hwmgr, struct amd_pp_simple_clock_info *clocks);
+	int (*power_off_asic)(struct pp_hwmgr *hwmgr);
 };
 
 struct pp_table_func {
@@ -561,6 +562,7 @@ struct pp_hwmgr {
 	enum PP_DAL_POWERLEVEL dal_power_level;
 	struct phm_dynamic_state_info dyn_state;
 	struct phm_runtime_table_header setup_asic;
+	struct phm_runtime_table_header power_down_asic;
 	struct phm_runtime_table_header disable_dynamic_state_management;
 	struct phm_runtime_table_header enable_dynamic_state_management;
 	struct phm_runtime_table_header set_power_state;
