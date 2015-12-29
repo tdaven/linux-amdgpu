@@ -31,6 +31,12 @@
 #include "eventmanager.h"
 #include "pp_debug.h"
 
+#define PP_CHECK(handle)						\
+	do {								\
+		if ((handle) == NULL || (handle)->pp_valid != PP_VALID)	\
+			return -EINVAL;					\
+	} while (0)
+
 static int pp_early_init(void *handle)
 {
 	return 0;
@@ -538,6 +544,8 @@ static int amd_pp_instance_init(struct amd_pp_init *pp_init,
 	if (handle == NULL)
 		return -ENOMEM;
 
+	handle->pp_valid = PP_VALID;
+
 	ret = smum_init(pp_init, handle);
 	if (ret)
 		goto fail_smum;
@@ -612,8 +620,7 @@ int amd_powerplay_display_configuration_change(void *handle,
 {
 	struct pp_hwmgr  *hwmgr;
 
-	if (handle == NULL)
-		return -EINVAL;
+	PP_CHECK((struct pp_instance *)handle);
 
 	hwmgr = ((struct pp_instance *)handle)->hwmgr;
 
@@ -626,7 +633,9 @@ int amd_powerplay_get_display_power_level(void *handle,
 {
 	struct pp_hwmgr  *hwmgr;
 
-	if (handle == NULL || output == NULL)
+	PP_CHECK((struct pp_instance *)handle);
+
+	if (output == NULL)
 		return -EINVAL;
 
 	hwmgr = ((struct pp_instance *)handle)->hwmgr;
@@ -641,7 +650,9 @@ int amd_powerplay_get_current_clocks(void *handle,
 	struct amd_pp_simple_clock_info simple_clocks;
 	struct pp_clock_info hw_clocks;
 
-	if (handle == NULL || clocks == NULL)
+	PP_CHECK((struct pp_instance *)handle);
+
+	if (clocks == NULL)
 		return -EINVAL;
 
 	hwmgr = ((struct pp_instance *)handle)->hwmgr;
@@ -683,7 +694,9 @@ int amd_powerplay_get_clock_by_type(void *handle, enum amd_pp_clock_type type, s
 
 	struct pp_hwmgr *hwmgr;
 
-	if (handle == NULL || clocks == NULL)
+	PP_CHECK((struct pp_instance *)handle);
+
+	if (clocks == NULL)
 		return -EINVAL;
 
 	hwmgr = ((struct pp_instance *)handle)->hwmgr;
@@ -699,7 +712,9 @@ int amd_powerplay_get_display_mode_validation_clocks(void *handle,
 	int result = -1;
 	struct pp_hwmgr  *hwmgr;
 
-	if (handle == NULL || clocks == NULL)
+	PP_CHECK((struct pp_instance *)handle);
+
+	if (clocks == NULL)
 		return -EINVAL;
 
 	hwmgr = ((struct pp_instance *)handle)->hwmgr;
