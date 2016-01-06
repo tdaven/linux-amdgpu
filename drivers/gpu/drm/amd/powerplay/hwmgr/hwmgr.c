@@ -108,6 +108,9 @@ int hw_init_power_state_table(struct pp_hwmgr *hwmgr)
 
 	hwmgr->ps = kzalloc(size * table_entries, GFP_KERNEL);
 
+	if (hwmgr->ps == NULL)
+		return -ENOMEM;
+
 	state = hwmgr->ps;
 
 	for (i = 0; i < table_entries; i++) {
