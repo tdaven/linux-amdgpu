@@ -328,7 +328,6 @@ int phm_get_performance_level(struct pp_hwmgr *hwmgr, const struct pp_hw_power_s
 
 	return hwmgr->hwmgr_func->get_performance_level(hwmgr, state, designation, index, level);
 
-
 }
 
 
