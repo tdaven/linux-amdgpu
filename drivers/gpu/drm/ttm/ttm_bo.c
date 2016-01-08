@@ -235,15 +235,16 @@ void ttm_bo_move_to_lru_tail(struct ttm_buffer_object *bo)
 
 	lockdep_assert_held(&bo->resv->lock.base);
 
-	if (!list_empty(&bo->swap)) {
-		list_del(&bo->swap);
-		list_add_tail(&bo->swap, &bo->glob->swap_lru);
-	}
+	if (bo->mem.placement & TTM_PL_FLAG_NO_EVICT) {
+		list_del_init(&bo->swap);
+		list_del_init(&bo->lru);
 
-	if (!list_empty(&bo->lru)) {
+	} else {
+		if (bo->ttm != NULL)
+			list_move_tail(&bo->swap, &bo->glob->swap_lru);
+
 		man = &bdev->man[bo->mem.mem_type];
-		list_del(&bo->lru);
-		list_add_tail(&bo->lru, &man->lru);
+		list_move_tail(&bo->lru, &man->lru);
 	}
 }
 EXPORT_SYMBOL(ttm_bo_move_to_lru_tail);
