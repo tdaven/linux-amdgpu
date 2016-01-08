@@ -361,7 +361,7 @@ static int amdgpu_cs_parser_bos(struct amdgpu_cs_parser *p,
 	if (unlikely(r != 0))
 		goto error_reserve;
 
-	amdgpu_vm_get_pt_bos(p->adev, &fpriv->vm, &duplicates);
+	amdgpu_vm_get_pt_bos(&fpriv->vm, &duplicates);
 
 	p->bytes_moved_threshold = amdgpu_cs_get_threshold_for_moves(p->adev);
 	p->bytes_moved = 0;
@@ -386,8 +386,10 @@ static int amdgpu_cs_parser_bos(struct amdgpu_cs_parser *p,
 	}
 
 error_validate:
-	if (r)
+	if (r) {
+		amdgpu_vm_move_pt_bos_in_lru(p->adev, &fpriv->vm);
 		ttm_eu_backoff_reservation(&p->ticket, &p->validated);
+	}
 
 error_reserve:
 	if (need_mmap_lock)
@@ -431,7 +433,10 @@ static int cmp_size_smaller_first(void *priv, struct list_head *a,
  **/
 static void amdgpu_cs_parser_fini(struct amdgpu_cs_parser *parser, int error, bool backoff)
 {
+	struct amdgpu_fpriv *fpriv = parser->filp->driver_priv;
 	unsigned i;
+
+	amdgpu_vm_move_pt_bos_in_lru(parser->adev, &fpriv->vm);
 
 	if (!error) {
 		/* Sort the buffer list from the smallest to largest buffer,
