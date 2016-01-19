@@ -2294,14 +2294,14 @@ amdgpu_get_sdma_instance(struct amdgpu_ring *ring)
 	      (adev)->pm.funcs->get_fan_speed_percent((adev), (s))
 
 #define amdgpu_dpm_get_sclk(adev, l) \
-	(adev)->pp_enabled ?						\
+	((adev)->pp_enabled ?						\
 	      (adev)->powerplay.pp_funcs->get_sclk((adev)->powerplay.pp_handle, (l)) : \
-		(adev)->pm.funcs->get_sclk((adev), (l))
+		(adev)->pm.funcs->get_sclk((adev), (l)))
 
 #define amdgpu_dpm_get_mclk(adev, l)  \
-	(adev)->pp_enabled ?						\
+	((adev)->pp_enabled ?						\
 	      (adev)->powerplay.pp_funcs->get_mclk((adev)->powerplay.pp_handle, (l)) : \
-	      (adev)->pm.funcs->get_mclk((adev), (l))
+	      (adev)->pm.funcs->get_mclk((adev), (l)))
 
 
 #define amdgpu_dpm_force_performance_level(adev, l) \
