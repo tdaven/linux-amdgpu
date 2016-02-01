@@ -761,7 +761,8 @@ int amdgpu_job_alloc_with_ib(struct amdgpu_device *adev, unsigned size,
 			     struct amdgpu_job **job);
 void amdgpu_job_free(struct amdgpu_job *job);
 int amdgpu_job_submit(struct amdgpu_job *job, struct amdgpu_ring *ring,
-		      void *owner, struct fence **f);
+		      struct amd_sched_entity *entity, void *owner,
+		      struct fence **f);
 
 struct amdgpu_ring {
 	struct amdgpu_device		*adev;
@@ -875,6 +876,9 @@ struct amdgpu_vm {
 
 	/* for id and flush management per ring */
 	struct amdgpu_vm_id	ids[AMDGPU_MAX_RINGS];
+
+	/* Scheduler entity for page table updates */
+	struct amd_sched_entity	entity;
 };
 
 struct amdgpu_vm_manager_id {
