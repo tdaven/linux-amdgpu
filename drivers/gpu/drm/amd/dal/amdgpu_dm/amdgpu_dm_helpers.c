@@ -420,7 +420,7 @@ void dm_helpers_dp_mst_handle_mst_hpd_rx_irq(void *param)
 		}
 	}
 #else
-	return false;
+	return;
 #endif
 }
 
