@@ -639,7 +639,7 @@ static int amdgpu_uvd_cs_pass2(struct amdgpu_uvd_cs_ctx *ctx)
 
 	amdgpu_set_ib_value(ctx->parser, ctx->ib_idx, ctx->data0,
 			    lower_32_bits(start));
-	amdgpu_set_ib_value(ctx->parser, ctx->ib_idx, ctx->data0,
+	amdgpu_set_ib_value(ctx->parser, ctx->ib_idx, ctx->data1,
 			    upper_32_bits(start));
 
 	cmd = amdgpu_get_ib_value(ctx->parser, ctx->ib_idx, ctx->idx) >> 1;
