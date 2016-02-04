@@ -1,0 +1,98 @@
+/*
+ * Copyright 2012-15 Advanced Micro Devices, Inc.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * Authors: AMD
+ *
+ */
+
+#ifndef __DAL_BIOS_PARSER_INTERFACE_H__
+#define __DAL_BIOS_PARSER_INTERFACE_H__
+
+#include "dc_bios_types.h"
+
+struct adapter_service;
+struct bios_parser;
+
+struct bp_init_data {
+	struct dc_context *ctx;
+	uint8_t *bios;
+};
+
+struct dc_bios *dal_bios_parser_create(
+	struct bp_init_data *init,
+	struct adapter_service *as);
+
+void dal_bios_parser_destroy(
+	struct dc_bios **dcb);
+
+/*****************************************************************************/
+/* Interfaces of BIOS Parser Helper */
+bool dal_bios_parser_is_lid_open(
+	struct bios_parser *bp);
+bool dal_bios_parser_is_lid_status_changed(
+	struct bios_parser *bp);
+bool dal_bios_parser_is_display_config_changed(
+	struct bios_parser *bp);
+bool dal_bios_parser_is_accelerated_mode(
+	struct bios_parser *bp);
+void dal_bios_parser_set_scratch_lcd_scale(
+	struct bios_parser *bp,
+	enum lcd_scale scale);
+enum lcd_scale  dal_bios_parser_get_scratch_lcd_scale(
+	struct bios_parser *bp);
+void dal_bios_parser_get_bios_event_info(
+	struct bios_parser *bp,
+	struct bios_event_info *info);
+void dal_bios_parser_update_requested_backlight_level(
+	struct bios_parser *bp,
+	uint32_t backlight_8bit);
+uint32_t dal_bios_parser_get_requested_backlight_level(
+	struct bios_parser *bp);
+void dal_bios_parser_take_backlight_control(
+	struct bios_parser *bp,
+	bool cntl);
+bool dal_bios_parser_is_active_display(
+	struct bios_parser *bp,
+	enum signal_type signal,
+	const struct connector_device_tag_info *device_tag);
+enum controller_id dal_bios_parser_get_embedded_display_controller_id(
+	struct bios_parser *bp);
+uint32_t dal_bios_parser_get_embedded_display_refresh_rate(
+	struct bios_parser *bp);
+void dal_bios_parser_set_scratch_connected(
+	struct bios_parser *bp,
+	struct graphics_object_id connector_id,
+	bool connected,
+	const struct connector_device_tag_info *device_tag);
+void dal_bios_parser_prepare_scratch_active_and_requested(
+	struct bios_parser *bp,
+	enum controller_id controller_id,
+	enum signal_type signal,
+	const struct connector_device_tag_info *device_tag);
+void dal_bios_parser_set_scratch_active_and_requested(
+	struct bios_parser *bp);
+void dal_bios_parser_set_scratch_critical_state(
+	struct bios_parser *bp,
+	bool state);
+void dal_bios_parser_set_scratch_acc_mode_change(
+	struct bios_parser *bp);
+
+#endif /* __DAL_BIOS_PARSER_INTERFACE_H__ */
