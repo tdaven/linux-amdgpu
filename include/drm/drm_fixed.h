@@ -156,8 +156,7 @@ static inline s64 drm_fixp_from_fraction(s64 a, s64 b)
 	u64 rem;
 
 	/* determine integer part */
-	u64 res_abs = a_abs / b_abs;
-	rem = a_abs % b_abs;
+	u64 res_abs  = div64_u64_rem(a_abs, b_abs, &rem);
 
 	/* determine fractional part */
 	{
