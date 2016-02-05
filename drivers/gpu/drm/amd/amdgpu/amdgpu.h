@@ -598,8 +598,6 @@ struct amdgpu_sa_manager {
 	uint32_t		align;
 };
 
-struct amdgpu_sa_bo;
-
 /* sub-allocation buffer */
 struct amdgpu_sa_bo {
 	struct list_head		olist;
