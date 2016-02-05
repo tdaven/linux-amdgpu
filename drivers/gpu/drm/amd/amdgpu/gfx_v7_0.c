@@ -4079,7 +4079,7 @@ static void gfx_v7_0_enable_cgcg(struct amdgpu_device *adev, bool enable)
 
 	orig = data = RREG32(mmRLC_CGCG_CGLS_CTRL);
 
-	if (enable && (adev->cg_flags & AMDGPU_CG_SUPPORT_GFX_CGCG)) {
+	if (enable && (adev->cg_flags & AMD_CG_SUPPORT_GFX_CGCG)) {
 		gfx_v7_0_enable_gui_idle_interrupt(adev, true);
 
 		tmp = gfx_v7_0_halt_rlc(adev);
@@ -4117,9 +4117,9 @@ static void gfx_v7_0_enable_mgcg(struct amdgpu_device *adev, bool enable)
 {
 	u32 data, orig, tmp = 0;
 
-	if (enable && (adev->cg_flags & AMDGPU_CG_SUPPORT_GFX_MGCG)) {
-		if (adev->cg_flags & AMDGPU_CG_SUPPORT_GFX_MGLS) {
-			if (adev->cg_flags & AMDGPU_CG_SUPPORT_GFX_CP_LS) {
+	if (enable && (adev->cg_flags & AMD_CG_SUPPORT_GFX_MGCG)) {
+		if (adev->cg_flags & AMD_CG_SUPPORT_GFX_MGLS) {
+			if (adev->cg_flags & AMD_CG_SUPPORT_GFX_CP_LS) {
 				orig = data = RREG32(mmCP_MEM_SLP_CNTL);
 				data |= CP_MEM_SLP_CNTL__CP_MEM_LS_EN_MASK;
 				if (orig != data)
@@ -4146,14 +4146,14 @@ static void gfx_v7_0_enable_mgcg(struct amdgpu_device *adev, bool enable)
 
 		gfx_v7_0_update_rlc(adev, tmp);
 
-		if (adev->cg_flags & AMDGPU_CG_SUPPORT_GFX_CGTS) {
+		if (adev->cg_flags & AMD_CG_SUPPORT_GFX_CGTS) {
 			orig = data = RREG32(mmCGTS_SM_CTRL_REG);
 			data &= ~CGTS_SM_CTRL_REG__SM_MODE_MASK;
 			data |= (0x2 << CGTS_SM_CTRL_REG__SM_MODE__SHIFT);
 			data |= CGTS_SM_CTRL_REG__SM_MODE_ENABLE_MASK;
 			data &= ~CGTS_SM_CTRL_REG__OVERRIDE_MASK;
-			if ((adev->cg_flags & AMDGPU_CG_SUPPORT_GFX_MGLS) &&
-			    (adev->cg_flags & AMDGPU_CG_SUPPORT_GFX_CGTS_LS))
+			if ((adev->cg_flags & AMD_CG_SUPPORT_GFX_MGLS) &&
+			    (adev->cg_flags & AMD_CG_SUPPORT_GFX_CGTS_LS))
 				data &= ~CGTS_SM_CTRL_REG__LS_OVERRIDE_MASK;
 			data &= ~CGTS_SM_CTRL_REG__ON_MONITOR_ADD_MASK;
 			data |= CGTS_SM_CTRL_REG__ON_MONITOR_ADD_EN_MASK;
@@ -4219,7 +4219,7 @@ static void gfx_v7_0_enable_sclk_slowdown_on_pu(struct amdgpu_device *adev,
 	u32 data, orig;
 
 	orig = data = RREG32(mmRLC_PG_CNTL);
-	if (enable && (adev->pg_flags & AMDGPU_PG_SUPPORT_RLC_SMU_HS))
+	if (enable && (adev->pg_flags & AMD_PG_SUPPORT_RLC_SMU_HS))
 		data |= RLC_PG_CNTL__SMU_CLK_SLOWDOWN_ON_PU_ENABLE_MASK;
 	else
 		data &= ~RLC_PG_CNTL__SMU_CLK_SLOWDOWN_ON_PU_ENABLE_MASK;
@@ -4233,7 +4233,7 @@ static void gfx_v7_0_enable_sclk_slowdown_on_pd(struct amdgpu_device *adev,
 	u32 data, orig;
 
 	orig = data = RREG32(mmRLC_PG_CNTL);
-	if (enable && (adev->pg_flags & AMDGPU_PG_SUPPORT_RLC_SMU_HS))
+	if (enable && (adev->pg_flags & AMD_PG_SUPPORT_RLC_SMU_HS))
 		data |= RLC_PG_CNTL__SMU_CLK_SLOWDOWN_ON_PD_ENABLE_MASK;
 	else
 		data &= ~RLC_PG_CNTL__SMU_CLK_SLOWDOWN_ON_PD_ENABLE_MASK;
@@ -4246,7 +4246,7 @@ static void gfx_v7_0_enable_cp_pg(struct amdgpu_device *adev, bool enable)
 	u32 data, orig;
 
 	orig = data = RREG32(mmRLC_PG_CNTL);
-	if (enable && (adev->pg_flags & AMDGPU_PG_SUPPORT_CP))
+	if (enable && (adev->pg_flags & AMD_PG_SUPPORT_CP))
 		data &= ~0x8000;
 	else
 		data |= 0x8000;
@@ -4259,7 +4259,7 @@ static void gfx_v7_0_enable_gds_pg(struct amdgpu_device *adev, bool enable)
 	u32 data, orig;
 
 	orig = data = RREG32(mmRLC_PG_CNTL);
-	if (enable && (adev->pg_flags & AMDGPU_PG_SUPPORT_GDS))
+	if (enable && (adev->pg_flags & AMD_PG_SUPPORT_GDS))
 		data &= ~0x2000;
 	else
 		data |= 0x2000;
@@ -4340,7 +4340,7 @@ static void gfx_v7_0_enable_gfx_cgpg(struct amdgpu_device *adev,
 {
 	u32 data, orig;
 
-	if (enable && (adev->pg_flags & AMDGPU_PG_SUPPORT_GFX_PG)) {
+	if (enable && (adev->pg_flags & AMD_PG_SUPPORT_GFX_PG)) {
 		orig = data = RREG32(mmRLC_PG_CNTL);
 		data |= RLC_PG_CNTL__GFX_POWER_GATING_ENABLE_MASK;
 		if (orig != data)
@@ -4412,7 +4412,7 @@ static void gfx_v7_0_enable_gfx_static_mgpg(struct amdgpu_device *adev,
 	u32 data, orig;
 
 	orig = data = RREG32(mmRLC_PG_CNTL);
-	if (enable && (adev->pg_flags & AMDGPU_PG_SUPPORT_GFX_SMG))
+	if (enable && (adev->pg_flags & AMD_PG_SUPPORT_GFX_SMG))
 		data |= RLC_PG_CNTL__STATIC_PER_CU_PG_ENABLE_MASK;
 	else
 		data &= ~RLC_PG_CNTL__STATIC_PER_CU_PG_ENABLE_MASK;
@@ -4426,7 +4426,7 @@ static void gfx_v7_0_enable_gfx_dynamic_mgpg(struct amdgpu_device *adev,
 	u32 data, orig;
 
 	orig = data = RREG32(mmRLC_PG_CNTL);
-	if (enable && (adev->pg_flags & AMDGPU_PG_SUPPORT_GFX_DMG))
+	if (enable && (adev->pg_flags & AMD_PG_SUPPORT_GFX_DMG))
 		data |= RLC_PG_CNTL__DYN_PER_CU_PG_ENABLE_MASK;
 	else
 		data &= ~RLC_PG_CNTL__DYN_PER_CU_PG_ENABLE_MASK;
@@ -4593,15 +4593,15 @@ static void gfx_v7_0_get_csb_buffer(struct amdgpu_device *adev,
 
 static void gfx_v7_0_init_pg(struct amdgpu_device *adev)
 {
-	if (adev->pg_flags & (AMDGPU_PG_SUPPORT_GFX_PG |
-			      AMDGPU_PG_SUPPORT_GFX_SMG |
-			      AMDGPU_PG_SUPPORT_GFX_DMG |
-			      AMDGPU_PG_SUPPORT_CP |
-			      AMDGPU_PG_SUPPORT_GDS |
-			      AMDGPU_PG_SUPPORT_RLC_SMU_HS)) {
+	if (adev->pg_flags & (AMD_PG_SUPPORT_GFX_PG |
+			      AMD_PG_SUPPORT_GFX_SMG |
+			      AMD_PG_SUPPORT_GFX_DMG |
+			      AMD_PG_SUPPORT_CP |
+			      AMD_PG_SUPPORT_GDS |
+			      AMD_PG_SUPPORT_RLC_SMU_HS)) {
 		gfx_v7_0_enable_sclk_slowdown_on_pu(adev, true);
 		gfx_v7_0_enable_sclk_slowdown_on_pd(adev, true);
-		if (adev->pg_flags & AMDGPU_PG_SUPPORT_GFX_PG) {
+		if (adev->pg_flags & AMD_PG_SUPPORT_GFX_PG) {
 			gfx_v7_0_init_gfx_cgpg(adev);
 			gfx_v7_0_enable_cp_pg(adev, true);
 			gfx_v7_0_enable_gds_pg(adev, true);
@@ -4613,14 +4613,14 @@ static void gfx_v7_0_init_pg(struct amdgpu_device *adev)
 
 static void gfx_v7_0_fini_pg(struct amdgpu_device *adev)
 {
-	if (adev->pg_flags & (AMDGPU_PG_SUPPORT_GFX_PG |
-			      AMDGPU_PG_SUPPORT_GFX_SMG |
-			      AMDGPU_PG_SUPPORT_GFX_DMG |
-			      AMDGPU_PG_SUPPORT_CP |
-			      AMDGPU_PG_SUPPORT_GDS |
-			      AMDGPU_PG_SUPPORT_RLC_SMU_HS)) {
+	if (adev->pg_flags & (AMD_PG_SUPPORT_GFX_PG |
+			      AMD_PG_SUPPORT_GFX_SMG |
+			      AMD_PG_SUPPORT_GFX_DMG |
+			      AMD_PG_SUPPORT_CP |
+			      AMD_PG_SUPPORT_GDS |
+			      AMD_PG_SUPPORT_RLC_SMU_HS)) {
 		gfx_v7_0_update_gfx_pg(adev, false);
-		if (adev->pg_flags & AMDGPU_PG_SUPPORT_GFX_PG) {
+		if (adev->pg_flags & AMD_PG_SUPPORT_GFX_PG) {
 			gfx_v7_0_enable_cp_pg(adev, false);
 			gfx_v7_0_enable_gds_pg(adev, false);
 		}
@@ -5497,14 +5497,14 @@ static int gfx_v7_0_set_powergating_state(void *handle,
 	if (state == AMD_PG_STATE_GATE)
 		gate = true;
 
-	if (adev->pg_flags & (AMDGPU_PG_SUPPORT_GFX_PG |
-			      AMDGPU_PG_SUPPORT_GFX_SMG |
-			      AMDGPU_PG_SUPPORT_GFX_DMG |
-			      AMDGPU_PG_SUPPORT_CP |
-			      AMDGPU_PG_SUPPORT_GDS |
-			      AMDGPU_PG_SUPPORT_RLC_SMU_HS)) {
+	if (adev->pg_flags & (AMD_PG_SUPPORT_GFX_PG |
+			      AMD_PG_SUPPORT_GFX_SMG |
+			      AMD_PG_SUPPORT_GFX_DMG |
+			      AMD_PG_SUPPORT_CP |
+			      AMD_PG_SUPPORT_GDS |
+			      AMD_PG_SUPPORT_RLC_SMU_HS)) {
 		gfx_v7_0_update_gfx_pg(adev, gate);
-		if (adev->pg_flags & AMDGPU_PG_SUPPORT_GFX_PG) {
+		if (adev->pg_flags & AMD_PG_SUPPORT_GFX_PG) {
 			gfx_v7_0_enable_cp_pg(adev, gate);
 			gfx_v7_0_enable_gds_pg(adev, gate);
 		}
