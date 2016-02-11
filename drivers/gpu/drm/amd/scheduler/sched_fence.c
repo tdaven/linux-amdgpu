@@ -24,6 +24,7 @@
 #include <linux/kthread.h>
 #include <linux/wait.h>
 #include <linux/sched.h>
+#include <trace/events/fence.h>
 #include <drm/drmP.h>
 #include "gpu_scheduler.h"
 
@@ -61,6 +62,7 @@ void amd_sched_fence_scheduled(struct amd_sched_fence *s_fence)
 {
 	struct fence_cb *cur, *tmp;
 
+	trace_fence_emit(&s_fence->base);
 	set_bit(AMD_SCHED_FENCE_SCHEDULED_BIT, &s_fence->base.flags);
 	list_for_each_entry_safe(cur, tmp, &s_fence->scheduled_cb, node) {
 		list_del_init(&cur->node);
