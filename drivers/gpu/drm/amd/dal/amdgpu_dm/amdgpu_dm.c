@@ -416,7 +416,7 @@ static void dm_pflip_high_irq(void *interrupt_params)
 	spin_unlock_irqrestore(&adev->ddev->event_lock, flags);
 
 	drm_crtc_vblank_put(&amdgpu_crtc->base);
-	queue_work(amdgpu_crtc->pflip_queue, &works->unpin_work);
+	schedule_work(&works->unpin_work);
 }
 
 static void dm_crtc_high_irq(void *interrupt_params)

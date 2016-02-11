@@ -921,10 +921,7 @@ stream_create_fail:
 
 void amdgpu_dm_crtc_destroy(struct drm_crtc *crtc)
 {
-	struct amdgpu_crtc *dm_crtc = to_amdgpu_crtc(crtc);
-
 	drm_crtc_cleanup(crtc);
-	destroy_workqueue(dm_crtc->pflip_queue);
 	kfree(crtc);
 }
 
@@ -1585,9 +1582,6 @@ int amdgpu_dm_crtc_init(struct amdgpu_display_manager *dm,
 	dm->adev->mode_info.crtcs[crtc_index] = acrtc;
 	drm_mode_crtc_set_gamma_size(&acrtc->base, 256);
 
-	acrtc->pflip_queue =
-		create_singlethread_workqueue("amdgpu-pageflip-queue");
-
 	return 0;
 fail:
 	kfree(primary_plane);
@@ -1998,7 +1992,10 @@ static void manage_dm_interrupts(
 		 * As this function sleeps it was bug to call it inside the
 		 * amdgpu_dm_flip_cleanup function under locked event_lock
 		 */
-		flush_workqueue(acrtc->pflip_queue);
+		if (acrtc->pflip_works) {
+			flush_work(&acrtc->pflip_works->flip_work);
+			flush_work(&acrtc->pflip_works->unpin_work);
+		}
 
 		/*
 		 * TODO: once Vitaly's change to adjust locking in
