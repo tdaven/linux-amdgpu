@@ -161,6 +161,7 @@ static ssize_t amdgpu_set_dpm_forced_performance_level(struct device *dev,
 		mutex_lock(&adev->pm.mutex);
 		if (adev->pm.dpm.thermal_active) {
 			count = -EINVAL;
+			mutex_unlock(&adev->pm.mutex);
 			goto fail;
 		}
 		ret = amdgpu_dpm_force_performance_level(adev, level);
@@ -171,8 +172,6 @@ static ssize_t amdgpu_set_dpm_forced_performance_level(struct device *dev,
 		mutex_unlock(&adev->pm.mutex);
 	}
 fail:
-	mutex_unlock(&adev->pm.mutex);
-
 	return count;
 }
 
