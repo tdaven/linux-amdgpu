@@ -2613,7 +2613,7 @@ static u32 gfx_v8_0_get_rb_active_bitmap(struct amdgpu_device *adev)
 static void gfx_v8_0_setup_rb(struct amdgpu_device *adev)
 {
 	int i, j;
-	u32 data, tmp, num_rbs = 0;
+	u32 data, tmp, num_rbs = 1;
 	u32 active_rbs = 0;
 
 	mutex_lock(&adev->grbm_idx_mutex);
