@@ -2012,7 +2012,6 @@ struct amdgpu_device {
 	struct amdgpu_sdma		sdma;
 
 	/* uvd */
-	bool				has_uvd;
 	struct amdgpu_uvd		uvd;
 
 	/* vce */
