@@ -1624,8 +1624,8 @@ static int vi_common_soft_reset(void *handle)
 	return 0;
 }
 
-static void fiji_update_bif_medium_grain_light_sleep(struct amdgpu_device *adev,
-						     bool enable)
+static void vi_update_bif_medium_grain_light_sleep(struct amdgpu_device *adev,
+						   bool enable)
 {
 	uint32_t temp, data;
 
@@ -1644,8 +1644,8 @@ static void fiji_update_bif_medium_grain_light_sleep(struct amdgpu_device *adev,
 		WREG32_PCIE(ixPCIE_CNTL2, data);
 }
 
-static void fiji_update_hdp_medium_grain_clock_gating(struct amdgpu_device *adev,
-						      bool enable)
+static void vi_update_hdp_medium_grain_clock_gating(struct amdgpu_device *adev,
+						    bool enable)
 {
 	uint32_t temp, data;
 
@@ -1660,8 +1660,8 @@ static void fiji_update_hdp_medium_grain_clock_gating(struct amdgpu_device *adev
 		WREG32(mmHDP_HOST_PATH_CNTL, data);
 }
 
-static void fiji_update_hdp_light_sleep(struct amdgpu_device *adev,
-		bool enable)
+static void vi_update_hdp_light_sleep(struct amdgpu_device *adev,
+				      bool enable)
 {
 	uint32_t temp, data;
 
@@ -1676,8 +1676,8 @@ static void fiji_update_hdp_light_sleep(struct amdgpu_device *adev,
 		WREG32(mmHDP_MEM_POWER_LS, data);
 }
 
-static void fiji_update_rom_medium_grain_clock_gating(struct amdgpu_device *adev,
-						      bool enable)
+static void vi_update_rom_medium_grain_clock_gating(struct amdgpu_device *adev,
+						    bool enable)
 {
 	uint32_t temp, data;
 
@@ -1701,13 +1701,22 @@ static int vi_common_set_clockgating_state(void *handle,
 
 	switch (adev->asic_type) {
 	case CHIP_FIJI:
-		fiji_update_bif_medium_grain_light_sleep(adev,
+		vi_update_bif_medium_grain_light_sleep(adev,
 				state == AMD_CG_STATE_GATE ? true : false);
-		fiji_update_hdp_medium_grain_clock_gating(adev,
+		vi_update_hdp_medium_grain_clock_gating(adev,
 				state == AMD_CG_STATE_GATE ? true : false);
-		fiji_update_hdp_light_sleep(adev,
+		vi_update_hdp_light_sleep(adev,
 				state == AMD_CG_STATE_GATE ? true : false);
-		fiji_update_rom_medium_grain_clock_gating(adev,
+		vi_update_rom_medium_grain_clock_gating(adev,
+				state == AMD_CG_STATE_GATE ? true : false);
+		break;
+	case CHIP_CARRIZO:
+	case CHIP_STONEY:
+		vi_update_bif_medium_grain_light_sleep(adev,
+				state == AMD_CG_STATE_GATE ? true : false);
+		vi_update_hdp_medium_grain_clock_gating(adev,
+				state == AMD_CG_STATE_GATE ? true : false);
+		vi_update_hdp_light_sleep(adev,
 				state == AMD_CG_STATE_GATE ? true : false);
 		break;
 	default:
