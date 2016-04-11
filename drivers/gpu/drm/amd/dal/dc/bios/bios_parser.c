@@ -94,7 +94,6 @@ static uint32_t get_support_mask_for_device_id(struct device_id device_id);
 static ATOM_ENCODER_CAP_RECORD *get_encoder_cap_record(
 	struct bios_parser *bp,
 	ATOM_OBJECT *object);
-static void process_ext_display_connection_info(struct bios_parser *bp);
 
 #define BIOS_IMAGE_SIZE_OFFSET 2
 #define BIOS_IMAGE_SIZE_UNIT 512
@@ -103,7 +102,7 @@ static void process_ext_display_connection_info(struct bios_parser *bp);
 static bool bios_parser_construct(
 	struct bios_parser *bp,
 	struct bp_init_data *init,
-	struct adapter_service *as);
+	enum dce_version dce_version);
 
 enum bp_result dc_bios_get_embedded_panel_info(struct dc_bios *dcb,
 					       struct embedded_panel_info *info);
@@ -111,7 +110,8 @@ enum bp_result dc_bios_get_embedded_panel_info(struct dc_bios *dcb,
 /*****************************************************************************/
 
 struct dc_bios *dal_bios_parser_create(
-	struct bp_init_data *init, struct adapter_service *as)
+	struct bp_init_data *init,
+	enum dce_version dce_version)
 {
 	struct bios_parser *bp = NULL;
 
@@ -119,7 +119,7 @@ struct dc_bios *dal_bios_parser_create(
 	if (!bp)
 		return NULL;
 
-	if (bios_parser_construct(bp, init, as))
+	if (bios_parser_construct(bp, init, dce_version))
 		return (struct dc_bios *)bp;
 
 	dm_free(bp);
@@ -3369,7 +3369,7 @@ static uint32_t get_support_mask_for_device_id(struct device_id device_id)
  */
 
 static bool i2c_read(
-	struct bios_parser *bp,
+	struct adapter_service *as,
 	struct graphics_object_i2c_info *i2c_info,
 	uint8_t *buffer,
 	uint32_t length)
@@ -3379,14 +3379,14 @@ static bool i2c_read(
 	bool result = false;
 	struct i2c_command cmd;
 
-	ddc = dal_adapter_service_obtain_ddc_from_i2c_info(bp->as, i2c_info);
+	ddc = dal_adapter_service_obtain_ddc_from_i2c_info(as, i2c_info);
 
 	if (!ddc)
 		return result;
 
 	/*Using SW engine */
 	cmd.engine = I2C_COMMAND_ENGINE_SW;
-	cmd.speed = dal_adapter_service_get_sw_i2c_speed(bp->as);
+	cmd.speed = dal_adapter_service_get_sw_i2c_speed(as);
 
 	{
 		struct i2c_payload payloads[] = {
@@ -3409,12 +3409,12 @@ static bool i2c_read(
 
 		/* TODO route this through drm i2c_adapter */
 		result = dal_i2caux_submit_i2c_command(
-				dal_adapter_service_get_i2caux(bp->as),
+				dal_adapter_service_get_i2caux(as),
 				ddc,
 				&cmd);
 	}
 
-	dal_adapter_service_release_ddc(bp->as, ddc);
+	dal_adapter_service_release_ddc(as, ddc);
 
 	return result;
 }
@@ -3427,6 +3427,7 @@ static bool i2c_read(
  */
 static enum bp_result get_ext_display_connection_info(
 	struct bios_parser *bp,
+	struct adapter_service *as,
 	ATOM_OBJECT *opm_object,
 	ATOM_EXTERNAL_DISPLAY_CONNECTION_INFO *ext_display_connection_info_tbl)
 {
@@ -3453,11 +3454,10 @@ static enum bp_result get_ext_display_connection_info(
 				BP_RESULT_OK)
 			return BP_RESULT_BADBIOSTABLE;
 
-		if (i2c_read(
-				bp,
-				&i2c_info,
-				(uint8_t *)ext_display_connection_info_tbl,
-				sizeof(ATOM_EXTERNAL_DISPLAY_CONNECTION_INFO))) {
+		if (i2c_read(as,
+			     &i2c_info,
+			     (uint8_t *)ext_display_connection_info_tbl,
+			     sizeof(ATOM_EXTERNAL_DISPLAY_CONNECTION_INFO))) {
 			config_tbl_present = true;
 		}
 	}
@@ -3774,7 +3774,8 @@ static ATOM_CONNECTOR_HPDPIN_LUT_RECORD *get_ext_connector_hpd_pin_lut_record(
  *
  */
 static enum bp_result patch_bios_image_from_ext_display_connection_info(
-	struct bios_parser *bp)
+	struct bios_parser *bp,
+	struct adapter_service *as)
 {
 	ATOM_OBJECT_TABLE *connector_tbl;
 	uint32_t connector_tbl_offset;
@@ -3814,10 +3815,9 @@ static enum bp_result patch_bios_image_from_ext_display_connection_info(
 	connector_tbl = GET_IMAGE(ATOM_OBJECT_TABLE, connector_tbl_offset);
 
 	/* Read Connector info table from EEPROM through i2c */
-	if (get_ext_display_connection_info(
-			bp,
-			opm_object,
-			&ext_display_connection_info_tbl) != BP_RESULT_OK) {
+	if (get_ext_display_connection_info(bp, as,
+					    opm_object,
+					    &ext_display_connection_info_tbl) != BP_RESULT_OK) {
 		if (bp->headless_no_opm) {
 			/* Failed to read OPM, remove all non-CF connectors. */
 			for (i = 0; i < connector_tbl->ucNumberOfObjects; ++i) {
@@ -4025,7 +4025,8 @@ static enum bp_result patch_bios_image_from_ext_display_connection_info(
  *
  */
 
-static void process_ext_display_connection_info(struct bios_parser *bp)
+static void process_ext_display_connection_info(struct bios_parser *bp,
+						struct adapter_service *as)
 {
 	ATOM_OBJECT_TABLE *connector_tbl;
 	uint32_t connector_tbl_offset;
@@ -4080,7 +4081,7 @@ static void process_ext_display_connection_info(struct bios_parser *bp)
 		/* Step 2: (only if MXM connector found) Patch BIOS image with
 		 * info from external module */
 		if (mxm_connector_found &&
-				patch_bios_image_from_ext_display_connection_info(bp) !=
+		    patch_bios_image_from_ext_display_connection_info(bp, as) !=
 						BP_RESULT_OK) {
 			/* Patching the bios image has failed. We will copy
 			 * again original image provided and afterwards
@@ -4114,11 +4115,12 @@ static void process_ext_display_connection_info(struct bios_parser *bp)
 	}
 }
 
-void dc_bios_post_init(struct dc_bios *dcb)
+void dc_bios_post_init(struct dc_bios *dcb,
+		       struct adapter_service *as)
 {
 	struct bios_parser *bp = BP_FROM_DCB(dcb);
 
-	process_ext_display_connection_info(bp);
+	process_ext_display_connection_info(bp, as);
 }
 
 bool dc_bios_is_accelerated_mode(struct dc_bios *dcb)
@@ -4765,15 +4767,11 @@ static uint32_t get_embedded_display_refresh_rate(
 static bool bios_parser_construct(
 	struct bios_parser *bp,
 	struct bp_init_data *init,
-	struct adapter_service *as)
+	enum dce_version dce_version)
 {
 	uint16_t *rom_header_offset = NULL;
 	ATOM_ROM_HEADER *rom_header = NULL;
 	ATOM_OBJECT_HEADER *object_info_tbl;
-	enum dce_version dce_version;
-
-	if (!as)
-		return false;
 
 	if (!init)
 		return false;
@@ -4781,9 +4779,7 @@ static bool bios_parser_construct(
 	if (!init->bios)
 		return false;
 
-	dce_version = dal_adapter_service_get_dce_version(as);
 	bp->ctx = init->ctx;
-	bp->as = as;
 	bp->bios = init->bios;
 	bp->bios_size = bp->bios[BIOS_IMAGE_SIZE_OFFSET] * BIOS_IMAGE_SIZE_UNIT;
 	bp->bios_local_image = NULL;

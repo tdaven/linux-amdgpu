@@ -749,6 +749,7 @@ static bool adapter_service_construct(
 	}
 
 	as->dce_environment = init_data->dce_environment;
+	dce_version = dal_adapter_service_get_dce_version(as);
 
 	if (init_data->vbios_override)
 		as->dcb_override = init_data->vbios_override;
@@ -757,7 +758,7 @@ static bool adapter_service_construct(
 		init_data->bp_init_data.ctx = init_data->ctx;
 
 		as->dcb_internal = dal_bios_parser_create(
-				&init_data->bp_init_data, as);
+				&init_data->bp_init_data, dce_version);
 
 		if (!as->dcb_internal) {
 			ASSERT_CRITICAL(false);
@@ -767,7 +768,6 @@ static bool adapter_service_construct(
 
 	dcb = dal_adapter_service_get_bios_parser(as);
 
-	dce_version = dal_adapter_service_get_dce_version(as);
 
 	/* Create GPIO service */
 	as->gpio_service = dal_gpio_service_create(
@@ -804,7 +804,7 @@ static bool adapter_service_construct(
 	/* Integrated info is not provided on discrete ASIC. NULL is allowed */
 	as->integrated_info = dc_bios_create_integrated_info(dcb);
 
-	dc_bios_post_init(dcb);
+	dc_bios_post_init(dcb, as);
 
 	/* Generate backlight translation table and initializes
 			  other brightness properties */

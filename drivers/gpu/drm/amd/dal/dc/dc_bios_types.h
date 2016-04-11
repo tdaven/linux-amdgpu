@@ -208,7 +208,8 @@ enum bp_result dc_bios_enable_disp_power_gating(struct dc_bios *bios,
 						enum bp_pipe_control_action action);
 
 
-void dc_bios_post_init(struct dc_bios *bios);
+void dc_bios_post_init(struct dc_bios *bios,
+		       struct adapter_service *as);
 
 struct integrated_info *dc_bios_create_integrated_info(struct dc_bios *bios);
 
