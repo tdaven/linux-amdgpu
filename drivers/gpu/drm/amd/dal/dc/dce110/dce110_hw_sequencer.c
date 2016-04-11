@@ -874,15 +874,11 @@ static void disable_vga_and_power_gate_all_controllers(
  */
 static void enable_accelerated_mode(struct core_dc *dc)
 {
-	struct dc_bios *dcb;
-
-	dcb = dal_adapter_service_get_bios_parser(dc->res_pool.adapter_srv);
-
 	power_down_all_hw_blocks(dc);
 
 	disable_vga_and_power_gate_all_controllers(dc);
 
-	dc_bios_set_scratch_acc_mode_change(dcb);
+	dce110_set_scratch_acc_mode_change(dc->ctx);
 }
 
 #if 0
