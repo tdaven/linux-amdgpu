@@ -148,15 +148,6 @@ void dal_bios_parser_destroy(struct dc_bios **dcb)
 	*dcb = NULL;
 }
 
-void dc_bios_power_down(struct dc_bios *dcb)
-{
-#if defined(CONFIG_DRM_AMD_DAL_VBIOS_PRESENT)
-	struct bios_parser *bp = BP_FROM_DCB(dcb);
-
-	dal_bios_parser_set_scratch_lcd_scale(bp, bp->lcd_scale);
-#endif
-}
-
 void dc_bios_power_up(struct dc_bios *dcb)
 {
 #if defined(CONFIG_DRM_AMD_DAL_VBIOS_PRESENT)
@@ -4640,13 +4631,6 @@ static bool is_display_config_changed(
 {
 	BREAK_TO_DEBUGGER();
 	return false;
-}
-
-static void set_scratch_lcd_scale(
-	struct dc_bios *bios,
-	enum lcd_scale scale)
-{
-	BREAK_TO_DEBUGGER();
 }
 
 static enum lcd_scale get_scratch_lcd_scale(
