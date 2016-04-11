@@ -291,7 +291,7 @@ bool dce110_timing_generator_enable_crtc(struct timing_generator *tg)
 	value = 0;
 	dm_write_reg(tg->ctx, CRTC_REG(mmCRTC_MASTER_UPDATE_LOCK), value);
 
-	result = tg->bp->funcs->enable_crtc(tg->bp, tg110->controller_id, true);
+	result = dc_bios_enable_crtc(tg->bp, tg110->controller_id, true);
 
 	return result == BP_RESULT_OK;
 }
@@ -469,7 +469,7 @@ bool dce110_timing_generator_disable_crtc(struct timing_generator *tg)
 
 	struct dce110_timing_generator *tg110 = DCE110TG_FROM_TG(tg);
 
-	result = tg->bp->funcs->enable_crtc(tg->bp, tg110->controller_id, false);
+	result = dc_bios_enable_crtc(tg->bp, tg110->controller_id, false);
 
 	/* Need to make sure stereo is disabled according to the DCE5.0 spec */
 
@@ -574,7 +574,7 @@ bool dce110_timing_generator_program_timing_generator(
 	if (patched_crtc_timing.flags.HORZ_COUNT_BY_TWO == 1)
 		bp_params.flags.HORZ_COUNT_BY_TWO = 1;
 
-	result = tg->bp->funcs->program_crtc_timing(tg->bp, &bp_params);
+	result = dc_bios_program_crtc_timing(tg->bp, &bp_params);
 
 	program_horz_count_by_2(tg, &patched_crtc_timing);
 

@@ -188,7 +188,7 @@ static bool dce112_program_pix_clk(
 		bp_pc_params.flags.SUPPORT_YUV_420 = 0;
 	}
 
-	if (dce112_clk_src->bios->funcs->set_pixel_clock(
+	if (dc_bios_set_pixel_clock(
 			dce112_clk_src->bios, &bp_pc_params) != BP_RESULT_OK)
 		return false;
 
@@ -219,7 +219,7 @@ static bool dce112_clock_source_power_down(
 	bp_pixel_clock_params.flags.FORCE_PROGRAMMING_OF_PLL = 1;
 
 	/*Call ASICControl to process ATOMBIOS Exec table*/
-	bp_result = dce112_clk_src->bios->funcs->set_pixel_clock(
+	bp_result = dc_bios_set_pixel_clock(
 			dce112_clk_src->bios,
 			&bp_pixel_clock_params);
 
@@ -250,7 +250,7 @@ bool dce112_clk_src_construct(
 	clk_src->base.funcs = &dce112_clk_src_funcs;
 	clk_src->offsets = *reg_offsets;
 
-	if (clk_src->bios->funcs->get_firmware_info(
+	if (dc_bios_get_firmware_info(
 			clk_src->bios, &fw_info) != BP_RESULT_OK) {
 		ASSERT_CRITICAL(false);
 		goto unexpected_failure;
