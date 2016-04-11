@@ -127,7 +127,6 @@ bool dc_bios_is_lid_open(struct dc_bios *bios);
 #if 0 /* unused trap to debugger functions */
 
 bool dc_bios_is_lid_status_changed(struct dc_bios *bios);
-bool dc_bios_is_display_config_changed(struct dc_bios *bios);
 
 enum lcd_scale  dc_bios_get_scratch_lcd_scale(struct dc_bios *bios);
 void dc_bios_get_bios_event_info(struct dc_bios *bios,
