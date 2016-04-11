@@ -40,7 +40,6 @@
 
 uint8_t dc_bios_get_connectors_number(struct dc_bios *bios);
 
-void dc_bios_power_down(struct dc_bios *bios);
 void dc_bios_power_up(struct dc_bios *bios);
 
 uint8_t dc_bios_get_encoders_number(struct dc_bios *bios);
@@ -130,8 +129,6 @@ bool dc_bios_is_lid_open(struct dc_bios *bios);
 bool dc_bios_is_lid_status_changed(struct dc_bios *bios);
 bool dc_bios_is_display_config_changed(struct dc_bios *bios);
 
-void dc_bios_set_scratch_lcd_scale(struct dc_bios *bios,
-				   enum lcd_scale scale);
 enum lcd_scale  dc_bios_get_scratch_lcd_scale(struct dc_bios *bios);
 void dc_bios_get_bios_event_info(struct dc_bios *bios,
 				 struct bios_event_info *info);
