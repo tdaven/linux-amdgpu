@@ -148,7 +148,6 @@ void dc_bios_prepare_scratch_active_and_requested(struct dc_bios *bios,
 						  enum controller_id controller_id,
 						  enum signal_type signal,
 						  const struct connector_device_tag_info *device_tag);
-void dc_bios_set_scratch_active_and_requested(struct dc_bios *bios);
 void dc_bios_set_scratch_acc_mode_change(struct dc_bios *bios);
 
 /* COMMANDS */
