@@ -234,8 +234,8 @@ static void initialize_backlight_caps(
 			return;
 	}
 
-	if (dcb->funcs->get_firmware_info(dcb, &fw_info) != BP_RESULT_OK ||
-		dcb->funcs->get_embedded_panel_info(dcb, &panel_info) != BP_RESULT_OK)
+	if (dc_bios_get_firmware_info(dcb, &fw_info) != BP_RESULT_OK ||
+		dc_bios_get_embedded_panel_info(dcb, &panel_info) != BP_RESULT_OK)
 		return;
 
 	params.data = &caps;
@@ -540,7 +540,7 @@ static bool get_hpd_info(struct adapter_service *as,
 {
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	return BP_RESULT_OK == dcb->funcs->get_hpd_info(dcb, id, info);
+	return BP_RESULT_OK == dc_bios_get_hpd_info(dcb, id, info);
 }
 
 /*
@@ -693,7 +693,7 @@ static void adapter_service_destruct(
 	dal_gpio_service_destroy(&as->gpio_service);
 	dal_asic_capability_destroy(&as->asic_cap);
 
-	dcb->funcs->destroy_integrated_info(dcb, &as->integrated_info);
+	dc_bios_destroy_integrated_info(dcb, &as->integrated_info);
 
 	if (as->dcb_internal) {
 		/* We are responsible only for destruction of Internal BIOS.
@@ -802,9 +802,9 @@ static bool adapter_service_construct(
 	/* Avoid wireless encoder creation in upstream branch. */
 
 	/* Integrated info is not provided on discrete ASIC. NULL is allowed */
-	as->integrated_info = dcb->funcs->create_integrated_info(dcb);
+	as->integrated_info = dc_bios_create_integrated_info(dcb);
 
-	dcb->funcs->post_init(dcb);
+	dc_bios_post_init(dcb);
 
 	/* Generate backlight translation table and initializes
 			  other brightness properties */
@@ -965,7 +965,7 @@ uint8_t dal_adapter_service_get_connectors_num(
 
 	dcb = dal_adapter_service_get_bios_parser(as);
 
-	vbios_connectors_num = dcb->funcs->get_connectors_number(dcb);
+	vbios_connectors_num = dc_bios_get_connectors_number(dcb);
 
 	wireless_connectors_num = wireless_get_connectors_num(as);
 
@@ -1002,7 +1002,7 @@ uint32_t dal_adapter_service_get_src_num(
 	if (is_wireless_object(id))
 		return wireless_get_srcs_num(as, id);
 	else
-		return dcb->funcs->get_src_number(dcb, id);
+		return dc_bios_get_src_number(dcb, id);
 }
 
 /**
@@ -1027,7 +1027,7 @@ struct graphics_object_id dal_adapter_service_get_src_obj(
 	if (is_wireless_object(id))
 		src_object_id = wireless_get_src_obj_id(as, id, index);
 	else {
-		if (BP_RESULT_OK != dcb->funcs->get_src_obj(dcb, id, index,
+		if (BP_RESULT_OK != dc_bios_get_src_obj(dcb, id, index,
 				&src_object_id)) {
 			src_object_id =
 				dal_graphics_object_id_init(
@@ -1058,12 +1058,12 @@ struct graphics_object_id dal_adapter_service_get_connector_obj_id(
 
 	dcb = dal_adapter_service_get_bios_parser(as);
 
-	bios_connectors_num = dcb->funcs->get_connectors_number(dcb);
+	bios_connectors_num = dc_bios_get_connectors_number(dcb);
 
 	if (connector_index >= bios_connectors_num)
 		return wireless_get_connector_id(as, connector_index);
 	else
-		return dcb->funcs->get_connector_id(dcb, connector_index);
+		return dc_bios_get_connector_id(dcb, connector_index);
 }
 
 bool dal_adapter_service_get_device_tag(
@@ -1074,8 +1074,8 @@ bool dal_adapter_service_get_device_tag(
 {
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	if (BP_RESULT_OK == dcb->funcs->get_device_tag(dcb,
-			connector_object_id, device_tag_index, info))
+	if (BP_RESULT_OK == dc_bios_get_device_tag(dcb,
+						   connector_object_id, device_tag_index, info))
 		return true;
 	else
 		return false;
@@ -1087,7 +1087,7 @@ bool dal_adapter_service_is_device_id_supported(struct adapter_service *as,
 {
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	return dcb->funcs->is_device_id_supported(dcb, id);
+	return dc_bios_is_device_id_supported(dcb, id);
 }
 
 bool dal_adapter_service_is_meet_underscan_req(struct adapter_service *as)
@@ -1130,7 +1130,7 @@ uint8_t dal_adapter_service_get_clock_sources_num(
 	 * Check is system supports the use of the External clock source
 	 * as a clock source for DP
 	 */
-	enum bp_result bp_result = dcb->funcs->get_firmware_info(dcb, &fw_info);
+	enum bp_result bp_result = dc_bios_get_firmware_info(dcb, &fw_info);
 
 	if (BP_RESULT_OK == bp_result &&
 			fw_info.external_clock_source_frequency_for_dp != 0)
@@ -1249,7 +1249,7 @@ bool dal_adapter_service_get_i2c_info(
 		return false;
 	}
 
-	return BP_RESULT_OK == dcb->funcs->get_i2c_info(dcb, id, i2c_info);
+	return BP_RESULT_OK == dc_bios_get_i2c_info(dcb, id, i2c_info);
 }
 
 /*
@@ -1306,7 +1306,7 @@ struct irq *dal_adapter_service_obtain_hpd_irq(
 	if (!get_hpd_info(as, id, &hpd_info))
 		return NULL;
 
-	bp_result = dcb->funcs->get_gpio_pin_info(dcb,
+	bp_result = dc_bios_get_gpio_pin_info(dcb,
 		hpd_info.hpd_int_gpio_uid, &pin_info);
 
 	if (bp_result != BP_RESULT_OK) {
@@ -1343,7 +1343,7 @@ uint32_t dal_adapter_service_get_ss_info_num(
 {
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	return dcb->funcs->get_ss_entry_number(dcb, signal);
+	return dc_bios_get_ss_entry_number(dcb, signal);
 }
 
 /*
@@ -1359,8 +1359,8 @@ bool dal_adapter_service_get_ss_info(
 {
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	enum bp_result bp_result = dcb->funcs->get_spread_spectrum_info(dcb,
-			signal, idx, info);
+	enum bp_result bp_result = dc_bios_get_spread_spectrum_info(dcb,
+								   signal, idx, info);
 
 	return BP_RESULT_OK == bp_result;
 }
@@ -1571,12 +1571,11 @@ struct gpio *dal_adapter_service_obtain_stereo_gpio(
 		/* Get GPIO record for this object.
 		 * Stereo GPIO record should have exactly one entry
 		 * where active state defines stereosync polarity */
-		if (1 != dcb->funcs->get_gpio_record(
-						dcb, id, &cntl_info,
-						1)) {
+		if (1 != dc_bios_get_gpio_record(dcb, id, &cntl_info,
+						 1)) {
 			return NULL;
 		} else if (BP_RESULT_OK
-				!= dcb->funcs->get_gpio_pin_info(
+				!= dc_bios_get_gpio_pin_info(
 						dcb, cntl_info.id,
 						&pin_info)) {
 			/*ASSERT_CRITICAL(false);*/
@@ -1612,7 +1611,7 @@ bool dal_adapter_service_get_firmware_info(
 {
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	return dcb->funcs->get_firmware_info(dcb, info) == BP_RESULT_OK;
+	return dc_bios_get_firmware_info(dcb, info) == BP_RESULT_OK;
 }
 
 /*
@@ -1803,7 +1802,7 @@ bool dal_adapter_service_get_embedded_panel_info(
 		/*TODO: add DALASSERT_MSG here*/
 		return false;
 
-	result = dcb->funcs->get_embedded_panel_info(dcb, info);
+	result = dc_bios_get_embedded_panel_info(dcb, info);
 
 	return result == BP_RESULT_OK;
 }
@@ -1820,7 +1819,7 @@ bool dal_adapter_service_enum_embedded_panel_patch_mode(
 		/*TODO: add DALASSERT_MSG here*/
 		return false;
 
-	result = dcb->funcs->enum_embedded_panel_patch_mode(dcb, index, mode);
+	result = dc_bios_enum_embedded_panel_patch_mode(dcb, index, mode);
 
 	return result == BP_RESULT_OK;
 }
@@ -1832,7 +1831,7 @@ bool dal_adapter_service_get_faked_edid_len(
 	enum bp_result result;
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	result = dcb->funcs->get_faked_edid_len(dcb, len);
+	result = dc_bios_get_faked_edid_len(dcb, len);
 
 	return result == BP_RESULT_OK;
 }
@@ -1845,7 +1844,7 @@ bool dal_adapter_service_get_faked_edid_buf(
 	enum bp_result result;
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	result = dcb->funcs->get_faked_edid_buf(dcb, buf, len);
+	result = dc_bios_get_faked_edid_buf(dcb, buf, len);
 
 	return result == BP_RESULT_OK;
 
@@ -1935,7 +1934,7 @@ bool dal_adapter_service_is_in_accelerated_mode(struct adapter_service *as)
 {
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	return dcb->funcs->is_accelerated_mode(dcb);
+	return dc_bios_is_accelerated_mode(dcb);
 }
 
 struct ddc *dal_adapter_service_obtain_ddc_from_i2c_info(
@@ -1981,7 +1980,7 @@ bool dal_adapter_service_is_lid_open(struct adapter_service *as)
 		return is_lid_open;
 
 #if defined(CONFIG_DRM_AMD_DAL_VBIOS_PRESENT)
-	return dcb->funcs->is_lid_open(dcb);
+	return dc_bios_is_lid_open(dcb);
 #else
 	return false;
 #endif
@@ -2068,7 +2067,7 @@ bool dal_adapter_service_get_encoder_cap_info(
 	 * - dpHbr2Cap: indicates supported/not supported by HW Encoder
 	 * - dpHbr2En : indicates DP spec compliant/not compliant
 	 */
-	result = dcb->funcs->get_encoder_cap_info(dcb, id, &bp_cap_info);
+	result = dc_bios_get_encoder_cap_info(dcb, id, &bp_cap_info);
 
 	/* Set dp_hbr2_validated flag (it's equal to Enable) */
 	info->dp_hbr2_validated = bp_cap_info.DP_HBR2_EN;

@@ -66,7 +66,7 @@ bool wireless_data_init(struct wireless_data *data,
 		 * Check if SBIOS sets remote display enable, exposed
 		 * through VBIOS. This is only valid for APU, not dGPU
 		 */
-		dcb->funcs->get_firmware_info(dcb, &info);
+		dc_bios_get_firmware_info(dcb, &info);
 
 		if ((REMOTE_DISPLAY_ENABLE == info.remote_display_config) &&
 				init_data->fusion) {

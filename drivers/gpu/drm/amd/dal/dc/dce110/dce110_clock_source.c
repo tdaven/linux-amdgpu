@@ -428,8 +428,8 @@ static bool pll_adjust_pix_clk(
 	bp_adjust_pixel_clock_params.signal_type = pix_clk_params->signal_type;
 	bp_adjust_pixel_clock_params.
 		ss_enable = pix_clk_params->flags.ENABLE_SS;
-	bp_result = clk_src->bios->funcs->adjust_pixel_clock(
-			clk_src->bios, &bp_adjust_pixel_clock_params);
+	bp_result = dc_bios_adjust_pixel_clock(clk_src->bios,
+					       &bp_adjust_pixel_clock_params);
 	if (bp_result == BP_RESULT_OK) {
 		pll_settings->actual_pix_clk = actual_pix_clk_khz;
 		pll_settings->adjusted_pix_clk =
@@ -552,10 +552,9 @@ static bool disable_spread_spectrum(struct dce110_clk_src *clk_src)
 	bp_ss_params.pll_id = clk_src->base.id;
 
 	/*Call ASICControl to process ATOMBIOS Exec table*/
-	result = clk_src->bios->funcs->enable_spread_spectrum_on_ppll(
-			clk_src->bios,
-			&bp_ss_params,
-			false);
+	result = dc_bios_enable_spread_spectrum_on_ppll(clk_src->bios,
+							&bp_ss_params,
+							false);
 
 	return result == BP_RESULT_OK;
 }
@@ -659,11 +658,9 @@ static bool enable_spread_spectrum(
 				bp_params.flags.EXTERNAL_SS = 1;
 
 			if (BP_RESULT_OK !=
-				clk_src->bios->funcs->
-					enable_spread_spectrum_on_ppll(
-							clk_src->bios,
-							&bp_params,
-							true))
+			    dc_bios_enable_spread_spectrum_on_ppll(clk_src->bios,
+								   &bp_params,
+								   true))
 				return false;
 		} else
 			return false;
@@ -766,8 +763,8 @@ static bool dce110_program_pix_clk(
 	bp_pc_params.flags.SET_EXTERNAL_REF_DIV_SRC =
 					pll_settings->use_external_clk;
 
-	if (dce110_clk_src->bios->funcs->set_pixel_clock(
-			dce110_clk_src->bios, &bp_pc_params) != BP_RESULT_OK)
+	if (dc_bios_set_pixel_clock(dce110_clk_src->bios,
+				    &bp_pc_params) != BP_RESULT_OK)
 		return false;
 
 /* Enable SS
@@ -808,7 +805,7 @@ static bool dce110_clock_source_power_down(
 	bp_pixel_clock_params.flags.FORCE_PROGRAMMING_OF_PLL = 1;
 
 	/*Call ASICControl to process ATOMBIOS Exec table*/
-	bp_result = dce110_clk_src->bios->funcs->set_pixel_clock(
+	bp_result = dc_bios_set_pixel_clock(
 			dce110_clk_src->bios,
 			&bp_pixel_clock_params);
 
@@ -855,9 +852,8 @@ static void get_ss_info_from_atombios(
 	spread_spectrum_data[0] = NULL;
 	*ss_entries_num = 0;
 
-	*ss_entries_num = clk_src->bios->funcs->get_ss_entry_number(
-			clk_src->bios,
-			as_signal);
+	*ss_entries_num = dc_bios_get_ss_entry_number(clk_src->bios,
+						      as_signal);
 
 	if (*ss_entries_num == 0)
 		return;
@@ -875,12 +871,11 @@ static void get_ss_info_from_atombios(
 		i < (*ss_entries_num);
 		++i, ++ss_info_cur) {
 
-		bp_result = clk_src->bios->funcs->get_spread_spectrum_info(
-				clk_src->bios,
-				as_signal,
-				i,
-				ss_info_cur);
-
+		bp_result = dc_bios_get_spread_spectrum_info(clk_src->bios,
+							     as_signal,
+							     i,
+							     ss_info_cur);
+		
 		if (bp_result != BP_RESULT_OK)
 			goto out_free_data;
 	}
@@ -982,9 +977,8 @@ static bool calc_pll_max_vco_construct(
 			init_data->bp == NULL)
 		return false;
 
-	if (init_data->bp->funcs->get_firmware_info(
-				init_data->bp,
-				&fw_info) != BP_RESULT_OK)
+	if (dc_bios_get_firmware_info(init_data->bp,
+				      &fw_info) != BP_RESULT_OK)
 		return false;
 
 	calc_pll_cs->ctx = init_data->ctx;
@@ -1103,8 +1097,7 @@ bool dce110_clk_src_construct(
 	clk_src->base.id = id;
 	clk_src->base.funcs = &dce110_clk_src_funcs;
 
-	if (clk_src->bios->funcs->get_firmware_info(
-			clk_src->bios, &fw_info) != BP_RESULT_OK) {
+	if (dc_bios_get_firmware_info(clk_src->bios, &fw_info) != BP_RESULT_OK) {
 		ASSERT_CRITICAL(false);
 		goto unexpected_failure;
 	}

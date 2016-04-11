@@ -51,7 +51,6 @@ enum spread_spectrum_id {
 };
 
 struct bios_parser {
-	struct dc_bios base;
 	struct dc_context *ctx;
 	struct adapter_service *as;
 
@@ -79,6 +78,6 @@ struct bios_parser {
 
 /* Bios Parser from DC Bios */
 #define BP_FROM_DCB(dc_bios) \
-	container_of(dc_bios, struct bios_parser, base)
+	(struct bios_parser *)(dc_bios)
 
 #endif
