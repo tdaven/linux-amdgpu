@@ -59,57 +59,6 @@ static void set_scratch_acc_mode_change(
 	dm_write_reg(ctx, addr, value);
 }
 
-/*
- * set_scratch_active_and_requested
- *
- * @brief
- * Set VBIOS scratch pad registers about active and requested displays
- *
- * @param
- * struct dc_context *ctx - [in] DAL context for register accessing
- * struct vbios_helper_data *d - [in] values to write
- */
-static void set_scratch_active_and_requested(
-	struct dc_context *ctx,
-	struct vbios_helper_data *d)
-{
-	uint32_t addr = 0;
-	uint32_t value = 0;
-
-	/* mmBIOS_SCRATCH_3 = mmBIOS_SCRATCH_0 + ATOM_ACTIVE_INFO_DEF */
-	addr = mmBIOS_SCRATCH_3;
-
-	value = dm_read_reg(ctx, addr);
-
-	value &= ~ATOM_S3_DEVICE_ACTIVE_MASK;
-	value |= (d->active & ATOM_S3_DEVICE_ACTIVE_MASK);
-
-	dm_write_reg(ctx, addr, value);
-
-	/* mmBIOS_SCRATCH_6 =  mmBIOS_SCRATCH_0 + ATOM_ACC_CHANGE_INFO_DEF */
-	addr = mmBIOS_SCRATCH_6;
-
-	value = dm_read_reg(ctx, addr);
-
-	value &= ~ATOM_S6_ACC_REQ_MASK;
-	value |= (d->requested & ATOM_S6_ACC_REQ_MASK);
-
-	dm_write_reg(ctx, addr, value);
-
-	/* mmBIOS_SCRATCH_5 =  mmBIOS_SCRATCH_0 + ATOM_DOS_REQ_INFO_DEF */
-	addr = mmBIOS_SCRATCH_5;
-
-	value = dm_read_reg(ctx, addr);
-
-	value &= ~ATOM_S5_DOS_REQ_DEVICEw0;
-	value |= (d->active & ATOM_S5_DOS_REQ_DEVICEw0);
-
-	dm_write_reg(ctx, addr, value);
-
-	d->active = 0;
-	d->requested = 0;
-}
-
 /**
  * get LCD Scale Mode from VBIOS scratch register
  */
@@ -311,116 +260,6 @@ static enum signal_type detect_sink(
 	return SIGNAL_TYPE_NONE;
 }
 
-/**
- * set_scratch_connected
- *
- * @brief
- *    update BIOS_SCRATCH_0 register about connected displays
- *
- * @param
- * bool - update scratch register or just prepare info to be updated
- * bool - connection state
- * const struct connector_device_tag_info * - pointer to device type and enum ID
- */
-static void set_scratch_connected(
-	struct dc_context *ctx,
-	struct graphics_object_id id,
-	bool connected,
-	const struct connector_device_tag_info *device_tag)
-{
-	uint32_t addr = 0;
-	uint32_t value = 0;
-	uint32_t update = 0;
-
-	switch (device_tag->dev_id.device_type) {
-	case DEVICE_TYPE_LCD:
-		/* For LCD VBIOS will update LCD Panel connected bit always and
-		 * Lid state bit based on SBIOS info do not do anything here
-		 * for LCD
-		 */
-		break;
-	case DEVICE_TYPE_CRT:
-		/* CRT is not supported in DCE11 */
-		break;
-	case DEVICE_TYPE_DFP:
-		switch (device_tag->dev_id.enum_id) {
-		case 1:
-			update |= ATOM_S0_DFP1;
-			break;
-		case 2:
-			update |= ATOM_S0_DFP2;
-			break;
-		case 3:
-			update |= ATOM_S0_DFP3;
-			break;
-		case 4:
-			update |= ATOM_S0_DFP4;
-			break;
-		case 5:
-			update |= ATOM_S0_DFP5;
-			break;
-		case 6:
-			update |= ATOM_S0_DFP6;
-			break;
-		default:
-			break;
-		}
-		break;
-	case DEVICE_TYPE_CV:
-		/* DCE 8.0 does not support CV, so don't do anything */
-		break;
-
-	case DEVICE_TYPE_TV:
-		/* For TV VBIOS will update S-Video or
-		 * Composite scratch bits on DAL_LoadDetect
-		 * when called by driver, do not do anything
-		 * here for TV
-		 */
-		break;
-
-	default:
-		break;
-
-	}
-
-	/* update scratch register */
-	addr = mmBIOS_SCRATCH_0 + ATOM_DEVICE_CONNECT_INFO_DEF;
-
-	value = dm_read_reg(ctx, addr);
-
-	if (connected)
-		value |= update;
-	else
-		value &= ~update;
-
-	dm_write_reg(ctx, addr, value);
-}
-
-static void set_scratch_critical_state(
-	struct dc_context *ctx,
-	bool state)
-{
-	uint32_t addr = mmBIOS_SCRATCH_6;
-	uint32_t value = dm_read_reg(ctx, addr);
-
-	if (state)
-		value |= ATOM_S6_CRITICAL_STATE;
-	else
-		value &= ~ATOM_S6_CRITICAL_STATE;
-
-	dm_write_reg(ctx, addr, value);
-}
-
-static void set_scratch_lcd_scale(
-	struct dc_context *ctx,
-	enum lcd_scale lcd_scale_request)
-{
-	DAL_LOGGER_NOT_IMPL(
-		LOG_MINOR_COMPONENT_BIOS,
-		"Bios Parser:%s\n",
-		__func__);
-}
-
 static bool is_lid_open(struct dc_context *ctx)
 {
 	uint32_t bios_scratch6;
@@ -440,27 +279,12 @@ static bool is_lid_open(struct dc_context *ctx)
 /* function table */
 static const struct bios_parser_helper bios_parser_helper_funcs = {
 	.detect_sink = detect_sink,
-	.fmt_bit_depth_control = NULL,
-	.fmt_control = NULL,
-	.get_bios_event_info = NULL,
-	.get_embedded_display_controller_id = NULL,
-	.get_embedded_display_refresh_rate = NULL,
-	.get_requested_backlight_level = NULL,
 	.get_scratch_lcd_scale = get_scratch_lcd_scale,
 	.is_accelerated_mode = is_accelerated_mode,
-	.is_active_display = NULL,
-	.is_display_config_changed = NULL,
 	.is_lid_open = is_lid_open,
-	.is_lid_status_changed = NULL,
 	.prepare_scratch_active_and_requested =
 			prepare_scratch_active_and_requested,
-	.set_scratch_acc_mode_change = set_scratch_acc_mode_change,
-	.set_scratch_active_and_requested = set_scratch_active_and_requested,
-	.set_scratch_connected = set_scratch_connected,
-	.set_scratch_critical_state = set_scratch_critical_state,
-	.set_scratch_lcd_scale = set_scratch_lcd_scale,
-	.take_backlight_control = NULL,
-	.update_requested_backlight_level = NULL,
+	.set_scratch_acc_mode_change = set_scratch_acc_mode_change
 };
 
 /*

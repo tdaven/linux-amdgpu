@@ -347,7 +347,7 @@ static bool dce112_enable_display_power_gating(
 		cntl = ASIC_PIPE_DISABLE;
 
 	if (power_gating != PIPE_GATING_CONTROL_INIT || controller_id == 0)
-		bp_result = dcb->funcs->enable_disp_power_gating(
+		bp_result = dc_bios_enable_disp_power_gating(
 						dcb, controller_id + 1, cntl);
 
 	if (power_gating != PIPE_GATING_CONTROL_ENABLE)

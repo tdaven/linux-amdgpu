@@ -789,7 +789,7 @@ static void set_clock(
 	pxl_clk_params.target_pixel_clock = requested_clk_khz;
 	pxl_clk_params.pll_id = base->id;
 
-	bp->funcs->program_display_engine_pll(bp, &pxl_clk_params);
+	dc_bios_program_display_engine_pll(bp, &pxl_clk_params);
 
 	if (dc->dfs_bypass_enabled) {
 
