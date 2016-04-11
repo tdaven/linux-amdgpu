@@ -147,10 +147,6 @@ enum controller_id dc_bios_get_embedded_display_controller_id(struct dc_bios *bi
 uint32_t dc_bios_get_embedded_display_refresh_rate(struct dc_bios *bios);
 #endif
 
-void dc_bios_set_scratch_connected(struct dc_bios *bios,
-				   struct graphics_object_id connector_id,
-				   bool connected,
-				   const struct connector_device_tag_info *device_tag);
 void dc_bios_prepare_scratch_active_and_requested(struct dc_bios *bios,
 						  enum controller_id controller_id,
 						  enum signal_type signal,
