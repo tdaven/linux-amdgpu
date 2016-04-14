@@ -2613,10 +2613,148 @@ static void evergreen_agp_enable(struct radeon_device *rdev)
 	WREG32(VM_CONTEXT1_CNTL, 0);
 }
 
+/*
+ * assumption is that EVERGREEN_CRTC_MASTER_EN enable for requested crtc
+ * We go from crtc to connector and it is not relible  since it
+ * should be an opposite direction .If crtc is enable then
+ * find the dig_fe which selects this crtc and insure that it enable.
+ * if such dig_fe is found then find dig_be which selects found dig_be and
+ * insure that it enable and in DP_SST mode.
+ * if UNIPHY_PLL_CONTROL1.enable then we should disconnect timing
+ * from dp symbols clocks .
+ */
+static bool is_dp_sst_stream_enabled(struct radeon_device *rdev, int crtc_id,
+		unsigned*ret_dig_fe)
+{
+#define DIG_BE_DPSST 0
+
+	static const int dig_offsets[] = {
+			NI_DIG0_REGISTER_OFFSET,
+			NI_DIG1_REGISTER_OFFSET,
+			NI_DIG2_REGISTER_OFFSET,
+			NI_DIG3_REGISTER_OFFSET,
+			NI_DIG4_REGISTER_OFFSET,
+			NI_DIG5_REGISTER_OFFSET };
+
+	static const int tx_offsets[] = {
+			NI_DCIO_UNIPHY0_UNIPHY_TX_CONTROL1,
+			NI_DCIO_UNIPHY1_UNIPHY_TX_CONTROL1,
+			NI_DCIO_UNIPHY2_UNIPHY_TX_CONTROL1,
+			NI_DCIO_UNIPHY3_UNIPHY_TX_CONTROL1,
+			NI_DCIO_UNIPHY4_UNIPHY_TX_CONTROL1,
+			NI_DCIO_UNIPHY5_UNIPHY_TX_CONTROL1};
+
+	unsigned i, j;
+	unsigned dig_fe;
+	unsigned dig_be;
+	unsigned dig_en_be;
+	unsigned uniphy_pll;
+	unsigned digs_fe_selected;
+	unsigned dig_be_mode;
+	unsigned dig_fe_mask;
+
+	bool is_enabled = false;
+	bool found_crtc = false;
+
+	int  dig_num    = sizeof(dig_offsets)/sizeof(dig_offsets[0]);
+
+	/*loop through all running dig_fe to find selected crtc*/
+	for (i = 0; i < dig_num ;i++ ) {
+		dig_fe  = RREG32(NI_DIG_FE_CNTL + dig_offsets[i]);
+		if (NI_DIG_FE_CNTL_SYMCLK_FE_ON & dig_fe &&
+			crtc_id == NI_DIG_FE_CNTL_SOURCE_SELECT(dig_fe)) {
+			/*found running pipe*/
+			found_crtc	= true;
+			dig_fe_mask	= 1<< i;
+			dig_fe		= i;
+			break;
+		}
+	}
+	if (found_crtc) {
+		/*loop through all running dig_be to find selected dig_fe*/
+		for( j = 0;j < dig_num ; j++ ) {
+			dig_be  = RREG32(NI_DIG_BE_CNTL + dig_offsets[j]);
+			/*if dig_fe_selected by dig_be?*/
+			digs_fe_selected = NI_DIG_BE_CNTL_FE_SOURCE_SELECT(dig_be);
+			dig_be_mode      = NI_DIG_FE_CNTL_MODE(dig_be);
+			if (dig_fe_mask &  digs_fe_selected &&
+				/*if dig_be in sst mode?*/
+				DIG_BE_DPSST == dig_be_mode) {
+				dig_en_be = RREG32(NI_DIG_BE_EN_CNTL +
+						dig_offsets[j]);
+				uniphy_pll= RREG32(NI_DCIO_UNIPHY0_PLL_CONTROL1 +
+						tx_offsets[j]);
+				/*dig_be enable and tx is running*/
+				if (dig_en_be & NI_DIG_BE_EN_CNTL_ENABLE &&
+					dig_en_be & NI_DIG_BE_EN_CNTL_SYMBCLK_ON &&
+					uniphy_pll & NI_DCIO_UNIPHY0_PLL_CONTROL1_ENABLE) {
+					is_enabled= true;
+					*ret_dig_fe = dig_fe;
+					break;
+				}
+			}
+		}
+	}
+	return is_enabled;
+
+}
+/*
+ * blank dig when in dp sst mode
+ *dig ignores crtc timing
+ */
+
+static void blank_dp_output(struct radeon_device *rdev, unsigned dig_fe)
+{
+	static const int dp_offsets[] = { EVERGREEN_DP0_REGISTER_OFFSET,
+			       EVERGREEN_DP1_REGISTER_OFFSET,
+			       EVERGREEN_DP2_REGISTER_OFFSET,
+			       EVERGREEN_DP3_REGISTER_OFFSET,
+			       EVERGREEN_DP4_REGISTER_OFFSET,
+			       EVERGREEN_DP5_REGISTER_OFFSET };
+
+	int stream_ctrl ;
+	int fifo_ctrl ;
+	int counter;
+	int reg_offset_dp_vid;
+	int reg_offset_dp_fifo;
+
+	if (dig_fe >= sizeof(dp_offsets)/sizeof(dp_offsets[0])) {
+		DRM_ERROR("invalid dig_fe %d\n",dig_fe);
+		return;
+	}
+
+	reg_offset_dp_vid  = EVERGREEN_DP_VID_STREAM_CNTL + dp_offsets[dig_fe];
+	reg_offset_dp_fifo = EVERGREEN_DP_STEER_FIFO      + dp_offsets[dig_fe];
+	stream_ctrl = RREG32(reg_offset_dp_vid);
+	if (!(stream_ctrl & EVERGREEN_DP_VID_STREAM_CNTL_ENABLE)) {
+		DRM_ERROR("dig %d , should be enable\n",dig_fe);
+		return;
+	}
+
+	stream_ctrl &=~EVERGREEN_DP_VID_STREAM_CNTL_ENABLE;
+	WREG32(reg_offset_dp_vid, stream_ctrl);
+
+	stream_ctrl = RREG32(reg_offset_dp_vid);
+	counter = 0;
+	while (counter < 32 && stream_ctrl & EVERGREEN_DP_VID_STREAM_STATUS) {
+		msleep(1);
+		counter++;
+		stream_ctrl = RREG32(reg_offset_dp_vid);
+	}
+	if (counter >= 32 ) {
+		DRM_ERROR("counter exceeds %d\n",counter);
+	}
+
+	fifo_ctrl = RREG32(reg_offset_dp_fifo);
+	fifo_ctrl|=EVERGREEN_DP_STEER_FIFO_RESET;
+	WREG32(reg_offset_dp_fifo,fifo_ctrl);
+
+}
 void evergreen_mc_stop(struct radeon_device *rdev, struct evergreen_mc_save *save)
 {
 	u32 crtc_enabled, tmp, frame_count, blackout;
 	int i, j;
+	unsigned dig_fe;
 
 	if (!ASIC_IS_NODCE(rdev)) {
 		save->vga_render_control = RREG32(VGA_RENDER_CONTROL);
@@ -2656,7 +2794,16 @@ void evergreen_mc_stop(struct radeon_device *rdev, struct evergreen_mc_save *sav
 					break;
 				udelay(1);
 			}
-
+			/*we should disable dig if it drives dp sst*/
+			/*but we are in radeon_device_init and the topology is unknown*/
+			/*and it is available after radeon_modeset_init*/
+			/*the following method radeon_atom_encoder_dpms_dig*/
+			/*does the job if we initialize it properly*/
+			/*for now we do it this manually*/
+			/**/
+			if(ASIC_IS_DCE5(rdev) && is_dp_sst_stream_enabled(rdev, i ,&dig_fe))
+				blank_dp_output(rdev, dig_fe);
+			/*we could remove 6 lines below*/
 			/* XXX this is a hack to avoid strange behavior with EFI on certain systems */
 			WREG32(EVERGREEN_CRTC_UPDATE_LOCK + crtc_offsets[i], 1);
 			tmp = RREG32(EVERGREEN_CRTC_CONTROL + crtc_offsets[i]);
