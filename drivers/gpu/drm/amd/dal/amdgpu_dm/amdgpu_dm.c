@@ -124,13 +124,6 @@ static int dm_wait_for_idle(void *handle)
 	return 0;
 }
 
-static void dm_print_status(void *handle)
-{
-	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
-	dev_info(adev->dev, "DCE registers\n");
-	/* XXX todo */
-}
-
 static int dm_soft_reset(void *handle)
 {
 	/* XXX todo */
@@ -639,7 +632,6 @@ const struct amd_ip_funcs amdgpu_dm_funcs = {
 	.is_idle = dm_is_idle,
 	.wait_for_idle = dm_wait_for_idle,
 	.soft_reset = dm_soft_reset,
-	.print_status = dm_print_status,
 	.set_clockgating_state = dm_set_clockgating_state,
 	.set_powergating_state = dm_set_powergating_state,
 };
