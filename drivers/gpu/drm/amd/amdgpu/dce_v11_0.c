@@ -1608,6 +1608,7 @@ static int dce_v11_0_audio_init(struct amdgpu_device *adev)
 
 	switch (adev->asic_type) {
 	case CHIP_CARRIZO:
+	case CHIP_STONEY:
 		adev->mode_info.audio.num_pins = 7;
 		break;
 	case CHIP_POLARIS10:
