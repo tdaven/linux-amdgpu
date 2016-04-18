@@ -171,6 +171,9 @@ int amdgpu_uvd_sw_init(struct amdgpu_device *adev)
 	DRM_INFO("Found UVD firmware Version: %hu.%hu Family ID: %hu\n",
 		version_major, version_minor, family_id);
 
+	adev->uvd.fw_version = ((version_major << 24) | (version_minor << 16) |
+				(family_id << 8));
+
 	/*
 	 * Limit the number of UVD handles depending on microcode major
 	 * and minor versions. The firmware version which has 40 UVD
