@@ -138,8 +138,6 @@ static struct radeon_px_quirk radeon_px_quirk_list[] = {
 	{ PCI_VENDOR_ID_ATI, 0x6840, 0x1043, 0x2122, RADEON_PX_QUIRK_DISABLE_PX },
 	/* macbook pro 8.2 */
 	{ PCI_VENDOR_ID_ATI, 0x6741, PCI_VENDOR_ID_APPLE, 0x00e2, RADEON_PX_QUIRK_LONG_WAKEUP },
-	/* Clevo P170EM */
-	{ PCI_VENDOR_ID_ATI, 0x6800, 0x1558, 0x7102, RADEON_PX_QUIRK_FORCE_ATPX_PWR_CNTL },
 	{ 0, 0, 0, 0, 0 },
 };
 
