@@ -66,10 +66,6 @@ bool radeon_has_atpx_dgpu_power_cntl(void) {
 	return radeon_atpx_priv.atpx.functions.power_cntl;
 }
 
-void radeon_force_atpx_dgpu_power_cntl(void) {
-	radeon_atpx_priv.atpx.functions.power_cntl = true;
-}
-
 /**
  * radeon_atpx_call - call an ATPX method
  *

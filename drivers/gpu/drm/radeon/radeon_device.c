@@ -105,15 +105,12 @@ static const char radeon_family_name[][16] = {
 
 #if defined(CONFIG_VGA_SWITCHEROO)
 bool radeon_has_atpx_dgpu_power_cntl(void);
-void radeon_force_atpx_dgpu_power_cntl(void);
 #else
 static inline bool radeon_has_atpx_dgpu_power_cntl(void) { return false; }
-static inline void radeon_force_atpx_dgpu_power_cntl(void) { };
 #endif
 
 #define RADEON_PX_QUIRK_DISABLE_PX  (1 << 0)
 #define RADEON_PX_QUIRK_LONG_WAKEUP (1 << 1)
-#define RADEON_PX_QUIRK_FORCE_ATPX_PWR_CNTL (1 << 2)
 
 struct radeon_px_quirk {
 	u32 chip_vendor;
@@ -168,9 +165,6 @@ static void radeon_device_handle_px_quirks(struct radeon_device *rdev)
 
 	if (rdev->px_quirk_flags & RADEON_PX_QUIRK_DISABLE_PX)
 		rdev->flags &= ~RADEON_IS_PX;
-
-	if (rdev->px_quirk_flags & RADEON_PX_QUIRK_FORCE_ATPX_PWR_CNTL)
-		radeon_force_atpx_dgpu_power_cntl();
 }
 
 /**
