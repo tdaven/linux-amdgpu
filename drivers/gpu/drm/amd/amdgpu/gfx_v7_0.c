@@ -2029,17 +2029,16 @@ static void gfx_v7_0_ring_emit_fence_compute(struct amdgpu_ring *ring,
  * on the gfx ring for execution by the GPU.
  */
 static void gfx_v7_0_ring_emit_ib_gfx(struct amdgpu_ring *ring,
-				  struct amdgpu_ib *ib)
+				  struct amdgpu_ib *ib, bool ctx_switch)
 {
-	bool need_ctx_switch = ring->current_ctx != ib->ctx;
 	u32 header, control = 0;
 	u32 next_rptr = ring->wptr + 5;
 
 	/* drop the CE preamble IB for the same context */
-	if ((ib->flags & AMDGPU_IB_FLAG_PREAMBLE) && !need_ctx_switch)
+	if ((ib->flags & AMDGPU_IB_FLAG_PREAMBLE) && !ctx_switch)
 		return;
 
-	if (need_ctx_switch)
+	if (ctx_switch)
 		next_rptr += 2;
 
 	next_rptr += 4;
@@ -2050,7 +2049,7 @@ static void gfx_v7_0_ring_emit_ib_gfx(struct amdgpu_ring *ring,
 	amdgpu_ring_write(ring, next_rptr);
 
 	/* insert SWITCH_BUFFER packet before first IB in the ring frame */
-	if (need_ctx_switch) {
+	if (ctx_switch) {
 		amdgpu_ring_write(ring, PACKET3(PACKET3_SWITCH_BUFFER, 0));
 		amdgpu_ring_write(ring, 0);
 	}
@@ -2073,7 +2072,7 @@ static void gfx_v7_0_ring_emit_ib_gfx(struct amdgpu_ring *ring,
 }
 
 static void gfx_v7_0_ring_emit_ib_compute(struct amdgpu_ring *ring,
-				  struct amdgpu_ib *ib)
+				  struct amdgpu_ib *ib, bool ctx_switch)
 {
 	u32 header, control = 0;
 	u32 next_rptr = ring->wptr + 5;
