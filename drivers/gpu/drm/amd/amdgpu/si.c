@@ -1046,6 +1046,7 @@ u32 si_get_xclk(struct amdgpu_device *adev)
 
 	return reference_clock;
 }
+
 //xxx:not implemented
 static int si_set_uvd_clocks(struct amdgpu_device *adev, u32 vclk, u32 dclk)
 {
@@ -1799,14 +1800,13 @@ static const struct amdgpu_ip_block_version verde_ip_blocks[] =
 		.rev = 0,
 		.funcs = &si_ih_ip_funcs,
 	},
-/*	{
+	{
 		.type = AMD_IP_BLOCK_TYPE_SMC,
 		.major = 6,
 		.minor = 0,
 		.rev = 0,
-		.funcs = &si_null_ip_funcs,
+		.funcs = &amdgpu_pp_ip_funcs,
 	},
-	*/
 	{
 		.type = AMD_IP_BLOCK_TYPE_DCE,
 		.major = 6,
@@ -1874,7 +1874,7 @@ static const struct amdgpu_ip_block_version hainan_ip_blocks[] =
 		.major = 6,
 		.minor = 0,
 		.rev = 0,
-		.funcs = &si_null_ip_funcs,
+		.funcs = &amdgpu_pp_ip_funcs,
 	},
 	{
 		.type = AMD_IP_BLOCK_TYPE_GFX,
