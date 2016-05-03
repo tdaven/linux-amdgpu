@@ -392,7 +392,6 @@ int amd_sched_job_init(struct amd_sched_job *job,
 	kref_init(&job->refcount);
 	job->sched = sched;
 	job->s_entity = entity;
-	job->fence_context = entity->fence_context;
 	job->s_fence = amd_sched_fence_create(entity, owner);
 	if (!job->s_fence)
 		return -ENOMEM;

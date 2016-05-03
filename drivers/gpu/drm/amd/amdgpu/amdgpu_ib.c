@@ -121,7 +121,7 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 {
 	struct amdgpu_device *adev = ring->adev;
 	struct amdgpu_ib *ib = &ibs[0];
-	uint64_t fence_context = 0, old = ring->last_fence_context;
+	struct amdgpu_ctx *ctx, *old_ctx;
 	struct fence *hwf;
 	struct amdgpu_vm *vm = NULL;
 	unsigned i, patch_offset = ~0;
@@ -131,10 +131,9 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 	if (num_ibs == 0)
 		return -EINVAL;
 
-	if (job) {/* for domain0 job like ring test, ibs->job is not assigned */
+	ctx = ibs->ctx;
+	if (job) /* for domain0 job like ring test, ibs->job is not assigned */
 		vm = job->vm;
-		fence_context = job->fence_context;
-	}
 
 	if (!ring->ready) {
 		dev_err(adev->dev, "couldn't schedule ib\n");
@@ -173,11 +172,12 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 	/* always set cond_exec_polling to CONTINUE */
 	*ring->cond_exe_cpu_addr = 1;
 
+	old_ctx = ring->current_ctx;
 	for (i = 0; i < num_ibs; ++i) {
 		ib = &ibs[i];
-		amdgpu_ring_emit_ib(ring, ib, (i == 0 && old != fence_context));
+		amdgpu_ring_emit_ib(ring, ib);
+		ring->current_ctx = ctx;
 	}
-	ring->last_fence_context = fence_context;
 
 	if (ring->funcs->emit_hdp_invalidate)
 		amdgpu_ring_emit_hdp_invalidate(ring);
@@ -185,7 +185,7 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 	r = amdgpu_fence_emit(ring, &hwf);
 	if (r) {
 		dev_err(adev->dev, "failed to emit fence (%d)\n", r);
-		ring->last_fence_context = old;
+		ring->current_ctx = old_ctx;
 		if (ib->vm_id)
 			amdgpu_vm_reset_id(adev, ib->vm_id);
 		amdgpu_ring_undo(ring);

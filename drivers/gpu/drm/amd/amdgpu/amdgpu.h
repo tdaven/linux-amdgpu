@@ -285,7 +285,7 @@ struct amdgpu_ring_funcs {
 	int (*parse_cs)(struct amdgpu_cs_parser *p, uint32_t ib_idx);
 	/* command emit functions */
 	void (*emit_ib)(struct amdgpu_ring *ring,
-			struct amdgpu_ib *ib, bool ctx_switch);
+			struct amdgpu_ib *ib);
 	void (*emit_fence)(struct amdgpu_ring *ring, uint64_t addr,
 			   uint64_t seq, unsigned flags);
 	void (*emit_pipeline_sync)(struct amdgpu_ring *ring);
@@ -744,6 +744,7 @@ struct amdgpu_ib {
 	struct amdgpu_user_fence        *user;
 	unsigned			vm_id;
 	uint64_t			vm_pd_addr;
+	struct amdgpu_ctx		*ctx;
 	uint32_t			gds_base, gds_size;
 	uint32_t			gws_base, gws_size;
 	uint32_t			oa_base, oa_size;
@@ -806,7 +807,7 @@ struct amdgpu_ring {
 	unsigned		wptr_offs;
 	unsigned		next_rptr_offs;
 	unsigned		fence_offs;
-	uint64_t last_fence_context;
+	struct amdgpu_ctx	*current_ctx;
 	enum amdgpu_ring_type	type;
 	char			name[16];
 	unsigned		cond_exe_offs;
@@ -1255,7 +1256,6 @@ struct amdgpu_job {
 	struct fence		*fence; /* the hw fence */
 	uint32_t		num_ibs;
 	void			*owner;
-	uint64_t			fence_context;
 	struct amdgpu_user_fence uf;
 };
 #define to_amdgpu_job(sched_job)		\
@@ -2228,7 +2228,7 @@ amdgpu_get_sdma_instance(struct amdgpu_ring *ring)
 #define amdgpu_ring_get_rptr(r) (r)->funcs->get_rptr((r))
 #define amdgpu_ring_get_wptr(r) (r)->funcs->get_wptr((r))
 #define amdgpu_ring_set_wptr(r) (r)->funcs->set_wptr((r))
-#define amdgpu_ring_emit_ib(r, ib, f) (r)->funcs->emit_ib((r), (ib), (f))
+#define amdgpu_ring_emit_ib(r, ib) (r)->funcs->emit_ib((r), (ib))
 #define amdgpu_ring_emit_pipeline_sync(r) (r)->funcs->emit_pipeline_sync((r))
 #define amdgpu_ring_emit_vm_flush(r, vmid, addr) (r)->funcs->emit_vm_flush((r), (vmid), (addr))
 #define amdgpu_ring_emit_fence(r, addr, seq, flags) (r)->funcs->emit_fence((r), (addr), (seq), (flags))
