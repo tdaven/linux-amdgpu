@@ -60,8 +60,8 @@ void amdgpu_dm_irq_fini(
  * @handler_args: arguments which will be passed to ih
  *
  * Returns:
- * 	IRQ Handler Index on success.
- * 	NULL on failure.
+ *	IRQ Handler Index on success.
+ *	NULL on failure.
  *
  * Cannot be called from an interrupt handler.
  */

@@ -875,7 +875,7 @@ static void get_ss_info_from_atombios(
 							     as_signal,
 							     i,
 							     ss_info_cur);
-		
+
 		if (bp_result != BP_RESULT_OK)
 			goto out_free_data;
 	}

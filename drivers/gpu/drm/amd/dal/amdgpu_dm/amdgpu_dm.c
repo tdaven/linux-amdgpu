@@ -1143,7 +1143,7 @@ static u8 dm_get_backlight_level(struct amdgpu_encoder *amdgpu_encoder)
 
 /**
  * dm_page_flip - called by amdgpu_flip_work_func(), which is triggered
- * 			via DRM IOCTL, by user mode.
+ *			via DRM IOCTL, by user mode.
  *
  * @adev: amdgpu_device pointer
  * @crtc_id: crtc to cleanup pageflip on
