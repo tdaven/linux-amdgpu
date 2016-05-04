@@ -164,10 +164,10 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 			amdgpu_ring_undo(ring);
 			return r;
 		}
-
-		if (ring->funcs->emit_hdp_flush)
-			amdgpu_ring_emit_hdp_flush(ring);
 	}
+
+	if (ring->funcs->emit_hdp_flush)
+		amdgpu_ring_emit_hdp_flush(ring);
 
 	/* always set cond_exec_polling to CONTINUE */
 	*ring->cond_exe_cpu_addr = 1;
@@ -178,10 +178,8 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 	}
 	ring->last_fence_context = fence_context;
 
-	if (vm) {
-		if (ring->funcs->emit_hdp_invalidate)
-			amdgpu_ring_emit_hdp_invalidate(ring);
-	}
+	if (ring->funcs->emit_hdp_invalidate)
+		amdgpu_ring_emit_hdp_invalidate(ring);
 
 	r = amdgpu_fence_emit(ring, &hwf);
 	if (r) {
