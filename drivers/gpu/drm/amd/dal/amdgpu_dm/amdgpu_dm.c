@@ -676,6 +676,7 @@ int amdgpu_dm_display_resume(struct amdgpu_device *adev )
 }
 
 const struct amd_ip_funcs amdgpu_dm_funcs = {
+	.name = "dm",
 	.early_init = dm_early_init,
 	.late_init = NULL,
 	.sw_init = dm_sw_init,
