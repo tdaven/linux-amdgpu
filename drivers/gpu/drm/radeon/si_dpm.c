@@ -3694,6 +3694,8 @@ static void si_program_display_gap(struct radeon_device *rdev)
 {
 	u32 tmp, pipe;
 	int i;
+	bool has_display = (rdev->pm.dpm.new_active_crtc_count > 0) ?
+		true : false;
 
 	tmp = RREG32(CG_DISPLAY_GAP_CNTL) & ~(DISP1_GAP_MASK | DISP2_GAP_MASK);
 	if (rdev->pm.dpm.new_active_crtc_count > 0)
@@ -3732,7 +3734,10 @@ static void si_program_display_gap(struct radeon_device *rdev)
 	 * This can be a problem on PowerXpress systems or if you want to use the card
 	 * for offscreen rendering or compute if there are no crtcs enabled.
 	 */
-	si_notify_smc_display_change(rdev, rdev->pm.dpm.new_active_crtc_count > 0);
+	/* set has_display for PX */
+	if (rdev->flags & RADEON_IS_PX)
+		has_display = true;
+	si_notify_smc_display_change(rdev, has_display);
 }
 
 static void si_enable_spread_spectrum(struct radeon_device *rdev, bool enable)

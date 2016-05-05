@@ -1743,6 +1743,8 @@ static void cypress_program_display_gap(struct radeon_device *rdev)
 {
 	u32 tmp, pipe;
 	int i;
+	bool has_display = (rdev->pm.dpm.new_active_crtc_count > 0) ?
+		true : false;
 
 	tmp = RREG32(CG_DISPLAY_GAP_CNTL) & ~(DISP1_GAP_MASK | DISP2_GAP_MASK);
 	if (rdev->pm.dpm.new_active_crtc_count > 0)
@@ -1777,7 +1779,10 @@ static void cypress_program_display_gap(struct radeon_device *rdev)
 		WREG32(DCCG_DISP_SLOW_SELECT_REG, tmp);
 	}
 
-	cypress_notify_smc_display_change(rdev, rdev->pm.dpm.new_active_crtc_count > 0);
+	/* set has_display for PX */
+	if (rdev->flags & RADEON_IS_PX)
+		has_display = true;
+	cypress_notify_smc_display_change(rdev, has_display);
 }
 
 void cypress_dpm_setup_asic(struct radeon_device *rdev)
