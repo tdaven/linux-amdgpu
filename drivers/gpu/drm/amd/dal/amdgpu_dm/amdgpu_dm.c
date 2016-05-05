@@ -1153,7 +1153,7 @@ static u8 dm_get_backlight_level(struct amdgpu_encoder *amdgpu_encoder)
  * Does the actual pageflip (surface address update).
  */
 static void dm_page_flip(struct amdgpu_device *adev,
-			int crtc_id, u64 crtc_base)
+			 int crtc_id, u64 crtc_base, bool async)
 {
 	struct amdgpu_crtc *acrtc;
 	struct dc_target *target;
