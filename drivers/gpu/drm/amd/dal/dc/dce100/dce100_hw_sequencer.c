@@ -229,6 +229,12 @@ static bool dce100_enable_display_power_gating(
 		return false;
 }
 
+static void set_displaymarks(
+		const struct core_dc *dc, struct validate_context *context)
+{
+	/* Do nothing until we have proper bandwitdth calcs */
+}
+
 static void enable_hw_base_light_sleep(void)
 {
 	/* TODO: implement */
@@ -252,12 +258,6 @@ static void dal_dc_clock_gating_dce100_power_up(struct dc_context *ctx, bool ena
 	} else {
 		enable_sw_manual_control_light_sleep();
 	}
-}
-
-static void set_displaymarks(
-		const struct core_dc *dc, struct validate_context *context)
-{
-	/* Do nothing until we have proper bandwitdth calcs */
 }
 
 /**************************************************************************/
