@@ -426,7 +426,8 @@ void dce80_stream_encoder_hdmi_set_stream_attribute(
 	cntl.lanes_number = LANE_COUNT_FOUR;
 	cntl.color_depth = crtc_timing->display_color_depth;
 
-	if (dc_bios_encoder_control(enc110->base.bp, &cntl) != BP_RESULT_OK)
+	if (enc110->base.bp->funcs->encoder_control(
+			enc110->base.bp, &cntl) != BP_RESULT_OK)
 		return;
 
 	switch (crtc_timing->pixel_encoding) {
@@ -566,7 +567,8 @@ void dce80_stream_encoder_dvi_set_stream_attribute(
 				LANE_COUNT_EIGHT : LANE_COUNT_FOUR;
 	cntl.color_depth = crtc_timing->display_color_depth;
 
-	if (dc_bios_encoder_control(enc110->base.bp, &cntl) != BP_RESULT_OK)
+	if (enc110->base.bp->funcs->encoder_control(
+			enc110->base.bp, &cntl) != BP_RESULT_OK)
 		return;
 
 	switch (crtc_timing->pixel_encoding) {

@@ -83,7 +83,7 @@ static bool create_links(
 
 	dcb = dc->ctx->dc_bios;
 
-	connectors_num = dc_bios_get_connectors_number(dcb);
+	connectors_num = dcb->funcs->get_connectors_number(dcb);
 
 	if (connectors_num > ENUM_ID_COUNT) {
 		dm_error(
@@ -770,7 +770,7 @@ bool dc_commit_targets(
 
 	pplib_apply_safe_state(core_dc);
 
-	if (!dc_bios_is_accelerated_mode(dcb)) {
+	if (!dcb->funcs->is_accelerated_mode(dcb)) {
 		core_dc->hwss.enable_accelerated_mode(core_dc);
 	}
 
@@ -853,7 +853,7 @@ bool dc_commit_surfaces_to_target(
 
 	target_status = &context->target_status[i];
 
-	if (!dc_bios_is_accelerated_mode(dcb)
+	if (!dcb->funcs->is_accelerated_mode(dcb)
 			|| i == context->target_count) {
 		BREAK_TO_DEBUGGER();
 		goto unexpected_fail;

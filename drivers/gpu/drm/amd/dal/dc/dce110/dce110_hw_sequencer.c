@@ -377,7 +377,8 @@ static bool dce110_enable_display_power_gating(
 		controller_id = CONTROLLER_ID_UNDERLAY0 - 1;
 
 	if (power_gating != PIPE_GATING_CONTROL_INIT || controller_id == 0)
-		bp_result = dc_bios_enable_disp_power_gating(dcb, controller_id + 1, cntl);
+		bp_result = dcb->funcs->enable_disp_power_gating(
+						dcb, controller_id + 1, cntl);
 
 	if (power_gating != PIPE_GATING_CONTROL_ENABLE)
 		dce110_init_pte(ctx);
@@ -485,7 +486,7 @@ static enum dc_status bios_parser_crtc_source_select(
 
 	dcb = dal_adapter_service_get_bios_parser(sink->link->adapter_srv);
 
-	if (BP_RESULT_OK != dc_bios_crtc_source_select(
+	if (BP_RESULT_OK != dcb->funcs->crtc_source_select(
 		dcb,
 		&crtc_source_select)) {
 		return DC_ERROR_UNEXPECTED;
@@ -500,7 +501,7 @@ static void update_bios_scratch_critical_state(struct adapter_service *as,
 {
 	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
 
-	dc_bios_set_scratch_critical_state(dcb, state);
+	dcb->funcs->set_scratch_critical_state(dcb, state);
 }
 
 static void update_info_frame(struct pipe_ctx *pipe_ctx)
@@ -892,7 +893,7 @@ static void enable_accelerated_mode(struct core_dc *dc)
 
 	disable_vga_and_power_gate_all_controllers(dc);
 
-	dc_bios_set_scratch_acc_mode_change(dcb);
+	dcb->funcs->set_scratch_acc_mode_change(dcb);
 }
 
 #if 0
@@ -1593,7 +1594,7 @@ static void init_hw(struct core_dc *dc)
 	}
 
 	dc->hwss.clock_gating_power_up(dc->ctx, false);
-	dc_bios_power_up(bp);
+	bp->funcs->power_up(bp);
 	/***************************************/
 
 	for (i = 0; i < dc->link_count; i++) {

@@ -781,7 +781,7 @@ static void set_clock(
 	dce_clk_params.pll_id = dc->disp_clk_base.id;
 	dce_clk_params.clock_type = DCECLOCK_TYPE_DISPLAY_CLOCK;
 
-	dc_bios_set_dce_clock(bp, &dce_clk_params);
+	bp->funcs->set_dce_clock(bp, &dce_clk_params);
 
 	/* from power down, we need mark the clock state as ClocksStateNominal
 	 * from HWReset, so when resume we will call pplib voltage regulator.*/
@@ -795,7 +795,7 @@ static void set_clock(
 	dce_clk_params.flags.USE_GENLOCK_AS_SOURCE_FOR_DPREFCLK =
 			(dce_clk_params.pll_id == CLOCK_SOURCE_COMBO_DISPLAY_PLL0);
 
-	dc_bios_set_dce_clock(bp, &dce_clk_params);
+	bp->funcs->set_dce_clock(bp, &dce_clk_params);
 }
 
 static void set_clock_state(
