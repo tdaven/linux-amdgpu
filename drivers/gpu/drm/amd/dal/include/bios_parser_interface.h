@@ -38,7 +38,7 @@ struct bp_init_data {
 
 struct dc_bios *dal_bios_parser_create(
 	struct bp_init_data *init,
-	enum dce_version dce_version);
+	struct adapter_service *as);
 
 void dal_bios_parser_destroy(
 	struct dc_bios **dcb);
