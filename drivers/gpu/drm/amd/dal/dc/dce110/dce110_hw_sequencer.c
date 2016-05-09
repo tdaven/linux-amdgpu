@@ -34,7 +34,6 @@
 
 #include "gpu/dce110/dc_clock_gating_dce110.h"
 
-#include "bios/dce110/bios_dce110.h"
 #include "timing_generator.h"
 #include "mem_input.h"
 #include "opp.h"
@@ -496,12 +495,12 @@ static enum dc_status bios_parser_crtc_source_select(
 }
 
 
-static void update_bios_scratch_critical_state(struct core_dc *dc,
+static void update_bios_scratch_critical_state(struct adapter_service *as,
 					       bool state)
 {
-#ifdef CONFIG_DRM_AMD_DAL_VBIOS_PRESENT
-	dce110_set_scratch_critical_state(dc->ctx, state);
-#endif
+	struct dc_bios *dcb = dal_adapter_service_get_bios_parser(as);
+
+	dc_bios_set_scratch_critical_state(dcb, state);
 }
 
 static void update_info_frame(struct pipe_ctx *pipe_ctx)
@@ -1221,7 +1220,8 @@ static enum dc_status apply_ctx_to_hw(
 		return DC_OK;
 
 	/* Apply new context */
-	update_bios_scratch_critical_state(dc, true);
+	update_bios_scratch_critical_state(context->res_ctx.pool.adapter_srv,
+			true);
 
 	for (i = 0; i < MAX_PIPES; i++) {
 		struct pipe_ctx *pipe_ctx_old =
@@ -1312,7 +1312,8 @@ static enum dc_status apply_ctx_to_hw(
 
 	dc->hwss.set_displaymarks(dc, context);
 
-	update_bios_scratch_critical_state(dc, false);
+	update_bios_scratch_critical_state(context->res_ctx.pool.adapter_srv,
+			false);
 
 	switch_dp_clock_sources(dc, &context->res_ctx);
 
