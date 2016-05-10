@@ -421,9 +421,8 @@ static void amdgpu_vm_update_pages(struct amdgpu_device *adev,
 	trace_amdgpu_vm_set_page(pe, addr, count, incr, flags);
 
 	if (vm_update_params->src) {
-		vm_update_params->src += (addr >> 12) * 8;
 		amdgpu_vm_copy_pte(adev, vm_update_params->ib,
-			pe, vm_update_params->src, count);
+			pe, (vm_update_params->src + (addr >> 12) * 8), count);
 
 	} else if (vm_update_params->pages_addr) {
 		amdgpu_vm_write_pte(adev, vm_update_params->ib,
