@@ -482,7 +482,7 @@ static ssize_t amdgpu_get_pp_sclk_od(struct device *dev,
 	if (adev->pp_enabled)
 		value = amdgpu_dpm_get_sclk_od(adev);
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", value);;
+	return snprintf(buf, PAGE_SIZE, "%d\n", value);
 }
 
 static ssize_t amdgpu_set_pp_sclk_od(struct device *dev,
