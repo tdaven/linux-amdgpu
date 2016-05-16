@@ -142,15 +142,14 @@ static struct amdgpu_connector *get_connector_for_sink(
 	const struct dc_sink *sink)
 {
 	struct drm_connector *connector;
-	struct amdgpu_connector *aconnector = NULL;
 
 	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
-		aconnector = to_amdgpu_connector(connector);
+		struct amdgpu_connector *aconnector = to_amdgpu_connector(connector);
 		if (aconnector->dc_sink == sink)
-			break;
+			return aconnector;
 	}
 
-	return aconnector;
+	return NULL;
 }
 #endif
 
@@ -159,15 +158,14 @@ static struct amdgpu_connector *get_connector_for_link(
 	const struct dc_link *link)
 {
 	struct drm_connector *connector;
-	struct amdgpu_connector *aconnector = NULL;
 
 	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
-		aconnector = to_amdgpu_connector(connector);
+		struct amdgpu_connector *aconnector = to_amdgpu_connector(connector);
 		if (aconnector->dc_link == link)
-			break;
+			return aconnector;
 	}
 
-	return aconnector;
+	return NULL;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 6, 0)
@@ -232,7 +230,7 @@ bool dm_helpers_dp_mst_write_payload_allocation_table(
 
 	aconnector = get_connector_for_sink(dev, stream->sink);
 
-	if (!aconnector->mst_port)
+	if (!aconnector || !aconnector->mst_port)
 		return false;
 
 	mst_mgr = &aconnector->mst_port->mst_mgr;
@@ -320,7 +318,7 @@ bool dm_helpers_dp_mst_poll_for_allocation_change_trigger(
 
 	aconnector = get_connector_for_sink(dev, stream->sink);
 
-	if (!aconnector->mst_port)
+	if (!aconnector || !aconnector->mst_port)
 		return false;
 
 	mst_mgr = &aconnector->mst_port->mst_mgr;
@@ -354,10 +352,10 @@ bool dm_helpers_dp_mst_send_payload_allocation(
 
 	aconnector = get_connector_for_sink(dev, stream->sink);
 
-	mst_port = aconnector->port;
-
-	if (!aconnector->mst_port)
+	if (!aconnector || !aconnector->mst_port)
 		return false;
+
+	mst_port = aconnector->port;
 
 	mst_mgr = &aconnector->mst_port->mst_mgr;
 
@@ -434,6 +432,11 @@ bool dm_helpers_dp_mst_start_top_mgr(
 	struct drm_device *dev = adev->ddev;
 	struct amdgpu_connector *aconnector = get_connector_for_link(dev, link);
 
+	if (!aconnector) {
+			DRM_ERROR("Failed to found connector for link!");
+			return false;
+	}
+
 	if (boot) {
 		DRM_INFO("DM_MST: Differing MST start on aconnector: %p [id: %d]\n",
 					aconnector, aconnector->base.base.id);
@@ -457,6 +460,11 @@ void dm_helpers_dp_mst_stop_top_mgr(
 	struct amdgpu_device *adev = ctx->driver_context;
 	struct drm_device *dev = adev->ddev;
 	struct amdgpu_connector *aconnector = get_connector_for_link(dev, link);
+
+	if (!aconnector) {
+			DRM_ERROR("Failed to found connector for link!");
+			return;
+	}
 
 	DRM_INFO("DM_MST: stopping TM on aconnector: %p [id: %d]\n",
 			aconnector, aconnector->base.base.id);
@@ -560,6 +568,11 @@ void dm_helper_conn_log(struct dc_context *ctx,
 	va_list args;
 	int size;
 	enum log_minor minor = event;
+
+	if (!aconnector) {
+			DRM_ERROR("Failed to found connector for link!");
+			return;
+	}
 
 	va_start(args, msg);
 
