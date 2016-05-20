@@ -134,6 +134,23 @@ static void si_dma_ring_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq,
 	amdgpu_ring_write(ring, DMA_PACKET(DMA_PACKET_TRAP, 0, 0, 0, 0));
 }
 
+static void si_dma_stop(struct amdgpu_device *adev)
+{
+	struct amdgpu_ring *ring;
+	u32 rb_cntl;
+	unsigned i;
+
+	for (i = 0; i < 2; i++) {
+		ring = &adev->sdma.instance[i].ring;
+		/* dma0 */
+		rb_cntl = RREG32(DMA_RB_CNTL + sdma_offsets[i]);
+		rb_cntl &= ~DMA_RB_ENABLE;
+		WREG32(DMA_RB_CNTL + sdma_offsets[i], rb_cntl);
+
+		ring->ready = false;
+	}
+}
+
 static int si_dma_gfx_resume(struct amdgpu_device *adev)
 {
 	struct amdgpu_ring *ring;
@@ -612,6 +629,10 @@ static int si_dma_hw_init(void *handle)
 
 static int si_dma_hw_fini(void *handle)
 {
+	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
+
+	si_dma_stop(adev);
+
 	return 0;
 }
 
