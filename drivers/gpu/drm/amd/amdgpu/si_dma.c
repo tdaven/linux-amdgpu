@@ -573,7 +573,7 @@ static int si_dma_sw_init(void *handle)
 		ring->ring_obj = NULL;
 		ring->use_doorbell = false;
 		sprintf(ring->name, "sdma%d", i);
-		r = amdgpu_ring_init(adev, ring, 64 * 1024,
+		r = amdgpu_ring_init(adev, ring, 1024,
 				     DMA_PACKET(DMA_PACKET_NOP, 0, 0, 0, 0), 0xf,
 				     &adev->sdma.trap_irq,
 				     (i == 0) ?
