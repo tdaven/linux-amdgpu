@@ -151,7 +151,7 @@ static void si_dma_stop(struct amdgpu_device *adev)
 	}
 }
 
-static int si_dma_gfx_resume(struct amdgpu_device *adev)
+static int si_dma_start(struct amdgpu_device *adev)
 {
 	struct amdgpu_ring *ring;
 	u32 rb_cntl, dma_cntl, ib_cntl, rb_bufsz, reg_offset;
@@ -212,23 +212,6 @@ static int si_dma_gfx_resume(struct amdgpu_device *adev)
 	}
 
 	return 0;
-}
-
-/**
- * si_dma_start - setup and start the async dma engines
- *
- * @adev: amdgpu_device pointer
- *
- * Set up the DMA engines and enable them (VI).
- * Returns 0 for success, error for failure.
- */
-static int si_dma_start(struct amdgpu_device *adev)
-{
-	int r;
-
-	r = si_dma_gfx_resume(adev);
-
-	return r;
 }
 
 /**
