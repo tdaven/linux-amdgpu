@@ -154,16 +154,15 @@ static void si_dma_stop(struct amdgpu_device *adev)
 static int si_dma_start(struct amdgpu_device *adev)
 {
 	struct amdgpu_ring *ring;
-	u32 rb_cntl, dma_cntl, ib_cntl, rb_bufsz, reg_offset;
+	u32 rb_cntl, dma_cntl, ib_cntl, rb_bufsz;
 	int i, r;
 	uint64_t rptr_addr;
 
 	for (i = 0; i < adev->sdma.num_instances; i++) {
 		ring = &adev->sdma.instance[i].ring;
-		reg_offset = sdma_offsets[i];
 
-		WREG32(DMA_SEM_INCOMPLETE_TIMER_CNTL + reg_offset, 0);
-		WREG32(DMA_SEM_WAIT_FAIL_TIMER_CNTL + reg_offset, 0);
+		WREG32(DMA_SEM_INCOMPLETE_TIMER_CNTL + sdma_offsets[i], 0);
+		WREG32(DMA_SEM_WAIT_FAIL_TIMER_CNTL + sdma_offsets[i], 0);
 
 		/* Set ring buffer size in dwords */
 		rb_bufsz = order_base_2(ring->ring_size / 4);
@@ -171,36 +170,36 @@ static int si_dma_start(struct amdgpu_device *adev)
 #ifdef __BIG_ENDIAN
 		rb_cntl |= DMA_RB_SWAP_ENABLE | DMA_RPTR_WRITEBACK_SWAP_ENABLE;
 #endif
-		WREG32(DMA_RB_CNTL + reg_offset, rb_cntl);
+		WREG32(DMA_RB_CNTL + sdma_offsets[i], rb_cntl);
 
 		/* Initialize the ring buffer's read and write pointers */
-		WREG32(DMA_RB_RPTR + reg_offset, 0);
-		WREG32(DMA_RB_WPTR + reg_offset, 0);
+		WREG32(DMA_RB_RPTR + sdma_offsets[i], 0);
+		WREG32(DMA_RB_WPTR + sdma_offsets[i], 0);
 
 		rptr_addr = adev->wb.gpu_addr + (ring->rptr_offs * 4);
 
-		WREG32(DMA_RB_RPTR_ADDR_LO, lower_32_bits(rptr_addr));
-		WREG32(DMA_RB_RPTR_ADDR_HI, upper_32_bits(rptr_addr) & 0xFF);
+		WREG32(DMA_RB_RPTR_ADDR_LO + sdma_offsets[i], lower_32_bits(rptr_addr));
+		WREG32(DMA_RB_RPTR_ADDR_HI + sdma_offsets[i], upper_32_bits(rptr_addr) & 0xFF);
 
 		rb_cntl |= DMA_RPTR_WRITEBACK_ENABLE;
 
-		WREG32(DMA_RB_BASE + reg_offset, ring->gpu_addr >> 8);
+		WREG32(DMA_RB_BASE + sdma_offsets[i], ring->gpu_addr >> 8);
 
 		/* enable DMA IBs */
 		ib_cntl = DMA_IB_ENABLE | CMD_VMID_FORCE;
 #ifdef __BIG_ENDIAN
 		ib_cntl |= DMA_IB_SWAP_ENABLE;
 #endif
-		WREG32(DMA_IB_CNTL + reg_offset, ib_cntl);
+		WREG32(DMA_IB_CNTL + sdma_offsets[i], ib_cntl);
 
-		dma_cntl = RREG32(DMA_CNTL + reg_offset);
+		dma_cntl = RREG32(DMA_CNTL + sdma_offsets[i]);
 		dma_cntl &= ~CTXEMPTY_INT_ENABLE;
-		WREG32(DMA_CNTL + reg_offset, dma_cntl);
+		WREG32(DMA_CNTL + sdma_offsets[i], dma_cntl);
 
 		ring->wptr = 0;
-		WREG32(DMA_RB_WPTR + reg_offset, ring->wptr << 2);
+		WREG32(DMA_RB_WPTR + sdma_offsets[i], ring->wptr << 2);
 
-		WREG32(DMA_RB_CNTL + reg_offset, rb_cntl | DMA_RB_ENABLE);
+		WREG32(DMA_RB_CNTL + sdma_offsets[i], rb_cntl | DMA_RB_ENABLE);
 
 		ring->ready = true;
 
