@@ -140,7 +140,7 @@ static void si_dma_stop(struct amdgpu_device *adev)
 	u32 rb_cntl;
 	unsigned i;
 
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < adev->sdma.num_instances; i++) {
 		ring = &adev->sdma.instance[i].ring;
 		/* dma0 */
 		rb_cntl = RREG32(DMA_RB_CNTL + sdma_offsets[i]);
@@ -158,7 +158,7 @@ static int si_dma_start(struct amdgpu_device *adev)
 	int i, r;
 	uint64_t rptr_addr;
 
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < adev->sdma.num_instances; i++) {
 		ring = &adev->sdma.instance[i].ring;
 		reg_offset = sdma_offsets[i];
 
@@ -755,13 +755,12 @@ static int si_dma_set_clockgating_state(void *handle,
 	u32 orig, data, offset;
 	int i;
 	bool enable;
-
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
 	enable = (state == AMD_CG_STATE_GATE) ? true : false;
 
 	if (enable && (adev->cg_flags & AMD_CG_SUPPORT_SDMA_MGCG)) {
-		for (i = 0; i < 2; i++) {
+		for (i = 0; i < adev->sdma.num_instances; i++) {
 			if (i == 0)
 				offset = DMA0_REGISTER_OFFSET;
 			else
@@ -773,7 +772,7 @@ static int si_dma_set_clockgating_state(void *handle,
 			WREG32(DMA_CLK_CTRL + offset, 0x00000100);
 		}
 	} else {
-		for (i = 0; i < 2; i++) {
+		for (i = 0; i < adev->sdma.num_instances; i++) {
 			if (i == 0)
 				offset = DMA0_REGISTER_OFFSET;
 			else
