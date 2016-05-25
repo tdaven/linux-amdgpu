@@ -944,6 +944,7 @@ static void gfx_v6_0_setup_rb(struct amdgpu_device *adev,
 
 	adev->gfx.config.backend_enable_mask = enabled_rbs;
 	DRM_INFO("amdgpu: enabled_rbs %d \n", enabled_rbs);
+	adev->gfx.config.num_rbs = hweight32(enabled_rbs);
 
 	for (i = 0; i < se_num; i++) {
 		gfx_v6_0_select_se_sh(adev, i, 0xffffffff);
