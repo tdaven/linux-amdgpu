@@ -65,7 +65,7 @@ static int get_callid(const char *dptr, unsigned int dataoff,
 static int
 ip_vs_sip_fill_param(struct ip_vs_conn_param *p, struct sk_buff *skb)
 {
-	struct ip_vs_iphdr iph;
+	struct ip_vs_iphdr iph = {0};
 	unsigned int dataoff, datalen, matchoff, matchlen;
 	const char *dptr;
 	int retc;
