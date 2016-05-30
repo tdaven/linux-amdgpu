@@ -107,8 +107,6 @@ struct timing_generator {
 	struct timing_generator_funcs *funcs;
 	struct dc_bios *bp;
 	struct dc_context *ctx;
-	/* enum controller_id - CONTROLLER_ID_D0.  start from 0 */
-	uint8_t otg_id;
 };
 
 struct dc_crtc_timing;
