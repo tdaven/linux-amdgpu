@@ -1123,8 +1123,6 @@ static const struct amdgpu_asic_funcs vi_asic_funcs =
 	.get_xclk = &vi_get_xclk,
 	.set_uvd_clocks = &vi_set_uvd_clocks,
 	.set_vce_clocks = &vi_set_vce_clocks,
-	/* these should be moved to their own ip modules */
-	.get_gpu_clock_counter = &gfx_v8_0_get_gpu_clock_counter,
 };
 
 static int vi_common_early_init(void *handle)

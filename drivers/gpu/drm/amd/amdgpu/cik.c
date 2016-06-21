@@ -2015,8 +2015,6 @@ static const struct amdgpu_asic_funcs cik_asic_funcs =
 	.get_xclk = &cik_get_xclk,
 	.set_uvd_clocks = &cik_set_uvd_clocks,
 	.set_vce_clocks = &cik_set_vce_clocks,
-	/* these should be moved to their own ip modules */
-	.get_gpu_clock_counter = &gfx_v7_0_get_gpu_clock_counter,
 };
 
 static int cik_common_early_init(void *handle)
