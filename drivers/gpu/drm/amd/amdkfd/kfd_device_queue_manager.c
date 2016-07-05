@@ -1102,11 +1102,7 @@ static int unmap_queues_cpsch(struct device_queue_manager *dqm,
 
 	retval = 0;
 
-	if (lock)
-		mutex_lock(&dqm->lock);
 	if (!dqm->active_runlist)
-		goto out;
-	if (dqm->active_runlist == false)
 		return retval;
 
 	pr_debug("kfd: Before destroying queues, sdma queue count is : %u\n",
