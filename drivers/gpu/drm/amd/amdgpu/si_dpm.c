@@ -7628,7 +7628,7 @@ static int si_dpm_late_init(void *handle)
 	int ret;
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
-	if (!amdgpu_dpm)
+	if (amdgpu_dpm <= 0)
 		return 0;
 
 	/* init the sysfs and debugfs files late */
@@ -7756,7 +7756,7 @@ static int si_dpm_sw_init(void *handle)
 	adev->pm.current_mclk = adev->clock.default_mclk;
 	adev->pm.int_thermal_type = THERMAL_TYPE_NONE;
 
-	if (amdgpu_dpm == 0)
+	if (amdgpu_dpm <= 0)
 		return 0;
 
 	ret = si_dpm_init_microcode(adev);
@@ -7801,7 +7801,7 @@ static int si_dpm_hw_init(void *handle)
 
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
-	if (!amdgpu_dpm)
+	if (amdgpu_dpm <= 0)
 		return 0;
 
 	mutex_lock(&adev->pm.mutex);
