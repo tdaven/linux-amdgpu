@@ -90,6 +90,7 @@ unsigned amdgpu_pcie_gen_cap = 0;
 unsigned amdgpu_pcie_lane_cap = 0;
 unsigned amdgpu_cg_mask = 0xffffffff;
 unsigned amdgpu_pg_mask = 0xffffffff;
+int amdgpu_virtual_display = 0;
 
 MODULE_PARM_DESC(vramlimit, "Restrict VRAM for testing, in megabytes");
 module_param_named(vramlimit, amdgpu_vram_limit, int, 0600);
@@ -188,6 +189,9 @@ module_param_named(cg_mask, amdgpu_cg_mask, uint, 0444);
 
 MODULE_PARM_DESC(pg_mask, "Powergating flags mask (0 = disable power gating)");
 module_param_named(pg_mask, amdgpu_pg_mask, uint, 0444);
+
+MODULE_PARM_DESC(virtual_display, "enable virtual display (0 = disable virtual display)");
+module_param_named(virtual_display, amdgpu_virtual_display, int, 0444);
 
 static const struct pci_device_id pciidlist[] = {
 #ifdef CONFIG_DRM_AMDGPU_CIK
