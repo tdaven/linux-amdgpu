@@ -88,6 +88,7 @@
 
 typedef uint32_t PECI_RegistryValue;
 
+#if 0
 /* [2.5%,~2.5%] Clock stretched is multiple of 2.5% vs not and [Fmin, Fmax, LDO_REFSEL, USE_FOR_LOW_FREQ] */
 static const uint16_t PP_ClockStretcherLookupTable[2][4] = {
 	{600, 1050, 3, 0},
@@ -102,6 +103,7 @@ static const uint32_t PP_ClockStretcherDDTTable[2][4][4] = {
 static const uint8_t PP_ClockStretchAmountConversion[2][6] = {
 	{0, 1, 3, 2, 4, 5},
 	{0, 2, 4, 5, 6, 5} };
+#endif
 
 /* Values for the CG_THERMAL_CTRL::DPM_EVENT_SRC field. */
 enum DPM_EVENT_SRC {
