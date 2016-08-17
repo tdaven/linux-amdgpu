@@ -395,7 +395,7 @@ static int amdgpu_pmops_suspend(struct device *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct drm_device *drm_dev = pci_get_drvdata(pdev);
-	return amdgpu_suspend_kms(drm_dev, true, true);
+	return amdgpu_suspend_kms(drm_dev, true, true, false);
 }
 
 static int amdgpu_pmops_resume(struct device *dev)
@@ -409,7 +409,7 @@ static int amdgpu_pmops_freeze(struct device *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct drm_device *drm_dev = pci_get_drvdata(pdev);
-	return amdgpu_suspend_kms(drm_dev, false, true);
+	return amdgpu_suspend_kms(drm_dev, false, true, true);
 }
 
 static int amdgpu_pmops_thaw(struct device *dev)
@@ -434,7 +434,7 @@ static int amdgpu_pmops_runtime_suspend(struct device *dev)
 	drm_kms_helper_poll_disable(drm_dev);
 	vga_switcheroo_set_dynamic_switch(pdev, VGA_SWITCHEROO_OFF);
 
-	ret = amdgpu_suspend_kms(drm_dev, false, false);
+	ret = amdgpu_suspend_kms(drm_dev, false, false, false);
 	pci_save_state(pdev);
 	pci_disable_device(pdev);
 	pci_ignore_hotplug(pdev);

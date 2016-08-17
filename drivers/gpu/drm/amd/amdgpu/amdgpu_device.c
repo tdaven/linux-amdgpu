@@ -1037,7 +1037,7 @@ static void amdgpu_switcheroo_set_state(struct pci_dev *pdev, enum vga_switchero
 		printk(KERN_INFO "amdgpu: switched off\n");
 		drm_kms_helper_poll_disable(dev);
 		dev->switch_power_state = DRM_SWITCH_POWER_CHANGING;
-		amdgpu_suspend_kms(dev, true, true);
+		amdgpu_suspend_kms(dev, true, true, false);
 		dev->switch_power_state = DRM_SWITCH_POWER_OFF;
 	}
 }
@@ -1780,7 +1780,8 @@ void amdgpu_device_fini(struct amdgpu_device *adev)
  * Returns 0 for success or an error on failure.
  * Called at driver suspend.
  */
-int amdgpu_suspend_kms(struct drm_device *dev, bool suspend, bool fbcon)
+int amdgpu_suspend_kms(struct drm_device *dev, bool suspend, bool fbcon,
+		       bool freeze)
 {
 	struct amdgpu_device *adev;
 	struct drm_crtc *crtc;
@@ -1844,7 +1845,10 @@ int amdgpu_suspend_kms(struct drm_device *dev, bool suspend, bool fbcon)
 	amdgpu_bo_evict_vram(adev);
 
 	pci_save_state(dev->pdev);
-	if (suspend) {
+	if (freeze) {
+		/* reset the asic during freeze */
+		r = amdgpu_asic_reset(adev);
+	} else if (suspend) {
 		/* Shut down the device */
 		pci_disable_device(dev->pdev);
 		pci_set_power_state(dev->pdev, PCI_D3hot);
