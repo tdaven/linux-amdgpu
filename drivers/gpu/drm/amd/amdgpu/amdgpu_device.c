@@ -1977,7 +1977,8 @@ int amdgpu_device_resume(struct drm_device *dev, bool resume, bool fbcon)
 	if (resume) {
 		pci_set_power_state(dev->pdev, PCI_D0);
 		pci_restore_state(dev->pdev);
-		if (r = pci_enable_device(dev->pdev)) {
+		r = pci_enable_device(dev->pdev);
+		if (r) {
 			if (fbcon)
 				console_unlock();
 			return r;
