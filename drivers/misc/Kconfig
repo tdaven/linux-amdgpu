@@ -538,4 +538,5 @@ source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
 source "drivers/misc/psp_comm/Kconfig"
+source "drivers/misc/tee/Kconfig"
 endmenu

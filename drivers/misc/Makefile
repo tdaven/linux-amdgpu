@@ -57,3 +57,4 @@ obj-$(CONFIG_ECHO)		+= echo/
 obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
 obj-$(CONFIG_CXL_BASE)		+= cxl/
 obj-$(CONFIG_PSP_COMM_DRIVER_SUPPORT) += psp_comm/
+obj-$(CONFIG_TEE_DRIVER_SUPPORT) += tee/
