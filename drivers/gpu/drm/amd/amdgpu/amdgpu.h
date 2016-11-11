@@ -54,6 +54,7 @@
 #include "amdgpu_gds.h"
 #include "amdgpu_acp.h"
 #include "amdgpu_dm.h"
+#include "amdgpu_psp.h"
 #include "amd_powerplay.h"
 
 #include "gpu_scheduler.h"
@@ -2030,6 +2031,9 @@ struct amdgpu_device {
 
 	/* vce */
 	struct amdgpu_vce		vce;
+
+	/* psp */
+	struct amdgpu_psp		psp;
 
 	/* firmwares */
 	struct amdgpu_firmware		firmware;

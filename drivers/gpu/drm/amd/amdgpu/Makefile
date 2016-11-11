@@ -111,6 +111,10 @@ include $(FULL_AMD_PATH)/acp/Makefile
 amdgpu-y += $(AMD_ACP_FILES)
 endif
 
+# add PSP block
+amdgpu-y += \
+	amdgpu_psp.o
+
 amdgpu-$(CONFIG_COMPAT) += amdgpu_ioc32.o
 amdgpu-$(CONFIG_VGA_SWITCHEROO) += amdgpu_atpx_handler.o
 amdgpu-$(CONFIG_ACPI) += amdgpu_acpi.o
