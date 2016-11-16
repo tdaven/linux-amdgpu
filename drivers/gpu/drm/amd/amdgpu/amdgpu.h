@@ -55,6 +55,7 @@
 #include "amdgpu_acp.h"
 #include "amdgpu_dm.h"
 #include "amdgpu_psp.h"
+#include "hdcpss.h"
 #include "amd_powerplay.h"
 
 #include "gpu_scheduler.h"
@@ -2043,6 +2044,11 @@ struct amdgpu_device {
 
 	/* display related functionality */
 	struct amdgpu_display_manager dm;
+
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+	/* HDCP related functionality */
+        struct hdcpss_data hdcp;
+#endif
 
 	const struct amdgpu_ip_block_version *ip_blocks;
 	int				num_ip_blocks;

@@ -15,7 +15,8 @@ ccflags-y := -Iinclude/drm -I$(FULL_AMD_PATH)/include/asic_reg \
 	-I$(FULL_AMD_DAL_PATH) \
 	-I$(FULL_AMD_DAL_PATH)/include \
 	-I$(FULL_AMD_DAL_PATH)/dc \
-	-I$(FULL_AMD_DAL_PATH)/amdgpu_dm
+	-I$(FULL_AMD_DAL_PATH)/amdgpu_dm \
+	-I$(FULL_AMD_PATH)/hdcp_service
 
 amdgpu-y := amdgpu_drv.o
 
@@ -114,6 +115,15 @@ endif
 # add PSP block
 amdgpu-y += \
 	amdgpu_psp.o
+
+# HDCP Security Service component
+ifneq ($(CONFIG_DRM_AMD_HDCP_SERVICE),)
+
+AMDHDCPSERVICEPATH := ../hdcp_service
+include $(FULL_AMD_PATH)/hdcp_service/Makefile
+
+amdgpu-y += $(AMD_HDCPSERVICE_FILES)
+endif
 
 amdgpu-$(CONFIG_COMPAT) += amdgpu_ioc32.o
 amdgpu-$(CONFIG_VGA_SWITCHEROO) += amdgpu_atpx_handler.o

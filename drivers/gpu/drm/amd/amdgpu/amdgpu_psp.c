@@ -223,6 +223,8 @@ static int g2p_hw_init(void *handle)
 	/* For debug */
 	g2p_print_status(adev);
 
+	hdcpss_init((void *)adev);
+
 	return 0;
 }
 

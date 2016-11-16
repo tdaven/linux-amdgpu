@@ -49,6 +49,8 @@
 
 #define COMMAND_RESP_TIMEOUT		500	/* timeout in milliseconds */
 
+extern int hdcpss_init(void *);
+
 enum g2p_comm_cmd_id {
 	G2P_COMM_CMD_ID_INIT_RBI_RING	= 0x00010000,
 	G2P_COMM_CMD_ID_INIT_GPCOM_RING	= 0x00020000,

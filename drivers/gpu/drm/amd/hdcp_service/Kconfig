@@ -1,0 +1,8 @@
+menu "HDCP service configuration"
+
+config DRM_AMD_HDCP_SERVICE
+       bool "Enable HDCP security service support"
+       default y
+       help
+        Choose this option to enable HDCP security service component for AMD SOCs.
+endmenu

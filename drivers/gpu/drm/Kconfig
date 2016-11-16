@@ -164,6 +164,8 @@ source "drivers/gpu/drm/amd/powerplay/Kconfig"
 
 source "drivers/gpu/drm/amd/acp/Kconfig"
 
+source "drivers/gpu/drm/amd/hdcp_service/Kconfig"
+
 source "drivers/gpu/drm/nouveau/Kconfig"
 
 config DRM_I810
