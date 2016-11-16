@@ -42,6 +42,12 @@
 
 #include "dm_helpers.h"
 
+/* Maximum line char number for connectivity log,
+ * in case of output EDID, needs at least 256x3 bytes plus some other
+ * message, so set line size to 896.
+ */
+#define CONN_MAX_LINE_SIZE 896
+
 /* dm_helpers_parse_edid_caps
  *
  * Parse edid caps
@@ -372,52 +378,6 @@ bool dm_helpers_dp_mst_send_payload_allocation(
 #endif
 }
 
-void dm_helpers_dp_mst_handle_mst_hpd_rx_irq(void *param)
-{
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 3, 0)
-	uint8_t esi[8] = { 0 };
-	uint8_t dret;
-	bool new_irq_handled = true;
-	struct amdgpu_connector *aconnector = (struct amdgpu_connector *)param;
-
-	/* DPCD 0x2002 - 0x2008 for down stream IRQ from MST, eDP etc. */
-	dret = drm_dp_dpcd_read(
-		&aconnector->dm_dp_aux.aux,
-		DP_SINK_COUNT_ESI, esi, 8);
-
-	while ((dret == 8) && new_irq_handled) {
-		uint8_t retry;
-
-		DRM_DEBUG_KMS("ESI %02x %02x %02x\n", esi[0], esi[1], esi[2]);
-
-		/* handle HPD short pulse irq */
-		drm_dp_mst_hpd_irq(&aconnector->mst_mgr, esi, &new_irq_handled);
-
-		if (new_irq_handled) {
-			/* ACK at DPCD to notify down stream */
-			for (retry = 0; retry < 3; retry++) {
-				uint8_t wret;
-
-				wret = drm_dp_dpcd_write(
-					&aconnector->dm_dp_aux.aux,
-					DP_SINK_COUNT_ESI + 1,
-					&esi[1],
-					3);
-				if (wret == 3)
-					break;
-			}
-
-			/* check if there is new irq to be handle */
-			dret = drm_dp_dpcd_read(
-				&aconnector->dm_dp_aux.aux,
-				DP_SINK_COUNT_ESI, esi, 8);
-		}
-	}
-#else
-	return false;
-#endif
-}
-
 bool dm_helpers_dp_mst_start_top_mgr(
 		struct dc_context *ctx,
 		const struct dc_link *link,
@@ -539,3 +499,51 @@ bool dm_helpers_submit_i2c(
 	return result;
 }
 
+void dm_helper_conn_log(struct dc_context *ctx,
+		const struct dc_link *link,
+		uint8_t *hex_data,
+		int hex_data_count,
+		enum conn_event event,
+		const char *msg,
+		...)
+{
+	struct amdgpu_device *adev = ctx->driver_context;
+	struct drm_device *dev = adev->ddev;
+	struct amdgpu_connector *aconnector = get_connector_for_link(dev, link);
+	char buffer[CONN_MAX_LINE_SIZE] = { 0 };
+	va_list args;
+	int size;
+	enum log_minor minor = event;
+
+	va_start(args, msg);
+
+	sprintf(buffer, "[%s] ", aconnector->base.name);
+
+	size = strlen(buffer);
+
+	size += dm_log_to_buffer(
+		&buffer[size], CONN_MAX_LINE_SIZE, msg, args);
+
+	if (buffer[strlen(buffer) - 1] == '\n') {
+		buffer[strlen(buffer) - 1] = '\0';
+		size--;
+	}
+
+	if (hex_data_count > (CONN_MAX_LINE_SIZE - size))
+		return;
+
+	if (hex_data) {
+		int i;
+
+		for (i = 0; i < hex_data_count; i++)
+			sprintf(&buffer[size + i * 3], "%2.2X ", hex_data[i]);
+	}
+
+	strcat(buffer, "^\n");
+
+	dal_logger_write(ctx->logger,
+					LOG_MAJOR_CONNECTIVITY,
+					minor,
+					buffer);
+	va_end(args);
+}

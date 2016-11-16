@@ -33,6 +33,8 @@
 #include "gpio_types.h"
 #include "link_service_types.h"
 
+#define MAX_TARGETS 6
+#define MAX_SURFACES 6
 #define MAX_SINKS_PER_LINK 4
 
 /*******************************************************************************
@@ -242,6 +244,16 @@ bool dc_target_is_connected_to_sink(
 uint8_t dc_target_get_controller_id(const struct dc_target *dc_target);
 
 uint32_t dc_target_get_vblank_counter(const struct dc_target *dc_target);
+
+/* TODO: Return parsed values rather than direct register read
+ * This has a dependency on the caller (amdgpu_get_crtc_scanoutpos)
+ * being refactored properly to be dce-specific
+ */
+uint32_t dc_target_get_scanoutpos(
+		const struct dc_target *dc_target,
+		uint32_t *vbl,
+		uint32_t *position);
+
 enum dc_irq_source dc_target_get_irq_src(
 	const struct dc *dc,
 	const struct dc_target *dc_target,
@@ -252,7 +264,7 @@ enum dc_irq_source dc_target_get_irq_src(
  */
 struct dc_validation_set {
 	const struct dc_target *target;
-	const struct dc_surface *surfaces[4];
+	const struct dc_surface *surfaces[MAX_SURFACES];
 	uint8_t surface_count;
 };
 
@@ -351,6 +363,33 @@ struct dc_link {
 	uint8_t ddc_hw_inst;
 	uint8_t link_enc_hw_inst;
 };
+
+struct dpcd_caps {
+	union dpcd_rev dpcd_rev;
+	union max_lane_count max_ln_count;
+	union max_down_spread max_down_spread;
+
+	/* dongle type (DP converter, CV smart dongle) */
+	enum display_dongle_type dongle_type;
+	/* Dongle's downstream count. */
+	union sink_count sink_count;
+	/* If dongle_type == DISPLAY_DONGLE_DP_HDMI_CONVERTER,
+	indicates 'Frame Sequential-to-lllFrame Pack' conversion capability.*/
+	bool is_dp_hdmi_s3d_converter;
+
+	bool allow_invalid_MSA_timing_param;
+	bool panel_mode_edp;
+	uint32_t sink_dev_id;
+	uint32_t branch_dev_id;
+	int8_t branch_dev_name[6];
+	int8_t branch_hw_revision;
+};
+
+struct dc_link_status {
+	struct dpcd_caps *dpcd_caps;
+};
+
+const struct dc_link_status *dc_link_get_status(const struct dc_link *dc_link);
 
 /*
  * Return an enumerated dc_link.  dc_link order is constant and determined at

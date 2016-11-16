@@ -99,7 +99,13 @@ static bool program_hpd_filter(
 	case SIGNAL_TYPE_DISPLAY_PORT:
 	case SIGNAL_TYPE_DISPLAY_PORT_MST:
 		/* Program hpd filter to allow DP signal to settle */
-		delay_on_connect_in_ms = 20;
+		/* 500:	not able to detect MST <-> SST switch as HPD is low for
+		 * 	only 100ms on DELL U2413
+		 * 0:	some passive dongle still show aux mode instead of i2c
+		 * 20-50:not enough to hide bouncing HPD with passive dongle.
+		 * 	also see intermittent i2c read issues.
+		 */
+		delay_on_connect_in_ms = 80;
 		delay_on_disconnect_in_ms = 0;
 		break;
 	case SIGNAL_TYPE_LVDS:
@@ -673,6 +679,14 @@ bool dc_link_detect(const struct dc_link *dc_link, bool boot)
 			break;
 		}
 
+		/* Connectivity log: detection */
+		for (i = 0; i < sink->public.dc_edid.length / EDID_BLOCK_SIZE; i++) {
+			CONN_DATA_DETECT(link,
+					&sink->public.dc_edid.raw_edid[i * EDID_BLOCK_SIZE],
+					EDID_BLOCK_SIZE,
+					"%s: [Block %d] ", sink->public.edid_caps.display_name, i);
+		}
+
 		dal_logger_write(link->ctx->logger,
 			LOG_MAJOR_DETECTION,
 			LOG_MINOR_DETECTION_EDID_PARSER,
@@ -895,6 +909,8 @@ static bool construct(
 
 	link->public.irq_source_hpd = DC_IRQ_SOURCE_INVALID;
 	link->public.irq_source_hpd_rx = DC_IRQ_SOURCE_INVALID;
+
+	link->link_status.dpcd_caps = &link->dpcd_caps;
 
 	link->dc = init_params->dc;
 	link->adapter_srv = as;
@@ -1172,7 +1188,11 @@ static enum dc_status enable_link_dp(struct pipe_ctx *pipe_ctx)
 	if (link_settings.link_rate == LINK_RATE_LOW)
 			skip_video_pattern = false;
 
-	if (perform_link_training(link, &link_settings, skip_video_pattern)) {
+	if (perform_link_training_with_retries(
+			link,
+			&link_settings,
+			skip_video_pattern,
+			3)) {
 		link->public.cur_link_settings = link_settings;
 		status = DC_OK;
 	}
@@ -1341,6 +1361,13 @@ bool dc_link_set_backlight_level(const struct dc_link *public, uint32_t level)
 	link->link_enc->funcs->set_lcd_backlight_level(link->link_enc, level);
 
 	return true;
+}
+
+const struct dc_link_status *dc_link_get_status(const struct dc_link *dc_link)
+{
+	struct core_link *link = DC_LINK_TO_CORE(dc_link);
+
+	return &link->link_status;
 }
 
 void core_link_resume(struct core_link *link)
@@ -1632,8 +1659,6 @@ void core_link_enable_stream(struct pipe_ctx *pipe_ctx)
 
 	core_dc->hwss.enable_stream(pipe_ctx);
 
-	pipe_ctx->stream->status.link = &pipe_ctx->stream->sink->link->public;
-
 	if (pipe_ctx->signal == SIGNAL_TYPE_DISPLAY_PORT_MST)
 		allocate_mst_payload(pipe_ctx);
 }
@@ -1642,13 +1667,10 @@ void core_link_disable_stream(struct pipe_ctx *pipe_ctx)
 {
 	struct core_dc *core_dc = DC_TO_CORE(pipe_ctx->stream->ctx->dc);
 
-	pipe_ctx->stream->status.link = NULL;
 	if (pipe_ctx->signal == SIGNAL_TYPE_DISPLAY_PORT_MST)
 		deallocate_mst_payload(pipe_ctx);
 
 	core_dc->hwss.disable_stream(pipe_ctx);
-
-	pipe_ctx->stream->status.link = NULL;
 
 	disable_link(pipe_ctx->stream->sink->link, pipe_ctx->signal);
 }

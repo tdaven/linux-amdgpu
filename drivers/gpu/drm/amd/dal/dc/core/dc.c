@@ -46,6 +46,7 @@
 #include "link_encoder.h"
 
 #include "dc_link_ddc.h"
+#include "dm_helpers.h"
 
 /*******************************************************************************
  * Private structures
@@ -736,7 +737,7 @@ bool dc_commit_targets(
 	struct dc_bios *dcb = core_dc->ctx->dc_bios;
 	enum dc_status result = DC_ERROR_UNEXPECTED;
 	struct validate_context *context;
-	struct dc_validation_set set[4];
+	struct dc_validation_set set[MAX_TARGETS];
 	uint8_t i;
 
 	if (false == targets_changed(core_dc, targets, target_count))
@@ -786,16 +787,22 @@ bool dc_commit_targets(
 	}
 
 	if (result == DC_OK) {
-		core_dc->hwss.reset_hw_ctx(core_dc, context);
-
-		if (context->target_count > 0)
-			result = core_dc->hwss.apply_ctx_to_hw(core_dc, context);
+		result = core_dc->hwss.apply_ctx_to_hw(core_dc, context);
 	}
 
 	for (i = 0; i < context->target_count; i++) {
 		struct dc_target *dc_target = &context->targets[i]->public;
+		struct core_sink *sink = DC_SINK_TO_CORE(dc_target->streams[0]->sink);
+
 		if (context->target_status[i].surface_count > 0)
 			target_enable_memory_requests(dc_target, &core_dc->current_context.res_ctx);
+
+		CONN_MSG_MODE(sink->link, "{%dx%d, %dx%d@%dKhz}",
+				dc_target->streams[0]->timing.h_addressable,
+				dc_target->streams[0]->timing.v_addressable,
+				dc_target->streams[0]->timing.h_total,
+				dc_target->streams[0]->timing.v_total,
+				dc_target->streams[0]->timing.pix_clk_khz);
 	}
 
 	program_timing_sync(core_dc, context);
@@ -831,6 +838,9 @@ bool dc_commit_surfaces_to_target(
 	int current_enabled_surface_count = 0;
 	int new_enabled_surface_count = 0;
 	bool is_mpo_turning_on = false;
+
+	if (core_dc->current_context.target_count == 0)
+		return false;
 
 	context = dm_alloc(sizeof(struct validate_context));
 
@@ -923,10 +933,14 @@ bool dc_commit_surfaces_to_target(
 			dal_logger_write(core_dc->ctx->logger,
 						LOG_MAJOR_INTERFACE_TRACE,
 						LOG_MINOR_COMPONENT_DC,
-						"Pipe:%d 0x%x: src: %d, %d, %d,"
+					   "Pipe:%d 0x%x: addr hi:0x%x, "
+					   "addr low:0x%x, "
+					   "src: %d, %d, %d,"
 						" %d; dst: %d, %d, %d, %d;\n",
 						pipe_ctx->pipe_idx,
 						dc_surface,
+					    dc_surface->address.grph.addr.high_part,
+					    dc_surface->address.grph.addr.low_part,
 						dc_surface->src_rect.x,
 						dc_surface->src_rect.y,
 						dc_surface->src_rect.width,
@@ -957,6 +971,7 @@ bool dc_commit_surfaces_to_target(
 		pplib_apply_display_requirements(core_dc, context,
 						&context->pp_display_cfg);
 	}
+
 
 	resource_validate_ctx_destruct(&(core_dc->current_context));
 	core_dc->current_context = *context;
@@ -1132,6 +1147,13 @@ void dc_set_power_state(
 		dc_commit_targets(dc, NULL, 0);
 
 		core_dc->hwss.power_down(core_dc);
+
+		/* Zero out the current context so that on resume we start with
+		 * clean state, and dc hw programming optimizations will not
+		 * cause any trouble.
+		 */
+		memset(&core_dc->current_context, 0,
+				sizeof(core_dc->current_context));
 		break;
 	}
 

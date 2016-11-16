@@ -215,7 +215,6 @@ static bool dce110_pipe_control_lock(
 {
 	uint32_t addr = HW_REG_BLND(mmBLND_V_UPDATE_LOCK, controller_idx);
 	uint32_t value = dm_read_reg(ctx, addr);
-	bool need_to_wait = false;
 
 	if (control_mask & PIPE_LOCK_CONTROL_GRAPHICS)
 		set_reg_field_value(
@@ -244,7 +243,6 @@ static bool dce110_pipe_control_lock(
 			lock,
 			BLND_V_UPDATE_LOCK,
 			BLND_BLND_V_UPDATE_LOCK);
-		need_to_wait = true;
 	}
 
 	if (control_mask & PIPE_LOCK_CONTROL_MODE)
@@ -255,97 +253,6 @@ static bool dce110_pipe_control_lock(
 			BLND_V_UPDATE_LOCK_MODE);
 
 	dm_write_reg(ctx, addr, value);
-
-	need_to_wait = false;/*todo: mpo optimization remove*/
-	if (!lock && need_to_wait) {
-		uint8_t counter = 0;
-		const uint8_t counter_limit = 100;
-		const uint16_t delay_us = 1000;
-
-		uint8_t pipe_pending;
-
-		addr = HW_REG_BLND(mmBLND_REG_UPDATE_STATUS,
-				controller_idx);
-
-		while (counter < counter_limit) {
-			value = dm_read_reg(ctx, addr);
-
-			pipe_pending = 0;
-
-			if (control_mask & PIPE_LOCK_CONTROL_BLENDER) {
-				pipe_pending |=
-					get_reg_field_value(
-						value,
-						BLND_REG_UPDATE_STATUS,
-						BLND_BLNDC_UPDATE_PENDING);
-				pipe_pending |= get_reg_field_value(
-					value,
-					BLND_REG_UPDATE_STATUS,
-					BLND_BLNDO_UPDATE_PENDING);
-			}
-
-			if (control_mask & PIPE_LOCK_CONTROL_SCL) {
-				pipe_pending |=
-					get_reg_field_value(
-						value,
-						BLND_REG_UPDATE_STATUS,
-						SCL_BLNDC_UPDATE_PENDING);
-				pipe_pending |=
-					get_reg_field_value(
-						value,
-						BLND_REG_UPDATE_STATUS,
-						SCL_BLNDO_UPDATE_PENDING);
-			}
-			if (control_mask & PIPE_LOCK_CONTROL_GRAPHICS) {
-				pipe_pending |=
-					get_reg_field_value(
-						value,
-						BLND_REG_UPDATE_STATUS,
-						DCP_BLNDC_GRPH_UPDATE_PENDING);
-				pipe_pending |=
-					get_reg_field_value(
-						value,
-						BLND_REG_UPDATE_STATUS,
-						DCP_BLNDO_GRPH_UPDATE_PENDING);
-			}
-			if (control_mask & PIPE_LOCK_CONTROL_SURFACE) {
-				pipe_pending |= get_reg_field_value(
-					value,
-					BLND_REG_UPDATE_STATUS,
-					DCP_BLNDC_GRPH_SURF_UPDATE_PENDING);
-				pipe_pending |= get_reg_field_value(
-					value,
-					BLND_REG_UPDATE_STATUS,
-					DCP_BLNDO_GRPH_SURF_UPDATE_PENDING);
-			}
-
-			if (pipe_pending == 0)
-				break;
-
-			counter++;
-			udelay(delay_us);
-		}
-
-		if (counter == counter_limit) {
-			dal_logger_write(
-				ctx->logger,
-				LOG_MAJOR_WARNING,
-				LOG_MINOR_COMPONENT_CONTROLLER,
-				"%s: wait for update exceeded (wait %d us)\n",
-				__func__,
-				counter * delay_us);
-			dal_logger_write(
-				ctx->logger,
-				LOG_MAJOR_WARNING,
-				LOG_MINOR_COMPONENT_CONTROLLER,
-				"%s: control %d, remain value %x\n",
-				__func__,
-				control_mask,
-				value);
-		} else {
-			/* OK. */
-		}
-	}
 
 	if (!lock && (control_mask & PIPE_LOCK_CONTROL_BLENDER))
 		trigger_write_crtc_h_blank_start_end(ctx, controller_idx);
@@ -512,7 +419,6 @@ static bool set_gamma_ramp(
 {
 	struct ipp_prescale_params *prescale_params;
 	struct pwl_params *regamma_params;
-	struct temp_params *temp_params;
 	bool result = false;
 
 	prescale_params = dm_alloc(sizeof(struct ipp_prescale_params));
@@ -524,11 +430,6 @@ static bool set_gamma_ramp(
 	if (regamma_params == NULL)
 		goto regamma_alloc_fail;
 
-	temp_params = dm_alloc(sizeof(struct temp_params));
-
-	if (temp_params == NULL)
-		goto temp_alloc_fail;
-
 	regamma_params->hw_points_num = GAMMA_HW_POINTS_NUM;
 
 	opp->funcs->opp_power_on_regamma_lut(opp, true);
@@ -538,9 +439,8 @@ static bool set_gamma_ramp(
 		ipp->funcs->ipp_program_prescale(ipp, prescale_params);
 	}
 
-	if (ramp) {
-		calculate_regamma_params(regamma_params,
-				temp_params, ramp, surface);
+	if (ramp && calculate_regamma_params(regamma_params, ramp, surface)) {
+
 		opp->funcs->opp_program_regamma_pwl(opp, regamma_params);
 		if (ipp)
 			ipp->funcs->ipp_set_degamma(ipp, IPP_DEGAMMA_MODE_HW_sRGB);
@@ -553,12 +453,10 @@ static bool set_gamma_ramp(
 
 	opp->funcs->opp_power_on_regamma_lut(opp, false);
 
-	dm_free(temp_params);
-
 	result = true;
 
-temp_alloc_fail:
 	dm_free(regamma_params);
+
 regamma_alloc_fail:
 	dm_free(prescale_params);
 prescale_alloc_fail:
@@ -774,12 +672,18 @@ static enum dc_status apply_single_controller_ctx_to_hw(
 		struct validate_context *context,
 		struct core_dc *dc)
 {
+	int i;
 	struct core_stream *stream = pipe_ctx->stream;
-	struct pipe_ctx *old_pipe_ctx =
-		&dc->current_context.res_ctx.pipe_ctx[pipe_ctx->pipe_idx];
 	bool timing_changed = context->res_ctx.pipe_ctx[pipe_ctx->pipe_idx]
 							.flags.timing_changed;
 	enum dc_color_space color_space;
+
+	struct pipe_ctx *pipe_ctx_old = NULL;
+
+	for (i = 0; i < MAX_PIPES; i++) {
+		if (dc->current_context.res_ctx.pipe_ctx[i].stream == pipe_ctx->stream)
+			pipe_ctx_old = &dc->current_context.res_ctx.pipe_ctx[i];
+	}
 
 	if (timing_changed) {
 		/* Must blank CRTC after disabling power gating and before any
@@ -787,14 +691,11 @@ static enum dc_status apply_single_controller_ctx_to_hw(
 		 */
 		pipe_ctx->tg->funcs->set_blank(pipe_ctx->tg, true);
 
-		/*
-		 * only disable stream in case it was ever enabled
-		 */
-		if (old_pipe_ctx->stream) {
-			core_link_disable_stream(old_pipe_ctx);
-
-			ASSERT(old_pipe_ctx->clock_source);
-			resource_unreference_clock_source(&dc->current_context.res_ctx, old_pipe_ctx->clock_source);
+		if (pipe_ctx_old) {
+			core_link_disable_stream(pipe_ctx);
+			resource_unreference_clock_source(
+						&dc->current_context.res_ctx,
+						pipe_ctx_old->clock_source);
 		}
 
 		/*TODO: AUTO check if timing changed*/
@@ -874,14 +775,6 @@ static enum dc_status apply_single_controller_ctx_to_hw(
 			return DC_ERROR_UNEXPECTED;
 		}
 	}
-
-	/* Setup audio rate clock source */
-	if (pipe_ctx->audio != NULL)
-		dal_audio_setup_audio_wall_dto(
-				pipe_ctx->audio,
-				pipe_ctx->signal,
-				&pipe_ctx->audio_output.crtc_info,
-				&pipe_ctx->audio_output.pll_info);
 
 	/* program blank color */
 	color_space = get_output_color_space(&stream->public.timing);
@@ -1230,6 +1123,43 @@ static void switch_dp_clock_sources(
  * Public functions
  ******************************************************************************/
 
+
+static void reset_single_pipe_hw_ctx(
+		const struct core_dc *dc,
+		struct pipe_ctx *pipe_ctx,
+		struct validate_context *context)
+{
+	struct dc_bios *dcb;
+
+	if (pipe_ctx->pipe_idx == DCE110_UNDERLAY_IDX)
+		return;
+
+	dcb = dal_adapter_service_get_bios_parser(
+			context->res_ctx.pool.adapter_srv);
+	if (pipe_ctx->audio) {
+		dal_audio_disable_output(pipe_ctx->audio,
+				pipe_ctx->stream_enc->id,
+				pipe_ctx->signal);
+		pipe_ctx->audio = NULL;
+	}
+
+	core_link_disable_stream(pipe_ctx);
+	if (!pipe_ctx->tg->funcs->set_blank(pipe_ctx->tg, true)) {
+		dm_error("DC: failed to blank crtc!\n");
+		BREAK_TO_DEBUGGER();
+	}
+	pipe_ctx->tg->funcs->disable_crtc(pipe_ctx->tg);
+	pipe_ctx->mi->funcs->free_mem_input(
+				pipe_ctx->mi, context->target_count);
+	pipe_ctx->xfm->funcs->transform_set_scaler_bypass(pipe_ctx->xfm);
+	resource_unreference_clock_source(&context->res_ctx, pipe_ctx->clock_source);
+	dc->hwss.enable_display_power_gating(
+		pipe_ctx->stream->ctx, pipe_ctx->pipe_idx, dcb,
+			PIPE_GATING_CONTROL_ENABLE);
+
+	pipe_ctx->stream = NULL;
+}
+
 /*TODO: const validate_context*/
 static enum dc_status apply_ctx_to_hw(
 		struct core_dc *dc,
@@ -1238,6 +1168,27 @@ static enum dc_status apply_ctx_to_hw(
 	enum dc_status status;
 	uint8_t i;
 
+	/* Reset old context */
+	/* look up the targets that have been removed since last commit */
+	for (i = 0; i < MAX_PIPES; i++) {
+		struct pipe_ctx *pipe_ctx_old =
+			&dc->current_context.res_ctx.pipe_ctx[i];
+		struct pipe_ctx *pipe_ctx = &context->res_ctx.pipe_ctx[i];
+
+		/* Note: We need to disable output if clock sources change,
+		 * since bios does optimization and doesn't apply if changing
+		 * PHY when not already disabled.
+		 */
+		if (pipe_ctx_old->stream && !pipe_ctx->stream)
+			reset_single_pipe_hw_ctx(
+				dc, pipe_ctx_old, &dc->current_context);
+	}
+
+	/* Skip applying if no targets */
+	if (context->target_count <= 0)
+		return DC_OK;
+
+	/* Apply new context */
 	update_bios_scratch_critical_state(context->res_ctx.pool.adapter_srv,
 			true);
 
@@ -1278,6 +1229,33 @@ static enum dc_status apply_ctx_to_hw(
 		if (DC_OK != status)
 			return status;
 	}
+
+	/* Setup audio rate clock source */
+	/* Issue:
+	 * Audio lag happened on DP monitor when unplug a HDMI monitor
+	 *
+	 * Cause:
+	 * In case of DP and HDMI connected or HDMI only, DCCG_AUDIO_DTO_SEL
+	 * is set to either dto0 or dto1, audio should work fine.
+	 * In case of DP connected only, DCCG_AUDIO_DTO_SEL should be dto1,
+	 * set to dto0 will cause audio lag.
+	 *
+	 * Solution:
+	 * Not optimized audio wall dto setup. When mode set, iterate pipe_ctx,
+	 * find first available pipe with audio, setup audio wall DTO per topology
+	 * instead of per pipe.
+	 */
+	for (i = 0; i < MAX_PIPES; i++) {
+		if (context->res_ctx.pipe_ctx[i].audio != NULL) {
+			dal_audio_setup_audio_wall_dto(
+					context->res_ctx.pipe_ctx[i].audio,
+					context->res_ctx.pipe_ctx[i].signal,
+					&context->res_ctx.pipe_ctx[i].audio_output.crtc_info,
+					&context->res_ctx.pipe_ctx[i].audio_output.pll_info);
+			break;
+		}
+	}
+
 	dc->hwss.set_displaymarks(dc, context);
 
 	update_bios_scratch_critical_state(context->res_ctx.pool.adapter_srv,
@@ -1417,7 +1395,7 @@ static void update_plane_addrs(struct core_dc *dc, struct resource_context *res_
 			PIPE_LOCK_CONTROL_SURFACE,
 			true);
 
-		pipe_ctx->mi->funcs->mem_input_program_surface_flip_and_addr(
+			pipe_ctx->mi->funcs->mem_input_program_surface_flip_and_addr(
 			pipe_ctx->mi,
 			&surface->public.address,
 			surface->public.flip_immediate);
@@ -1433,7 +1411,6 @@ static void update_plane_addrs(struct core_dc *dc, struct resource_context *res_
 					PIPE_LOCK_CONTROL_SURFACE,
 					false);
 
-
 		if (surface->public.flip_immediate)
 			pipe_ctx->mi->funcs->wait_for_no_surface_update_pending(pipe_ctx->mi);
 
@@ -1444,59 +1421,6 @@ static void update_plane_addrs(struct core_dc *dc, struct resource_context *res_
 	}
 }
 
-static void reset_single_pipe_hw_ctx(
-		const struct core_dc *dc,
-		struct pipe_ctx *pipe_ctx,
-		struct validate_context *context)
-{
-	struct dc_bios *dcb;
-
-	if (pipe_ctx->pipe_idx == DCE110_UNDERLAY_IDX)
-		return;
-
-	dcb = dal_adapter_service_get_bios_parser(
-			context->res_ctx.pool.adapter_srv);
-	if (pipe_ctx->audio) {
-		dal_audio_disable_output(pipe_ctx->audio,
-				pipe_ctx->stream_enc->id,
-				pipe_ctx->signal);
-		pipe_ctx->audio = NULL;
-	}
-
-	core_link_disable_stream(pipe_ctx);
-	if (!pipe_ctx->tg->funcs->set_blank(pipe_ctx->tg, true)) {
-		dm_error("DC: failed to blank crtc!\n");
-		BREAK_TO_DEBUGGER();
-	}
-	pipe_ctx->tg->funcs->disable_crtc(pipe_ctx->tg);
-	pipe_ctx->mi->funcs->free_mem_input(
-				pipe_ctx->mi, context->target_count);
-	pipe_ctx->xfm->funcs->transform_set_scaler_bypass(pipe_ctx->xfm);
-	resource_unreference_clock_source(&context->res_ctx, pipe_ctx->clock_source);
-	dc->hwss.enable_display_power_gating(
-		pipe_ctx->stream->ctx, pipe_ctx->pipe_idx, dcb,
-			PIPE_GATING_CONTROL_ENABLE);
-
-	pipe_ctx->stream = NULL;
-}
-
-static void reset_hw_ctx(
-		struct core_dc *dc,
-		struct validate_context *new_context)
-{
-	uint8_t i;
-
-	/* look up the targets that have been removed since last commit */
-	for (i = 0; i < MAX_PIPES; i++) {
-		struct pipe_ctx *pipe_ctx_old =
-			&dc->current_context.res_ctx.pipe_ctx[i];
-		struct pipe_ctx *pipe_ctx = &new_context->res_ctx.pipe_ctx[i];
-
-		if (pipe_ctx_old->stream && !pipe_ctx->stream)
-			reset_single_pipe_hw_ctx(
-				dc, pipe_ctx_old, &dc->current_context);
-	}
-}
 
 static void power_down(struct core_dc *dc)
 {
@@ -1644,13 +1568,11 @@ static void init_hw(struct core_dc *dc)
 		if (dal_audio_power_up(audio) != AUDIO_RESULT_OK)
 			dm_error("Failed audio power up!\n");
 	}
-
 }
 
 static const struct hw_sequencer_funcs dce110_funcs = {
 	.init_hw = init_hw,
 	.apply_ctx_to_hw = apply_ctx_to_hw,
-	.reset_hw_ctx = reset_hw_ctx,
 	.set_plane_config = set_plane_config,
 	.update_plane_addrs = update_plane_addrs,
 	.set_gamma_correction = set_gamma_ramp,

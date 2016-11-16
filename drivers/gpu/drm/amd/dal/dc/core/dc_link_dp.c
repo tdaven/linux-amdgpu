@@ -1009,35 +1009,58 @@ bool perform_link_training(
 	switch (lt_settings.link_settings.link_rate) {
 
 	case LINK_RATE_LOW:
-		link_rate = "Low";
+		link_rate = "RBR";
 		break;
 	case LINK_RATE_HIGH:
-		link_rate = "High";
+		link_rate = "HBR";
 		break;
 	case LINK_RATE_HIGH2:
-		link_rate = "High2";
+		link_rate = "HBR2";
 		break;
 	case LINK_RATE_RBR2:
 		link_rate = "RBR2";
 		break;
 	case LINK_RATE_HIGH3:
-		link_rate = "High3";
+		link_rate = "HBR3";
 		break;
 	default:
 		break;
 	}
 
-	dal_logger_write(link->ctx->logger,
-		LOG_MAJOR_MST,
-		LOG_MINOR_MST_PROGRAMMING,
-		"Link training for %d lanes at %s rate %s with PE %d, VS %d\n",
-		lt_settings.link_settings.lane_count,
-		link_rate,
-		status ? "succeeded" : "failed",
-		lt_settings.lane_settings[0].PRE_EMPHASIS,
-		lt_settings.lane_settings[0].VOLTAGE_SWING);
+	/* Connectivity log: link training */
+	CONN_MSG_LT(link, "%sx%d %s VS=%d, PE=%d",
+			link_rate,
+			lt_settings.link_settings.lane_count,
+			status ? "pass" : "fail",
+			lt_settings.lane_settings[0].VOLTAGE_SWING,
+			lt_settings.lane_settings[0].PRE_EMPHASIS);
 
 	return status;
+}
+
+
+bool perform_link_training_with_retries(
+	struct core_link *link,
+	const struct dc_link_settings *link_setting,
+	bool skip_video_pattern,
+	unsigned int retires)
+{
+	uint8_t j;
+	uint8_t delay_between_retries = 10;
+
+	for (j = 0; j < retires; ++j) {
+
+		if (perform_link_training(
+				link,
+				link_setting,
+				skip_video_pattern))
+			return true;
+
+		msleep(delay_between_retries);
+		delay_between_retries += 10;
+	}
+
+	return false;
 }
 
 /*TODO add more check to see if link support request link configuration */
@@ -1150,23 +1173,11 @@ bool dp_hbr_verify_link_cap(
 		if (skip_link_training)
 			success = true;
 		else {
-			uint8_t num_retries = 3;
-			uint8_t j;
-			uint8_t delay_between_retries = 10;
-
-			for (j = 0; j < num_retries; ++j) {
-				success = perform_link_training(
-					link,
-					cur,
-					skip_video_pattern);
-
-				if (success)
-					break;
-
-				msleep(delay_between_retries);
-
-				delay_between_retries += 10;
-			}
+			success = perform_link_training_with_retries(
+								link,
+								cur,
+								skip_video_pattern,
+								3);
 		}
 
 		if (success)
@@ -1527,8 +1538,15 @@ bool dc_link_handle_hpd_rx_irq(const struct dc_link *dc_link)
 	if (hpd_rx_irq_check_link_loss_status(
 		link,
 		&hpd_irq_dpcd_data)) {
-		perform_link_training(link,
-			&link->public.cur_link_settings, true);
+		/* Connectivity log: link loss */
+		CONN_DATA_LINK_LOSS(link,
+							hpd_irq_dpcd_data.raw,
+							sizeof(hpd_irq_dpcd_data),
+							"Status: ");
+
+		perform_link_training_with_retries(link,
+			&link->public.cur_link_settings, true, 3);
+
 		status = false;
 	}
 
@@ -1641,15 +1659,48 @@ static void get_active_converter_info(
 			break;
 		}
 	}
-	ddc_service_set_dongle_type(link->ddc,
-			link->dpcd_caps.dongle_type);
+
+	ddc_service_set_dongle_type(link->ddc, link->dpcd_caps.dongle_type);
+
+	{
+		struct dp_device_vendor_id dp_id;
+
+		/* read IEEE branch device id */
+		core_link_read_dpcd(
+			link,
+			DPCD_ADDRESS_BRANCH_DEVICE_ID_START,
+			(uint8_t *)&dp_id,
+			sizeof(dp_id));
+
+		link->dpcd_caps.branch_dev_id =
+			(dp_id.ieee_oui[0] << 16) +
+			(dp_id.ieee_oui[1] << 8) +
+			dp_id.ieee_oui[2];
+
+		memmove(
+			link->dpcd_caps.branch_dev_name,
+			dp_id.ieee_device_id,
+			sizeof(dp_id.ieee_device_id));
+	}
+
+	{
+		struct dp_sink_hw_fw_revision dp_hw_fw_revision;
+
+		core_link_read_dpcd(
+			link,
+			DPCD_ADDRESS_BRANCH_REVISION_START,
+			(uint8_t *)&dp_hw_fw_revision,
+			sizeof(dp_hw_fw_revision));
+
+		link->dpcd_caps.branch_hw_revision =
+			dp_hw_fw_revision.ieee_hw_rev;
+	}
 }
 
 static void dp_wa_power_up_0010FA(struct core_link *link, uint8_t *dpcd_data,
 		int length)
 {
 	int retry = 0;
-	struct dp_device_vendor_id dp_id;
 	union dp_downstream_port_present ds_port = { 0 };
 
 	if (!link->dpcd_caps.dpcd_rev.raw) {
@@ -1665,16 +1716,6 @@ static void dp_wa_power_up_0010FA(struct core_link *link, uint8_t *dpcd_data,
 
 	ds_port.byte = dpcd_data[DPCD_ADDRESS_DOWNSTREAM_PORT_PRESENT -
 				 DPCD_ADDRESS_DPCD_REV];
-
-	get_active_converter_info(ds_port.byte, link);
-
-	/* read IEEE branch device id */
-	core_link_read_dpcd(link, DPCD_ADDRESS_BRANCH_DEVICE_ID_START,
-			(uint8_t *)&dp_id, sizeof(dp_id));
-	link->dpcd_caps.branch_dev_id =
-			(dp_id.ieee_oui[0] << 16) +
-			(dp_id.ieee_oui[1] << 8) +
-			dp_id.ieee_oui[2];
 
 	if (link->dpcd_caps.dongle_type == DISPLAY_DONGLE_DP_VGA_CONVERTER) {
 		switch (link->dpcd_caps.branch_dev_id) {
@@ -1781,6 +1822,10 @@ static void retrieve_link_cap(struct core_link *link)
 			(uint8_t *)(&link->edp_revision),
 			sizeof(link->edp_revision));
 	}
+
+	/* Connectivity log: detection */
+	CONN_DATA_DETECT(link, dpcd_data, sizeof(dpcd_data), "Rx Caps: ");
+
 	/* TODO: Confirm if need retrieve_psr_link_cap */
 }
 

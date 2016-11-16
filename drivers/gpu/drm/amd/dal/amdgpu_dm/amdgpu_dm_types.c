@@ -58,7 +58,6 @@ struct dm_connector_state {
 	container_of((x), struct dm_connector_state, base)
 
 #define AMDGPU_CRTC_MODE_PRIVATE_FLAGS_GAMMASET 1
-#define MAX_TARGET_NUM 6
 
 void amdgpu_dm_encoder_destroy(struct drm_encoder *encoder)
 {
@@ -82,8 +81,8 @@ static void dm_set_cursor(
 
 	attributes.address.high_part = upper_32_bits(gpu_addr);
 	attributes.address.low_part  = lower_32_bits(gpu_addr);
-	attributes.width             = width-1;
-	attributes.height            = height-1;
+	attributes.width             = width;
+	attributes.height            = height;
 	attributes.x_hot             = 0;
 	attributes.y_hot             = 0;
 	attributes.color_format      = CURSOR_MODE_COLOR_PRE_MULTIPLIED_ALPHA;
@@ -624,7 +623,8 @@ static void calculate_stream_scaling_settings(
 static void dm_dc_surface_commit(
 		struct dc *dc,
 		struct drm_crtc *crtc,
-		struct dm_connector_state *dm_state)
+		struct dm_connector_state *dm_state
+		)
 {
 	struct dc_surface *dc_surface;
 	const struct amdgpu_crtc *acrtc = to_amdgpu_crtc(crtc);
@@ -757,6 +757,11 @@ static void dc_timing_from_drm_display_mode(
 		mode_in->crtc_vsync_end - mode_in->crtc_vsync_start;
 	timing_out->pix_clk_khz = mode_in->crtc_clock;
 	timing_out->aspect_ratio = get_aspect_ratio(mode_in);
+	if (mode_in->flags & DRM_MODE_FLAG_PHSYNC)
+		timing_out->flags.HSYNC_POSITIVE_POLARITY = 1;
+	if (mode_in->flags & DRM_MODE_FLAG_PVSYNC)
+		timing_out->flags.VSYNC_POSITIVE_POLARITY = 1;
+
 }
 
 static void fill_audio_info(
@@ -806,9 +811,6 @@ static void fill_audio_info(
 	/* TODO: For DP, video and audio latency should be calculated from DPCD caps */
 
 }
-
-/*TODO: move these defines elsewhere*/
-#define DAL_MAX_CONTROLLERS 4
 
 static void copy_crtc_timing_for_drm_display_mode(
 		const struct drm_display_mode *src_mode,
@@ -1014,10 +1016,12 @@ int amdgpu_dm_connector_atomic_set_property(
 	struct dm_connector_state *dm_new_state =
 		to_dm_connector_state(connector_state);
 
+	struct drm_crtc_state *new_crtc_state;
+	struct drm_crtc *crtc;
+	int i;
+	int ret = -EINVAL;
+
 	if (property == dev->mode_config.scaling_mode_property) {
-		struct drm_crtc_state *new_crtc_state;
-		struct drm_crtc *crtc;
-		int i;
 		enum amdgpu_rmx_type rmx_type;
 
 		switch (val) {
@@ -1040,79 +1044,45 @@ int amdgpu_dm_connector_atomic_set_property(
 			return 0;
 
 		dm_new_state->scaling = rmx_type;
-
-		for_each_crtc_in_state(
-			connector_state->state,
-			crtc,
-			new_crtc_state,
-			i) {
-
-			if (crtc == connector_state->crtc) {
-				struct drm_plane_state *plane_state;
-
-				new_crtc_state->mode_changed = true;
-
-				/*
-				 * Bit of magic done here. We need to ensure
-				 * that planes get update after mode is set.
-				 * So, we need to add primary plane to state,
-				 * and this way atomic_update would be called
-				 * for it
-				 */
-				plane_state =
-					drm_atomic_get_plane_state(
-						connector_state->state,
-						crtc->primary);
-
-				if (!plane_state)
-					return -EINVAL;
-			}
-		}
-
-		return 0;
+		ret = 0;
 	} else if (property == adev->mode_info.underscan_hborder_property) {
 		dm_new_state->underscan_hborder = val;
-		return 0;
+		ret = 0;
 	} else if (property == adev->mode_info.underscan_vborder_property) {
 		dm_new_state->underscan_vborder = val;
-		return 0;
+		ret = 0;
 	} else if (property == adev->mode_info.underscan_property) {
-		struct drm_crtc_state *new_crtc_state;
-		struct drm_crtc *crtc;
-		int i;
-
 		dm_new_state->underscan_enable = val;
-
-		for_each_crtc_in_state(
-			connector_state->state,
-			crtc,
-			new_crtc_state,
-			i) {
-
-			if (crtc == connector_state->crtc) {
-				struct drm_plane_state *plane_state;
-
-				/*
-				 * Bit of magic done here. We need to ensure
-				 * that planes get update after mode is set.
-				 * So, we need to add primary plane to state,
-				 * and this way atomic_update would be called
-				 * for it
-				 */
-				plane_state =
-					drm_atomic_get_plane_state(
-						connector_state->state,
-						crtc->primary);
-
-				if (!plane_state)
-					return -EINVAL;
-			}
-		}
-
-		return 0;
+		ret = 0;
 	}
 
-	return -EINVAL;
+	for_each_crtc_in_state(
+		connector_state->state,
+		crtc,
+		new_crtc_state,
+		i) {
+
+		if (crtc == connector_state->crtc) {
+			struct drm_plane_state *plane_state;
+
+			/*
+			 * Bit of magic done here. We need to ensure
+			 * that planes get update after mode is set.
+			 * So, we need to add primary plane to state,
+			 * and this way atomic_update would be called
+			 * for it
+			 */
+			plane_state =
+				drm_atomic_get_plane_state(
+					connector_state->state,
+					crtc->primary);
+
+			if (!plane_state)
+				return -EINVAL;
+		}
+	}
+
+	return ret;
 }
 
 void amdgpu_dm_connector_destroy(struct drm_connector *connector)
@@ -1121,6 +1091,7 @@ void amdgpu_dm_connector_destroy(struct drm_connector *connector)
 	const struct dc_link *link = aconnector->dc_link;
 	struct amdgpu_device *adev = connector->dev->dev_private;
 	struct amdgpu_display_manager *dm = &adev->dm;
+
 #if defined(CONFIG_BACKLIGHT_CLASS_DEVICE) ||\
 	defined(CONFIG_BACKLIGHT_CLASS_DEVICE_MODULE)
 
@@ -2052,6 +2023,38 @@ static enum dm_commit_action get_dm_commit_action(struct drm_crtc_state *state)
 	}
 }
 
+
+typedef bool (*predicate)(struct amdgpu_crtc *acrtc);
+
+static void wait_while_pflip_status(struct amdgpu_device *adev,
+		struct amdgpu_crtc *acrtc, predicate f) {
+	int count = 0;
+	while (f(acrtc)) {
+		/* Spin Wait*/
+		msleep(1);
+		count++;
+		if (count == 1000) {
+			DRM_ERROR("%s - crtc:%d[%p], pflip_stat:%d, probable hang!\n",
+										__func__, acrtc->crtc_id,
+										acrtc,
+										acrtc->pflip_status);
+			BUG_ON(1);
+		}
+	}
+
+	DRM_DEBUG_DRIVER("%s - Finished waiting for:%d msec, crtc:%d[%p], pflip_stat:%d \n",
+											__func__,
+											count,
+											acrtc->crtc_id,
+											acrtc,
+											acrtc->pflip_status);
+}
+
+static bool pflip_in_progress_predicate(struct amdgpu_crtc *acrtc)
+{
+	return acrtc->pflip_status != AMDGPU_FLIP_NONE;
+}
+
 static void manage_dm_interrupts(
 	struct amdgpu_device *adev,
 	struct amdgpu_crtc *acrtc,
@@ -2073,39 +2076,21 @@ static void manage_dm_interrupts(
 			&adev->pageflip_irq,
 			irq_type);
 	} else {
-		unsigned long flags;
+		wait_while_pflip_status(adev, acrtc,
+				pflip_in_progress_predicate);
+
 		amdgpu_irq_put(
 			adev,
 			&adev->pageflip_irq,
 			irq_type);
 		drm_crtc_vblank_off(&acrtc->base);
-
-		/*
-		 * should be called here, to guarantee no works left in queue.
-		 * As this function sleeps it was bug to call it inside the
-		 * amdgpu_dm_flip_cleanup function under locked event_lock
-		 */
-		if (acrtc->pflip_works) {
-			flush_work(&acrtc->pflip_works->flip_work);
-			flush_work(&acrtc->pflip_works->unpin_work);
-		}
-
-		/*
-		 * TODO: once Vitaly's change to adjust locking in
-		 * page_flip_work_func is submitted to base driver move
-		 * lock and check to amdgpu_dm_flip_cleanup function
-		 */
-
-		spin_lock_irqsave(&adev->ddev->event_lock, flags);
-		if (acrtc->pflip_status != AMDGPU_FLIP_NONE) {
-			/*
-			 * this is the case when on reset, last pending pflip
-			 * interrupt did not not occur. Clean-up
-			 */
-			amdgpu_dm_flip_cleanup(adev, acrtc);
-		}
-		spin_unlock_irqrestore(&adev->ddev->event_lock, flags);
 	}
+}
+
+
+static bool pflip_pending_predicate(struct amdgpu_crtc *acrtc)
+{
+	return acrtc->pflip_status == AMDGPU_FLIP_PENDING;
 }
 
 int amdgpu_dm_atomic_commit(
@@ -2117,15 +2102,15 @@ int amdgpu_dm_atomic_commit(
 	struct amdgpu_display_manager *dm = &adev->dm;
 	struct drm_plane *plane;
 	struct drm_plane_state *old_plane_state;
-	uint32_t i, j;
+	uint32_t i;
 	int32_t ret;
 	uint32_t commit_targets_count = 0;
 	uint32_t new_crtcs_count = 0;
 	struct drm_crtc *crtc;
 	struct drm_crtc_state *old_crtc_state;
 
-	struct dc_target *commit_targets[DAL_MAX_CONTROLLERS];
-	struct amdgpu_crtc *new_crtcs[DAL_MAX_CONTROLLERS];
+	struct dc_target *commit_targets[MAX_TARGETS];
+	struct amdgpu_crtc *new_crtcs[MAX_TARGETS];
 
 	/* In this step all new fb would be pinned */
 
@@ -2159,21 +2144,14 @@ int amdgpu_dm_atomic_commit(
 		struct amdgpu_connector *aconnector = NULL;
 		enum dm_commit_action action;
 		struct drm_crtc_state *new_state = crtc->state;
-		struct drm_connector *connector;
-		struct drm_connector_state *old_con_state;
 
 		acrtc = to_amdgpu_crtc(crtc);
 
-		for_each_connector_in_state(
-			state,
-			connector,
-			old_con_state,
-			j) {
-			if (connector->state->crtc == crtc) {
-				aconnector = to_amdgpu_connector(connector);
-				break;
-			}
-		}
+		aconnector =
+			amdgpu_dm_find_first_crct_matching_connector(
+				state,
+				crtc,
+				false);
 
 		/* handles headless hotplug case, updating new_state and
 		 * aconnector as needed
@@ -2189,7 +2167,7 @@ int amdgpu_dm_atomic_commit(
 					aconnector,
 					&crtc->state->mode);
 
-			DRM_INFO("Atomic commit: SET.\n");
+			DRM_INFO("Atomic commit: SET crtc id %d: [%p]\n", acrtc->crtc_id, acrtc);
 
 			if (!new_target) {
 				/*
@@ -2230,6 +2208,7 @@ int amdgpu_dm_atomic_commit(
 
 			acrtc->target = new_target;
 			acrtc->enabled = true;
+			acrtc->hw_mode = crtc->state->mode;
 
 			break;
 		}
@@ -2240,7 +2219,7 @@ int amdgpu_dm_atomic_commit(
 
 		case DM_COMMIT_ACTION_DPMS_OFF:
 		case DM_COMMIT_ACTION_RESET:
-			DRM_INFO("Atomic commit: RESET.\n");
+			DRM_INFO("Atomic commit: RESET. crtc id %d:[%p]\n", acrtc->crtc_id, acrtc);
 			/* i.e. reset mode */
 			if (acrtc->target) {
 				manage_dm_interrupts(adev, acrtc, false);
@@ -2272,6 +2251,7 @@ int amdgpu_dm_atomic_commit(
 	for_each_plane_in_state(state, plane, old_plane_state, i) {
 		struct drm_plane_state *plane_state = plane->state;
 		struct drm_crtc *crtc = plane_state->crtc;
+		struct amdgpu_crtc *acrtc = to_amdgpu_crtc(crtc);
 		struct drm_framebuffer *fb = plane_state->fb;
 		struct drm_connector *connector;
 		struct dm_connector_state *dm_state = NULL;
@@ -2315,6 +2295,14 @@ int amdgpu_dm_atomic_commit(
 			 */
 			if (!dm_state)
 				continue;
+
+			/*
+			 * if flip is pending (ie, still waiting for fence to return
+			 * before address is submitted) here, we cannot commit_surface
+			 * as commit_surface will pre-maturely write out the future
+			 * address. wait until flip is submitted before proceeding.
+			 */
+			wait_while_pflip_status(adev, acrtc, pflip_pending_predicate);
 
 			dm_dc_surface_commit(
 				dm->dc,
@@ -2374,6 +2362,7 @@ void dm_restore_drm_connector_state(struct drm_device *dev, struct drm_connector
 	struct amdgpu_crtc *disconnected_acrtc = to_amdgpu_crtc(connector->state->crtc);
 	const struct dc_sink *sink;
 	struct dc_target *commit_targets[6];
+	struct dc_target *current_target;
 	uint32_t commit_targets_count = 0;
 
 	if (!aconnector->dc_sink || !connector->state || !connector->state->crtc)
@@ -2399,8 +2388,10 @@ void dm_restore_drm_connector_state(struct drm_device *dev, struct drm_connector
 		 * should be changed
 		 */
 		manage_dm_interrupts(adev, disconnected_acrtc, false);
+
 		/* this is the update mode case */
-		dc_target_release(disconnected_acrtc->target);
+
+		current_target = disconnected_acrtc->target;
 
 		disconnected_acrtc->target = new_target;
 		disconnected_acrtc->enabled = true;
@@ -2418,7 +2409,16 @@ void dm_restore_drm_connector_state(struct drm_device *dev, struct drm_connector
 		}
 
 		/* DC is optimized not to do anything if 'targets' didn't change. */
-		dc_commit_targets(dc, commit_targets, commit_targets_count);
+		if (!dc_commit_targets(dc, commit_targets,
+				commit_targets_count)) {
+			DRM_INFO("Failed to restore connector state!\n");
+			dc_target_release(disconnected_acrtc->target);
+			disconnected_acrtc->target = current_target;
+			manage_dm_interrupts(adev, disconnected_acrtc, true);
+			return;
+		}
+
+		dc_target_release(current_target);
 
 		dm_dc_surface_commit(dc, &disconnected_acrtc->base,
 				to_dm_connector_state(
@@ -2479,25 +2479,24 @@ static uint32_t remove_from_val_sets(
 	uint32_t set_count,
 	const struct dc_target *target)
 {
-	uint32_t i = 0;
+	int i;
 
-	while (i < set_count) {
+	for (i = 0; i < set_count; i++)
 		if (val_sets[i].target == target)
 			break;
-		++i;
-	}
 
 	if (i == set_count) {
 		/* nothing found */
 		return set_count;
 	}
 
-	memmove(
-		&val_sets[i],
-		&val_sets[i + 1],
-		sizeof(struct dc_validation_set *) * (set_count - i - 1));
+	set_count--;
 
-	return set_count - 1;
+	for (; i < set_count; i++) {
+		val_sets[i] = val_sets[i + 1];
+	}
+
+	return set_count;
 }
 
 int amdgpu_dm_atomic_check(struct drm_device *dev,
@@ -2512,8 +2511,8 @@ int amdgpu_dm_atomic_check(struct drm_device *dev,
 	int ret;
 	int set_count;
 	int new_target_count;
-	struct dc_validation_set set[MAX_TARGET_NUM] = {{ 0 }};
-	struct dc_target *new_targets[MAX_TARGET_NUM] = { 0 };
+	struct dc_validation_set set[MAX_TARGETS] = {{ 0 }};
+	struct dc_target *new_targets[MAX_TARGETS] = { 0 };
 	struct amdgpu_device *adev = dev->dev_private;
 	struct dc *dc = adev->dm.dc;
 	bool need_to_validate = false;
