@@ -161,6 +161,31 @@ extern const struct amd_ip_funcs amdgpu_dm_funcs;
 void amdgpu_dm_update_connector_after_detect(
 	struct amdgpu_connector *aconnector);
 
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+struct dm_hdcp_info {
+	uint8_t link_enc_hw_inst;
+	uint8_t ddc_hw_inst;
+	enum signal_type signal;
+	void *display_id;
+
+	union {
+		struct {
+			uint8_t is_external_chip:1;
+		} bits;
+		uint8_t all;
+	} flags;
+};
+
+bool amdgpu_dm_get_hdcp_info(
+	void *display_id,
+	struct dm_hdcp_info *info);
+
+struct hdcp_protection_message;
+bool amdgpu_dm_process_hdcp_msg(
+	void *display_id,
+	struct hdcp_protection_message *message);
+#endif
+
 struct amdgpu_connector *amdgpu_dm_find_first_crct_matching_connector(
 	struct drm_atomic_state *state,
 	struct drm_crtc *crtc,

@@ -30,6 +30,9 @@
 #include "dal_types.h"
 #include "grph_object_defs.h"
 #include "logger_types.h"
+#if defined(CONFIG_DRM_AMD_HDCP_SERVICE)
+#include "hdcp_types.h"
+#endif
 #include "gpio_types.h"
 #include "link_service_types.h"
 
@@ -554,6 +557,16 @@ bool dc_write_dpcd(
 		uint32_t address,
 		const uint8_t *data,
 	uint32_t size);
+
+#if defined(CONFIG_DRM_AMD_HDCP_SERVICE)
+/*
+ * HDCP Interfaces
+ */
+
+bool dc_process_hdcp_msg(
+	const struct dc_stream *stream,
+	struct hdcp_protection_message *message);
+#endif
 
 bool dc_submit_i2c(
 		struct dc *dc,

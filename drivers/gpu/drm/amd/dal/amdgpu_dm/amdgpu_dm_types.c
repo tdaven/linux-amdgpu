@@ -35,6 +35,10 @@
 #include "amdgpu_pm.h"
 #include "dm_services_types.h"
 
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+#include "hdcpss_interface.h"
+#endif
+
 // We need to #undef FRAME_SIZE and DEPRECATED because they conflict
 // with ptrace-abi.h's #define's of them.
 #undef FRAME_SIZE
@@ -1085,12 +1089,56 @@ int amdgpu_dm_connector_atomic_set_property(
 	return ret;
 }
 
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+static ssize_t content_protection_status_show(
+	struct device *device,
+	struct device_attribute *attr,
+	char *buf)
+{
+	struct drm_connector *connector = device->driver_data;
+	struct drm_device *dev = connector->dev;
+	struct amdgpu_device *adev = dev->dev_private;
+	struct drm_crtc *crtc;
+	struct amdgpu_crtc *acrtc;
+	int value;
+	int ret;
+	int result;
+
+	crtc = connector->state->crtc;
+
+	result = snprintf(buf, PAGE_SIZE, "%d\n", 0);
+
+	if (!crtc)
+		return result;
+
+	acrtc = to_amdgpu_crtc(crtc);
+
+	if (!acrtc->target)
+		return result;
+
+	ret = hdcpss_get_encryption_level(&adev->hdcp, (void *)acrtc->target->streams[0], &value);
+
+	if (ret)
+		return result;
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", value);
+}
+
+static DEVICE_ATTR_RO(content_protection_status);
+#endif
+
 void amdgpu_dm_connector_destroy(struct drm_connector *connector)
 {
 	struct amdgpu_connector *aconnector = to_amdgpu_connector(connector);
 	const struct dc_link *link = aconnector->dc_link;
 	struct amdgpu_device *adev = connector->dev->dev_private;
 	struct amdgpu_display_manager *dm = &adev->dm;
+
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+	device_remove_file(
+		aconnector->base.kdev,
+		&dev_attr_content_protection_status);
+#endif
 
 #if defined(CONFIG_BACKLIGHT_CLASS_DEVICE) ||\
 	defined(CONFIG_BACKLIGHT_CLASS_DEVICE_MODULE)
@@ -1919,6 +1967,12 @@ int amdgpu_dm_connector_init(
 	}
 #endif
 
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+	res = device_create_file(
+		aconnector->base.kdev,
+		&dev_attr_content_protection_status);
+#endif
+
 out_free:
 	if (res) {
 		kfree(i2c);
@@ -2188,6 +2242,9 @@ int amdgpu_dm_atomic_commit(
 			}
 
 			if (acrtc->target) {
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+				hdcpss_notify_hotplug_detect(adev, 0, (void *)acrtc->target->streams[0]);
+#endif
 				/*
 				 * we evade vblanks and pflips on crtc that
 				 * should be changed
@@ -2223,6 +2280,9 @@ int amdgpu_dm_atomic_commit(
 			/* i.e. reset mode */
 			if (acrtc->target) {
 				manage_dm_interrupts(adev, acrtc, false);
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+				hdcpss_notify_hotplug_detect(adev, 0, (void *)acrtc->target->streams[0]);
+#endif
 
 				dc_target_release(acrtc->target);
 				acrtc->target = NULL;
@@ -2317,6 +2377,9 @@ int amdgpu_dm_atomic_commit(
 		 */
 		struct amdgpu_crtc *acrtc = new_crtcs[i];
 
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+		hdcpss_notify_hotplug_detect(adev, 1, (void *)acrtc->target->streams[0]);
+#endif
 		manage_dm_interrupts(adev, acrtc, true);
 		dm_crtc_cursor_reset(&acrtc->base);
 
@@ -2389,6 +2452,10 @@ void dm_restore_drm_connector_state(struct drm_device *dev, struct drm_connector
 		 */
 		manage_dm_interrupts(adev, disconnected_acrtc, false);
 
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+		hdcpss_notify_hotplug_detect(adev, 0, (void *)disconnected_acrtc->target->streams[0]);
+#endif
+
 		/* this is the update mode case */
 
 		current_target = disconnected_acrtc->target;
@@ -2427,6 +2494,9 @@ void dm_restore_drm_connector_state(struct drm_device *dev, struct drm_connector
 		manage_dm_interrupts(adev, disconnected_acrtc, true);
 		dm_crtc_cursor_reset(&disconnected_acrtc->base);
 
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+		hdcpss_notify_hotplug_detect(adev, 1, (void *)disconnected_acrtc->target->streams[0]);
+#endif
 	}
 }
 

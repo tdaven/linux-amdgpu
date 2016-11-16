@@ -53,6 +53,11 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_dp_mst_helper.h>
 
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+#include "hdcp_types.h"
+#include "hdcpss_interface.h"
+#endif
+
 /* Define variables here
  * These values will be passed to DAL for feature enable purpose
  * Disable ALL for HDMI light up
@@ -727,6 +732,13 @@ static void dm_handle_hpd_rx_irq(struct amdgpu_connector *aconnector)
 	uint8_t esi[DP_PSR_ERROR_STATUS - DP_SINK_COUNT_ESI] = { 0 };
 	uint8_t dret;
 	bool new_irq_handled = false;
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+	struct drm_connector *connector = &aconnector->base;
+	struct drm_device *dev = connector->dev;
+	struct amdgpu_device *adev = dev->dev_private;
+	struct drm_crtc *crtc = connector->state->crtc;
+	struct amdgpu_crtc *acrtc = crtc ? to_amdgpu_crtc(crtc) : NULL;
+#endif
 	int dpcd_addr;
 	int dpcd_bytes_to_read;
 
@@ -766,6 +778,17 @@ static void dm_handle_hpd_rx_irq(struct amdgpu_connector *aconnector)
 				&aconnector->mst_mgr,
 				esi,
 				&new_irq_handled);
+#endif
+
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+		if (esi[1] & DP_CP_IRQ) {
+			DRM_DEBUG_KMS("ESI CP_IRQ present\n");
+
+			if (acrtc && acrtc->target)
+				hdcpss_handle_cpirq(adev, (void *)acrtc->target->streams[0]);
+
+			new_irq_handled = true;
+		}
 #endif
 
 		if (new_irq_handled) {
@@ -1359,3 +1382,59 @@ bool amdgpu_dm_release_dal_lock(struct amdgpu_display_manager *dm)
 	/* TODO */
 	return true;
 }
+
+#ifdef CONFIG_DRM_AMD_HDCP_SERVICE
+
+#define EXTERNAL_TRANSLATOR_DEV_NAME "175AB0"
+#define EXTERNAL_TRANSLATOR_DEV_ID 0x000116
+
+bool amdgpu_dm_get_hdcp_info(
+	void *display_id,
+	struct dm_hdcp_info *info)
+{
+	const struct dc_stream *stream = display_id;
+	const struct dc_stream_status *stream_status;
+	const struct dc_link_status *link_status;
+	const struct dpcd_caps *dpcd_caps;
+
+	if (!stream)
+		return false;
+
+	if (!info)
+		return false;
+
+	stream_status = dc_stream_get_status(stream);
+
+	if (!stream_status->link)
+		return false;
+
+	link_status = dc_link_get_status(stream_status->link);
+
+	info->signal = stream->sink->sink_signal;
+	info->ddc_hw_inst = stream_status->link->ddc_hw_inst;
+	info->link_enc_hw_inst = stream_status->link->link_enc_hw_inst;
+	info->display_id = display_id;
+
+	dpcd_caps = link_status->dpcd_caps;
+
+	if (dpcd_caps->branch_dev_id == EXTERNAL_TRANSLATOR_DEV_ID &&
+		memcmp(
+			EXTERNAL_TRANSLATOR_DEV_NAME,
+			dpcd_caps->branch_dev_name,
+			sizeof(dpcd_caps->branch_dev_name)) == 0 &&
+		dpcd_caps->branch_hw_revision == 0x10)
+		info->flags.bits.is_external_chip = true;
+
+	return true;
+}
+
+bool amdgpu_dm_process_hdcp_msg(
+	void *display_id,
+	struct hdcp_protection_message *message)
+{
+	if (!display_id)
+		return false;
+
+	return dc_process_hdcp_msg(display_id, message);
+}
+#endif
