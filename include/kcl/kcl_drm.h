@@ -356,4 +356,9 @@ static inline const char *kcl_drm_get_format_name(uint32_t format, struct drm_fo
 #endif
 }
 
+#ifdef BUILD_AS_DKMS
+extern struct dma_buf_ops *_kcl_drm_gem_prime_dmabuf_ops;
+#define drm_gem_prime_dmabuf_ops (*_kcl_drm_gem_prime_dmabuf_ops)
+#endif
+
 #endif /* AMDKCL_DRM_H */
