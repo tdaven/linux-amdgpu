@@ -2702,7 +2702,7 @@ int amdgpu_sriov_gpu_reset(struct amdgpu_device *adev, struct amdgpu_job *job)
 		if (!ring || !ring->sched.thread)
 			continue;
 
-		kthread_park(ring->sched.thread);
+		kcl_kthread_park(ring->sched.thread);
 
 		if (job && j != i)
 			continue;
@@ -2710,7 +2710,7 @@ int amdgpu_sriov_gpu_reset(struct amdgpu_device *adev, struct amdgpu_job *job)
 		/* here give the last chance to check if job removed from mirror-list
 		 * since we already pay some time on kthread_park */
 		if (job && list_empty(&job->base.node)) {
-			kthread_unpark(ring->sched.thread);
+			kcl_kthread_unpark(ring->sched.thread);
 			goto give_up_reset;
 		}
 
@@ -2781,12 +2781,12 @@ int amdgpu_sriov_gpu_reset(struct amdgpu_device *adev, struct amdgpu_job *job)
 			continue;
 
 		if (job && j != i) {
-			kthread_unpark(ring->sched.thread);
+			kcl_kthread_unpark(ring->sched.thread);
 			continue;
 		}
 
 		amd_sched_job_recovery(&ring->sched);
-		kthread_unpark(ring->sched.thread);
+		kcl_kthread_unpark(ring->sched.thread);
 	}
 
 	drm_helper_resume_force_mode(adev->ddev);
@@ -2838,7 +2838,7 @@ int amdgpu_gpu_reset(struct amdgpu_device *adev)
 
 		if (!ring || !ring->sched.thread)
 			continue;
-		kthread_park(ring->sched.thread);
+		kcl_kthread_park(ring->sched.thread);
 		amd_sched_hw_job_reset(&ring->sched);
 	}
 	/* after all hw jobs are reset, hw fence is meaningless, so force_completion */
@@ -2941,13 +2941,13 @@ out:
 				continue;
 
 			amd_sched_job_recovery(&ring->sched);
-			kthread_unpark(ring->sched.thread);
+			kcl_kthread_unpark(ring->sched.thread);
 		}
 	} else {
 		dev_err(adev->dev, "asic resume failed (%d).\n", r);
 		for (i = 0; i < AMDGPU_MAX_RINGS; ++i) {
 			if (adev->rings[i] && adev->rings[i]->sched.thread) {
-				kthread_unpark(adev->rings[i]->sched.thread);
+				kcl_kthread_unpark(adev->rings[i]->sched.thread);
 			}
 		}
 	}
