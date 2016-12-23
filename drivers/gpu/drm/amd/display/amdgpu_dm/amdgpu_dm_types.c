@@ -2612,7 +2612,8 @@ void amdgpu_dm_atomic_commit_tail(
 	struct drm_connector *connector;
 	struct drm_connector_state *old_conn_state;
 
-	drm_atomic_helper_update_legacy_modeset_state(dev, state);
+	kcl_drm_atomic_helper_update_legacy_modeset_state(dev, state);
+
 	/* update changed items */
 	for_each_crtc_in_state(state, crtc, old_crtc_state, i) {
 		struct amdgpu_crtc *acrtc;
