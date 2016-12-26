@@ -996,7 +996,7 @@ static int smu7_start_dpm(struct pp_hwmgr *hwmgr)
 			SWRST_COMMAND_1, RESETLC, 0x0);
 
 	if (smu7_enable_sclk_mclk_dpm(hwmgr)) {
-		printk(KERN_ERR "Failed to enable Sclk DPM and Mclk DPM!");
+		pr_err("Failed to enable Sclk DPM and Mclk DPM!");
 		return -EINVAL;
 	}
 
@@ -1081,7 +1081,7 @@ static void smu7_set_dpm_event_sources(struct pp_hwmgr *hwmgr, uint32_t sources)
 
 	switch (sources) {
 	default:
-		printk(KERN_ERR "Unknown throttling event sources.");
+		pr_err("Unknown throttling event sources.");
 		/* fall through */
 	case 0:
 		protection = false;
@@ -1503,7 +1503,7 @@ static int smu7_get_evv_voltages(struct pp_hwmgr *hwmgr)
 						data->vddcgfx_leakage.count++;
 					}
 				} else {
-					printk("Error retrieving EVV voltage value!\n");
+					pr_info("Error retrieving EVV voltage value!\n");
 				}
 			}
 		} else {
@@ -1531,7 +1531,7 @@ static int smu7_get_evv_voltages(struct pp_hwmgr *hwmgr)
 					if (vddc >= 2000 || vddc == 0)
 						return -EINVAL;
 				} else {
-					printk(KERN_WARNING "failed to retrieving EVV voltage!\n");
+					pr_warning("failed to retrieving EVV voltage!\n");
 					continue;
 				}
 
@@ -1571,7 +1571,7 @@ static void smu7_patch_ppt_v1_with_vdd_leakage(struct pp_hwmgr *hwmgr,
 	}
 
 	if (*voltage > ATOM_VIRTUAL_VOLTAGE_ID0)
-		printk(KERN_ERR "Voltage value looks like a Leakage ID but it's not patched \n");
+		pr_err("Voltage value looks like a Leakage ID but it's not patched \n");
 }
 
 /**
@@ -2036,7 +2036,7 @@ static void smu7_patch_ppt_v0_with_vdd_leakage(struct pp_hwmgr *hwmgr,
 	}
 
 	if (*voltage > ATOM_VIRTUAL_VOLTAGE_ID0)
-		printk(KERN_ERR "Voltage value looks like a Leakage ID but it's not patched \n");
+		pr_err("Voltage value looks like a Leakage ID but it's not patched \n");
 }
 
 
@@ -2289,7 +2289,7 @@ static int smu7_hwmgr_backend_init(struct pp_hwmgr *hwmgr)
 	result = smu7_get_evv_voltages(hwmgr);
 
 	if (result) {
-		printk("Get EVV Voltage Failed.  Abort Driver loading!\n");
+		pr_info("Get EVV Voltage Failed.  Abort Driver loading!\n");
 		return -EINVAL;
 	}
 
@@ -2902,11 +2902,11 @@ static int smu7_get_pp_table_entry_v1(struct pp_hwmgr *hwmgr,
 	if (dep_mclk_table != NULL && dep_mclk_table->count == 1) {
 		if (dep_mclk_table->entries[0].clk !=
 				data->vbios_boot_state.mclk_bootup_value)
-			printk(KERN_ERR "Single MCLK entry VDDCI/MCLK dependency table "
+			pr_err("Single MCLK entry VDDCI/MCLK dependency table "
 					"does not match VBIOS boot MCLK level");
 		if (dep_mclk_table->entries[0].vddci !=
 				data->vbios_boot_state.vddci_bootup_value)
-			printk(KERN_ERR "Single VDDCI entry VDDCI/MCLK dependency table "
+			pr_err("Single VDDCI entry VDDCI/MCLK dependency table "
 					"does not match VBIOS boot VDDCI level");
 	}
 
@@ -3050,11 +3050,11 @@ static int smu7_get_pp_table_entry_v0(struct pp_hwmgr *hwmgr,
 	if (dep_mclk_table != NULL && dep_mclk_table->count == 1) {
 		if (dep_mclk_table->entries[0].clk !=
 				data->vbios_boot_state.mclk_bootup_value)
-			printk(KERN_ERR "Single MCLK entry VDDCI/MCLK dependency table "
+			pr_err("Single MCLK entry VDDCI/MCLK dependency table "
 					"does not match VBIOS boot MCLK level");
 		if (dep_mclk_table->entries[0].v !=
 				data->vbios_boot_state.vddci_bootup_value)
-			printk(KERN_ERR "Single VDDCI entry VDDCI/MCLK dependency table "
+			pr_err("Single VDDCI entry VDDCI/MCLK dependency table "
 					"does not match VBIOS boot VDDCI level");
 	}
 
@@ -3594,9 +3594,9 @@ static int smu7_notify_link_speed_change_after_state_change(
 
 		if (acpi_pcie_perf_request(hwmgr->device, request, false)) {
 			if (PP_PCIEGen2 == target_link_speed)
-				printk("PSPP request to switch to Gen2 from Gen3 Failed!");
+				pr_info("PSPP request to switch to Gen2 from Gen3 Failed!");
 			else
-				printk("PSPP request to switch to Gen1 from Gen2 Failed!");
+				pr_info("PSPP request to switch to Gen1 from Gen2 Failed!");
 		}
 	}
 
