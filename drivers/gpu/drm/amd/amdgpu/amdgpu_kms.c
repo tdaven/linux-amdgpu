@@ -561,7 +561,7 @@ static int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 
 			bios = adev->bios + bios_offset;
 			return copy_to_user(out, bios,
-				min((size_t)size, bios_size - bios_offset))
+				min(size, bios_size - bios_offset))
 					? -EFAULT : 0;
 		}
 		default:
