@@ -2656,6 +2656,7 @@ void amdgpu_dm_atomic_commit_tail(
 				crtc,
 				false);
 
+#if !defined(OS_NAME_RHEL_7_2)
 		DRM_DEBUG_KMS(
 			"amdgpu_crtc id:%d crtc_state_flags: enable:%d, active:%d, "
 			"planes_changed:%d, mode_changed:%d,active_changed:%d,"
@@ -2667,6 +2668,7 @@ void amdgpu_dm_atomic_commit_tail(
 			new_state->mode_changed,
 			new_state->active_changed,
 			new_state->connectors_changed);
+#endif
 
 		/* handles headless hotplug case, updating new_state and
 		 * aconnector as needed
@@ -3130,6 +3132,7 @@ int amdgpu_dm_atomic_check(struct drm_device *dev,
 
 		aconnector = amdgpu_dm_find_first_crct_matching_connector(state, crtc, true);
 
+#if !defined(OS_NAME_RHEL_7_2)
 		DRM_DEBUG_KMS(
 			"amdgpu_crtc id:%d crtc_state_flags: enable:%d, active:%d, "
 			"planes_changed:%d, mode_changed:%d,active_changed:%d,"
@@ -3141,6 +3144,7 @@ int amdgpu_dm_atomic_check(struct drm_device *dev,
 			crtc_state->mode_changed,
 			crtc_state->active_changed,
 			crtc_state->connectors_changed);
+#endif
 
 		if (modeset_required(crtc_state)) {
 
