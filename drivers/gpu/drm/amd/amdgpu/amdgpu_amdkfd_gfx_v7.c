@@ -41,7 +41,6 @@
 #include "gmc/gmc_7_1_sh_mask.h"
 #include "cik_structs.h"
 
-#define CIK_PIPE_PER_MEC	(4)
 #define CIK_QUEUES_PER_PIPE_MEC	(8)
 
 #define AMDKFD_SKIP_UNCOMPILED_CODE 1
@@ -279,8 +278,10 @@ static void unlock_srbm(struct kgd_dev *kgd)
 static void acquire_queue(struct kgd_dev *kgd, uint32_t pipe_id,
 				uint32_t queue_id)
 {
-	uint32_t mec = (++pipe_id / CIK_PIPE_PER_MEC) + 1;
-	uint32_t pipe = (pipe_id % CIK_PIPE_PER_MEC);
+	struct amdgpu_device *adev = get_amdgpu_device(kgd);
+
+	uint32_t mec = (++pipe_id / adev->gfx.mec.num_pipe_per_mec) + 1;
+	uint32_t pipe = (pipe_id % adev->gfx.mec.num_pipe_per_mec);
 
 	lock_srbm(kgd, mec, pipe, queue_id, 0);
 }
@@ -347,8 +348,8 @@ static int kgd_init_interrupts(struct kgd_dev *kgd, uint32_t pipe_id)
 	uint32_t mec;
 	uint32_t pipe;
 
-	mec = (++pipe_id / CIK_PIPE_PER_MEC) + 1;
-	pipe = (pipe_id % CIK_PIPE_PER_MEC);
+	mec = (++pipe_id / adev->gfx.mec.num_pipe_per_mec) + 1;
+	pipe = (pipe_id % adev->gfx.mec.num_pipe_per_mec);
 
 	lock_srbm(kgd, mec, pipe, 0, 0);
 
