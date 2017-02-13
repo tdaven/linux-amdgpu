@@ -100,6 +100,7 @@ extern int amdgpu_sched_jobs;
 extern int amdgpu_sched_hw_submission;
 extern int amdgpu_no_evict;
 extern int amdgpu_direct_gma_size;
+extern int amdgpu_ssg_enabled;
 extern unsigned amdgpu_pcie_gen_cap;
 extern unsigned amdgpu_pcie_lane_cap;
 extern unsigned amdgpu_cg_mask;
@@ -1463,6 +1464,19 @@ struct amdgpu_direct_gma {
 	atomic64_t		gart_usage;
 };
 
+#if defined(CONFIG_ZONE_DEVICE) && \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) || defined(OS_NAME_RHEL_7_3) || defined(OS_NAME_SLE))
+#define CONFIG_ENABLE_SSG
+#endif
+
+struct amdgpu_ssg {
+	bool			enabled;
+#ifdef CONFIG_ENABLE_SSG
+	struct percpu_ref	ref;
+	struct completion	cmp;
+#endif
+};
+
 struct amdgpu_device {
 	struct device			*dev;
 	struct drm_device		*ddev;
@@ -1507,6 +1521,9 @@ struct amdgpu_device {
 	struct amdgpu_direct_gma	direct_gma;
 	uint32_t			bios_scratch_reg_offset;
 	uint32_t			bios_scratch[AMDGPU_BIOS_NUM_SCRATCH];
+
+	/* SSG */
+	struct amdgpu_ssg		ssg;
 
 	/* Register/doorbell mmio */
 	resource_size_t			rmmio_base;
