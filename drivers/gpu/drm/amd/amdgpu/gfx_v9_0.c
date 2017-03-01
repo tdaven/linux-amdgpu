@@ -308,6 +308,8 @@ static int gfx_v9_0_init_microcode(struct amdgpu_device *adev)
 	adev->gfx.pfp_fw_version = le32_to_cpu(cp_hdr->header.ucode_version);
 	adev->gfx.pfp_feature_version = le32_to_cpu(cp_hdr->ucode_feature_version);
 
+	printk("pfp version:%d\n", adev->gfx.pfp_fw_version);
+
 	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_me.bin", chip_name);
 	err = request_firmware(&adev->gfx.me_fw, fw_name, adev->dev);
 	if (err)
@@ -319,6 +321,8 @@ static int gfx_v9_0_init_microcode(struct amdgpu_device *adev)
 	adev->gfx.me_fw_version = le32_to_cpu(cp_hdr->header.ucode_version);
 	adev->gfx.me_feature_version = le32_to_cpu(cp_hdr->ucode_feature_version);
 
+	printk("me version:%d\n", adev->gfx.me_fw_version);
+
 	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_ce.bin", chip_name);
 	err = request_firmware(&adev->gfx.ce_fw, fw_name, adev->dev);
 	if (err)
@@ -329,6 +333,8 @@ static int gfx_v9_0_init_microcode(struct amdgpu_device *adev)
 	cp_hdr = (const struct gfx_firmware_header_v1_0 *)adev->gfx.ce_fw->data;
 	adev->gfx.ce_fw_version = le32_to_cpu(cp_hdr->header.ucode_version);
 	adev->gfx.ce_feature_version = le32_to_cpu(cp_hdr->ucode_feature_version);
+
+	printk("ce version:%d\n", adev->gfx.ce_fw_version);
 
 	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_rlc.bin", chip_name);
 	err = request_firmware(&adev->gfx.rlc_fw, fw_name, adev->dev);
@@ -350,6 +356,7 @@ static int gfx_v9_0_init_microcode(struct amdgpu_device *adev)
 	adev->gfx.mec_fw_version = le32_to_cpu(cp_hdr->header.ucode_version);
 	adev->gfx.mec_feature_version = le32_to_cpu(cp_hdr->ucode_feature_version);
 
+	printk("mec version:%d\n", adev->gfx.mec_fw_version);
 
 	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_mec2.bin", chip_name);
 	err = request_firmware(&adev->gfx.mec2_fw, fw_name, adev->dev);
@@ -363,6 +370,8 @@ static int gfx_v9_0_init_microcode(struct amdgpu_device *adev)
 		le32_to_cpu(cp_hdr->header.ucode_version);
 		adev->gfx.mec2_feature_version =
 		le32_to_cpu(cp_hdr->ucode_feature_version);
+
+		printk("mec2 version:%d\n", adev->gfx.mec2_fw_version);
 	} else {
 		err = 0;
 		adev->gfx.mec2_fw = NULL;
