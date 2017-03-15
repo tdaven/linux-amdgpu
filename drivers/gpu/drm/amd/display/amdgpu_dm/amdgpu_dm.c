@@ -23,6 +23,8 @@
  *
  */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0)
+
 #include "dm_services_types.h"
 #include "dc.h"
 
@@ -1979,4 +1981,4 @@ bool amdgpu_dm_release_dal_lock(struct amdgpu_display_manager *dm)
 	return true;
 }
 
-
+#endif
