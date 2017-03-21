@@ -2516,6 +2516,9 @@ int amdgpu_sriov_gpu_reset(struct amdgpu_device *adev, bool voluntary)
 	struct amdgpu_ring *ring;
 	struct fence *fence = NULL, *next = NULL;
 
+	if (adev->family == AMDGPU_FAMILY_AI) /* doesn't support AI now */
+		return 0;
+
 	mutex_lock(&adev->virt.lock_reset);
 	atomic_inc(&adev->gpu_reset_counter);
 	adev->gfx.in_reset = true;
