@@ -37,6 +37,12 @@ static void amdgpu_job_timedout(struct amd_sched_job *s_job)
 		  atomic_read(&job->ring->fence_drv.last_seq),
 		  job->ring->fence_drv.sync_seq);
 	amdgpu_gpu_reset(job->adev);
+
+	if (job->ring->funcs->type != AMDGPU_RING_TYPE_GFX)
+		return;
+
+	if (job->adev->gfx.dump_last_header)
+		job->adev->gfx.dump_last_header(job->adev);
 }
 
 int amdgpu_job_alloc(struct amdgpu_device *adev, unsigned num_ibs,

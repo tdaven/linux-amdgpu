@@ -1016,6 +1016,31 @@ static int gfx_v9_0_ngg_en(struct amdgpu_device *adev)
 	return 0;
 }
 
+static void gfx_v9_dump(struct amdgpu_device *adev)
+{
+	int i = 0;
+
+	while (i < 8){
+		printk("CE[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_CE_HEADER_DUMP)));
+		i++;
+	}
+	printk("\n");
+
+	i = 0;
+	while (i < 8) {
+		printk("ME[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_ME_HEADER_DUMP)));
+		i++;
+	}
+	printk("\n");
+
+	i = 0;
+	while (i < 8) {
+		printk("PFP[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_PFP_HEADER_DUMP)));
+		i++;
+	}
+	printk("\n");
+}
+
 static int gfx_v9_0_sw_init(void *handle)
 {
 	int i, r;
@@ -1143,6 +1168,8 @@ static int gfx_v9_0_sw_init(void *handle)
 	r = gfx_v9_0_ngg_init(adev);
 	if (r)
 		return r;
+
+	adev->gfx.dump_last_header = gfx_v9_dump;
 
 	return 0;
 }
