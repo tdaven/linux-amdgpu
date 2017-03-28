@@ -970,7 +970,7 @@ int amdgpu_vce_ring_test_ring(struct amdgpu_ring *ring)
 	amdgpu_ring_write(ring, VCE_CMD_END);
 	amdgpu_ring_commit(ring);
 
-	for (i = 0; i < adev->usec_timeout; i++) {
+	for (i = 0; i < adev->usec_timeout * 10; i++) {
 		if (amdgpu_ring_get_rptr(ring) != rptr)
 			break;
 		DRM_UDELAY(1);
