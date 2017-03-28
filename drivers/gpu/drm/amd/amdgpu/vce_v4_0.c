@@ -257,10 +257,10 @@ static int vce_v4_0_sriov_start(struct amdgpu_device *adev)
 	struct amdgpu_ring *ring;
 	uint32_t offset, size;
 	uint32_t table_size = 0;
-	struct mmsch_v1_0_cmd_direct_write direct_wt = {0};
-	struct mmsch_v1_0_cmd_direct_read_modify_write direct_rd_mod_wt = {0};
-	struct mmsch_v1_0_cmd_direct_polling direct_poll = {0};
-	struct mmsch_v1_0_cmd_end end = {0};
+	struct mmsch_v1_0_cmd_direct_write direct_wt = {{0}};
+	struct mmsch_v1_0_cmd_direct_read_modify_write direct_rd_mod_wt = {{0}};
+	struct mmsch_v1_0_cmd_direct_polling direct_poll = {{0}};
+	struct mmsch_v1_0_cmd_end end = {{0}};
 	uint32_t *init_table = adev->virt.mm_table.cpu_addr;
 	struct mmsch_v1_0_init_header *header = (struct mmsch_v1_0_init_header *)init_table;
 
@@ -281,18 +281,12 @@ static int vce_v4_0_sriov_start(struct amdgpu_device *adev)
 		init_table += header->vce_table_offset;
 
 		ring = &adev->vce.ring[0];
-		INSERT_DIRECT_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_RB_RPTR), ring->wptr);
-		INSERT_DIRECT_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_RB_WPTR), ring->wptr);
+
 		INSERT_DIRECT_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_RB_BASE_LO), lower_32_bits(ring->gpu_addr));
 		INSERT_DIRECT_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_RB_BASE_HI), upper_32_bits(ring->gpu_addr));
 		INSERT_DIRECT_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_RB_SIZE), ring->ring_size / 4);
 
 		/* BEGING OF MC_RESUME */
-		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_CLOCK_GATING_A), ~(1 << 16), 0);
-		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_UENC_CLOCK_GATING), ~0xFF9FF000, 0x1FF000);
-		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_UENC_REG_CLOCK_GATING), ~0x3F, 0x3F);
-		INSERT_DIRECT_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_CLOCK_GATING_B), 0x1FF);
-
 		INSERT_DIRECT_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_LMI_CTRL), 0x398000);
 		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_LMI_CACHE_CTRL), ~0x1, 0);
 		INSERT_DIRECT_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_LMI_SWAP_CNTL), 0);
@@ -319,10 +313,13 @@ static int vce_v4_0_sriov_start(struct amdgpu_device *adev)
 		INSERT_DIRECT_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_VCPU_CACHE_SIZE2), size);
 
 		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_LMI_CTRL2), ~0x100, 0);
+
 		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_SYS_INT_EN),
 				0xffffffff, VCE_SYS_INT_EN__VCE_SYS_INT_TRAP_INTERRUPT_EN_MASK);
-
 		/* end of MC_RESUME */
+
+		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_STATUS),
+				VCE_STATUS__JOB_BUSY_MASK , ~VCE_STATUS__JOB_BUSY_MASK);
 		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_VCPU_CNTL),
 				~0x200001, VCE_VCPU_CNTL__CLK_EN_MASK);
 		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(VCE, 0, mmVCE_SOFT_RESET),
