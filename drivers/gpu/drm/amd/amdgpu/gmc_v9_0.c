@@ -176,6 +176,45 @@ static void gmc_v9_0_set_irq_funcs(struct amdgpu_device *adev)
 }
 
 /*
+ * gmc_v9_0_flush_vmhub - flush a a VMID in a VMHUB
+ *
+ * @adev: amdgpu_device pointer
+ * @hub: the VMHUB to flush
+ * @eng: the engine to use
+ * @vmid: vm instance to flush
+ *
+ * Flush the VMID in a VMHUB using the specified engine.
+ */
+void gmc_v9_0_flush_vmhub(struct amdgpu_device *adev, struct amdgpu_vmhub *hub,
+			  unsigned eng, uint32_t vmid)
+{
+	u32 tmp = hub->get_invalidate_req(vmid);
+	unsigned i;
+
+	WREG32_NO_KIQ(hub->vm_inv_eng0_req + eng, tmp);
+
+	/* Busy wait for ACK.*/
+	for (i = 0; i < 100; i++) {
+		tmp = RREG32_NO_KIQ(hub->vm_inv_eng0_ack + eng);
+		tmp &= 1 << vmid;
+		if (tmp)
+			return;
+		cpu_relax();
+	}
+
+	/* Wait for ACK with a delay.*/
+	for (i = 0; i < adev->usec_timeout; i++) {
+		tmp = RREG32_NO_KIQ(hub->vm_inv_eng0_ack + eng);
+		tmp &= 1 << vmid;
+		if (tmp)
+			return;
+		udelay(1);
+	}
+
+	DRM_ERROR("Timeout waiting for VM flush ACK!\n");
+}
+
+/*
  * GART
  * VMID 0 is the physical GPU addresses as used by the kernel.
  * VMIDs 1-15 are used for userspace clients and are handled
@@ -195,43 +234,15 @@ static void gmc_v9_0_gart_flush_gpu_tlb(struct amdgpu_device *adev,
 {
 	/* Use register 17 for GART */
 	const unsigned eng = 17;
-	unsigned i, j;
+	unsigned i;
 
 	/* flush hdp cache */
 	nbio_v6_1_hdp_flush(adev);
 
 	spin_lock(&adev->mc.invalidate_lock);
 
-	for (i = 0; i < AMDGPU_MAX_VMHUBS; ++i) {
-		struct amdgpu_vmhub *hub = &adev->vmhub[i];
-		u32 tmp = hub->get_invalidate_req(vmid);
-
-		WREG32_NO_KIQ(hub->vm_inv_eng0_req + eng, tmp);
-
-		/* Busy wait for ACK.*/
-		for (j = 0; j < 100; j++) {
-			tmp = RREG32_NO_KIQ(hub->vm_inv_eng0_ack + eng);
-			tmp &= 1 << vmid;
-			if (tmp)
-				break;
-			cpu_relax();
-		}
-		if (j < 100)
-			continue;
-
-		/* Wait for ACK with a delay.*/
-		for (j = 0; j < adev->usec_timeout; j++) {
-			tmp = RREG32_NO_KIQ(hub->vm_inv_eng0_ack + eng);
-			tmp &= 1 << vmid;
-			if (tmp)
-				break;
-			udelay(1);
-		}
-		if (j < adev->usec_timeout)
-			continue;
-
-		DRM_ERROR("Timeout waiting for VM flush ACK!\n");
-	}
+	for (i = 0; i < AMDGPU_MAX_VMHUBS; ++i)
+		gmc_v9_0_flush_vmhub(adev, &adev->vmhub[i], eng, vmid);
 
 	spin_unlock(&adev->mc.invalidate_lock);
 }
