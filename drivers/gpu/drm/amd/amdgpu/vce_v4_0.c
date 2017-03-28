@@ -536,8 +536,10 @@ static int vce_v4_0_sw_fini(void *handle)
 
 static int vce_v4_0_hw_init(void *handle)
 {
-	int r, i;
+	int r, i, t;
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
+	t = RREG32(SOC15_REG_OFFSET(VCE, 0, mmVCE_RB_ARB_CTRL));
+	WREG32(SOC15_REG_OFFSET(VCE, 0, mmVCE_RB_ARB_CTRL), VCE_RB_ARB_CTRL__VCE_CGTT_OVERRIDE_MASK & t);
 
 	if (amdgpu_sriov_vf(adev))
 		r = vce_v4_0_sriov_start(adev);
