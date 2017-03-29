@@ -1573,8 +1573,10 @@ static int amdgpu_late_init(struct amdgpu_device *adev)
 		}
 	}
 
-	amdgpu_dpm_enable_uvd(adev, false);
-	amdgpu_dpm_enable_vce(adev, false);
+	if (!amdgpu_sriov_vf(adev)) {
+		amdgpu_dpm_enable_uvd(adev, false);
+		amdgpu_dpm_enable_vce(adev, false);
+	}
 
 	return 0;
 }
