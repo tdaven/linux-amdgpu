@@ -110,6 +110,7 @@ static u32 soc15_pcie_rreg(struct amdgpu_device *adev, u32 reg)
 	address = nbio_pcie_id->index_offset;
 	data = nbio_pcie_id->data_offset;
 
+	printk("%s:%x\n",__func__, reg);
 	spin_lock_irqsave(&adev->pcie_idx_lock, flags);
 	WREG32(address, reg);
 	(void)RREG32(address);
@@ -129,6 +130,7 @@ static void soc15_pcie_wreg(struct amdgpu_device *adev, u32 reg, u32 v)
 	address = nbio_pcie_id->index_offset;
 	data = nbio_pcie_id->data_offset;
 
+	printk("%s:%x, %x\n",__func__, reg, v);
 	spin_lock_irqsave(&adev->pcie_idx_lock, flags);
 	WREG32(address, reg);
 	(void)RREG32(address);
@@ -145,6 +147,7 @@ static u32 soc15_uvd_ctx_rreg(struct amdgpu_device *adev, u32 reg)
 	address = SOC15_REG_OFFSET(UVD, 0, mmUVD_CTX_INDEX);
 	data = SOC15_REG_OFFSET(UVD, 0, mmUVD_CTX_DATA);
 
+	printk("%s:%x\n",__func__, reg);
 	spin_lock_irqsave(&adev->uvd_ctx_idx_lock, flags);
 	WREG32(address, ((reg) & 0x1ff));
 	r = RREG32(data);
@@ -159,6 +162,7 @@ static void soc15_uvd_ctx_wreg(struct amdgpu_device *adev, u32 reg, u32 v)
 	address = SOC15_REG_OFFSET(UVD, 0, mmUVD_CTX_INDEX);
 	data = SOC15_REG_OFFSET(UVD, 0, mmUVD_CTX_DATA);
 
+	printk("%s:%x, %x\n",__func__, reg, v);
 	spin_lock_irqsave(&adev->uvd_ctx_idx_lock, flags);
 	WREG32(address, ((reg) & 0x1ff));
 	WREG32(data, (v));
@@ -173,6 +177,7 @@ static u32 soc15_didt_rreg(struct amdgpu_device *adev, u32 reg)
 	address = SOC15_REG_OFFSET(GC, 0, mmDIDT_IND_INDEX);
 	data = SOC15_REG_OFFSET(GC, 0, mmDIDT_IND_DATA);
 
+	printk("%s:%x\n",__func__, reg);
 	spin_lock_irqsave(&adev->didt_idx_lock, flags);
 	WREG32(address, (reg));
 	r = RREG32(data);
@@ -187,6 +192,7 @@ static void soc15_didt_wreg(struct amdgpu_device *adev, u32 reg, u32 v)
 	address = SOC15_REG_OFFSET(GC, 0, mmDIDT_IND_INDEX);
 	data = SOC15_REG_OFFSET(GC, 0, mmDIDT_IND_DATA);
 
+	printk("%s:%x, %x\n",__func__, reg, v);
 	spin_lock_irqsave(&adev->didt_idx_lock, flags);
 	WREG32(address, (reg));
 	WREG32(data, (v));
