@@ -3583,6 +3583,8 @@ static int gfx_v9_0_kiq_set_interrupt_state(struct amdgpu_device *adev,
 	switch (type) {
 	case AMDGPU_CP_KIQ_IRQ_DRIVER0:
 		if (state == AMDGPU_IRQ_STATE_DISABLE) {
+			printk("someone shutdown KIQ interrupt!\n");
+			dump_stack();
 			tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmCPC_INT_CNTL));
 			tmp = REG_SET_FIELD(tmp, CPC_INT_CNTL,
 						 GENERIC2_INT_ENABLE, 0);
