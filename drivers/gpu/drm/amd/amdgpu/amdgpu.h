@@ -1749,6 +1749,14 @@ bool amdgpu_device_has_dc_support(struct amdgpu_device *adev);
 		tmp_ |= ((val) & ~(mask));			\
 		WREG32(reg, tmp_);				\
 	} while (0)
+
+#define WREG32_P_NO_KIQ(reg, val, mask)				\
+do {							\
+	uint32_t tmp_ = RREG32_NO_KIQ(reg);			\
+	tmp_ &= (mask);					\
+	tmp_ |= ((val) & ~(mask));			\
+	WREG32_NO_KIQ(reg, tmp_);				\
+} while (0)
 #define WREG32_AND(reg, and) WREG32_P(reg, 0, and)
 #define WREG32_OR(reg, or) WREG32_P(reg, or, ~(or))
 #define WREG32_PLL_P(reg, val, mask)				\
