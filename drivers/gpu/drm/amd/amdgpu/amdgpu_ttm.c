@@ -313,6 +313,7 @@ static int amdgpu_move_blit(struct ttm_buffer_object *bo,
 	unsigned long num_pages;
 	struct fence *fence = NULL;
 	int r;
+	const char * new_type, *old_type;
 
 	BUILD_BUG_ON((PAGE_SIZE % AMDGPU_GPU_PAGE_SIZE) != 0);
 
@@ -333,6 +334,34 @@ static int amdgpu_move_blit(struct ttm_buffer_object *bo,
 	if (r)
 		return r;
 	new_size = new_mm->size;
+
+	switch (new_mem->mem_type) {
+		case  TTM_PL_TT:
+		new_type = "TT";
+		break;
+		case TTM_PL_VRAM:
+		new_type = "VRAM";
+		break;
+		default:
+		new_type = "others";
+		break;
+	}
+
+	switch (old_mem->mem_type) {
+		case  TTM_PL_TT:
+		old_type = "TT";
+		break;
+		case TTM_PL_VRAM:
+		old_type = "VRAM";
+		break;
+		default:
+		old_type = "others";
+		break;
+	}
+
+	if (amdgpu_print_va_info==1)
+		printk("BLIT, E=%d, NEW(%s)=%p, OLD(%s)=%p\n", evict,
+				new_type, new_start, old_type, old_start);
 
 	num_pages = new_mem->num_pages;
 	while (num_pages) {

@@ -111,6 +111,7 @@ int amdgpu_pos_buf_per_se = 0;
 int amdgpu_cntl_sb_buf_per_se = 0;
 int amdgpu_param_buf_per_se = 0;
 int amdgpu_disable_kcq = 0;
+int amdgpu_print_va_info = 0;
 
 MODULE_PARM_DESC(vramlimit, "Restrict VRAM for testing, in megabytes");
 module_param_named(vramlimit, amdgpu_vram_limit, int, 0600);
@@ -241,6 +242,9 @@ module_param_named(param_buf_per_se, amdgpu_param_buf_per_se, int, 0444);
 
 MODULE_PARM_DESC(disble_kcq, "disable kernel compute queue for vega10(default false)");
 module_param_named(disable_kcq, amdgpu_disable_kcq, int, 0444);
+
+MODULE_PARM_DESC(print_va_info, "print debug VA map or clr footprint (default off)");
+module_param_named(print_va_info, amdgpu_print_va_info, int ,0444);
 
 
 static const struct pci_device_id pciidlist[] = {

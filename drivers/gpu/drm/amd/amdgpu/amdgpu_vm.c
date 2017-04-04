@@ -1250,6 +1250,7 @@ int amdgpu_vm_bo_update(struct amdgpu_device *adev,
 	struct drm_mm_node *nodes;
 	struct fence *exclusive;
 	int r;
+	const char *tt_name = "NULL";
 
 	if (clear || !bo_va->bo) {
 		mem = NULL;
@@ -1270,6 +1271,20 @@ int amdgpu_vm_bo_update(struct amdgpu_device *adev,
 		exclusive = reservation_object_get_excl(bo_va->bo->tbo.resv);
 	}
 
+	if (mem) {
+		switch (mem->mem_type) {
+			case TTM_PL_TT:
+			tt_name = "TT";
+			break;
+			case TTM_PL_VRAM:
+			tt_name = "VRAM";
+			break;
+			default:
+			tt_name = "OTHER";
+			break;
+		}
+	}
+
 	if (bo_va->bo) {
 		flags = amdgpu_ttm_tt_pte_flags(adev, bo_va->bo->tbo.ttm, mem);
 		gtt_flags = (amdgpu_ttm_is_bound(bo_va->bo->tbo.ttm) &&
@@ -1286,6 +1301,12 @@ int amdgpu_vm_bo_update(struct amdgpu_device *adev,
 	spin_unlock(&vm->status_lock);
 
 	list_for_each_entry(mapping, &bo_va->invalids, list) {
+
+		if (amdgpu_print_va_info == 1)
+			printk("%llu: [%s] S=%p,E=%p, F=%llx, type=%s\n",
+				vm->client_id, clear?"clr":"upd",
+				mapping->it.start, mapping->it.last, mapping->flags, tt_name);
+
 		r = amdgpu_vm_bo_split_mapping(adev, exclusive,
 					       gtt_flags, pages_addr, vm,
 					       mapping, flags, mem,
@@ -1470,6 +1491,11 @@ int amdgpu_vm_clear_freed(struct amdgpu_device *adev,
 
 		r = amdgpu_vm_bo_split_mapping(adev, NULL, 0, NULL, vm, mapping,
 					       0, 0, &f);
+
+		if (amdgpu_print_va_info == 1)
+			printk("%llu: clr-freed: S=%p, E=%p\n",
+				vm->client_id, mapping->it.start, mapping->it.last);
+
 		amdgpu_vm_free_mapping(adev, vm, mapping, f);
 		if (r) {
 			fence_put(f);
