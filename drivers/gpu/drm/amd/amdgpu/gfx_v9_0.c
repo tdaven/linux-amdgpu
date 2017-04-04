@@ -1026,29 +1026,56 @@ static int gfx_v9_0_ngg_en(struct amdgpu_device *adev)
 	return 0;
 }
 
-static void gfx_v9_dump(struct amdgpu_device *adev)
+static void gfx_v9_debug(struct amdgpu_device *adev, struct amdgpu_ring *ring)
+{
+	u64 vm_fault_addr;
+
+	vm_fault_addr = RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_ADDR_LO32)) & (u64)~1;
+	vm_fault_addr |= RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_ADDR_HI32));
+
+	printk("VM_L2_PROTECTION_FAULT_STATUS=%x\n", RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_STATUS)));
+	printk("vm fault addr=%p\n", vm_fault_addr);
+}
+
+static void gfx_v9_dump(struct amdgpu_device *adev, struct amdgpu_ring *ring)
 {
 	int i = 0;
 
-	while (i < 8){
-		printk("CE[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_CE_HEADER_DUMP)));
-		i++;
-	}
-	printk("\n");
+	if (ring->funcs->type == AMDGPU_RING_TYPE_GFX) {
+		while (i < 8){
+			printk("CE[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_CE_HEADER_DUMP)));
+			i++;
+		}
+		printk("\n");
 
-	i = 0;
-	while (i < 8) {
-		printk("ME[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_ME_HEADER_DUMP)));
-		i++;
-	}
-	printk("\n");
+		i = 0;
+		while (i < 8) {
+			printk("ME[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_ME_HEADER_DUMP)));
+			i++;
+		}
+		printk("\n");
 
-	i = 0;
-	while (i < 8) {
-		printk("PFP[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_PFP_HEADER_DUMP)));
-		i++;
+		i = 0;
+		while (i < 8) {
+			printk("PFP[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_PFP_HEADER_DUMP)));
+			i++;
+		}
+	} else {
+		/* COMPUTE */
+		while (i < 8) {
+			printk("ME1[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_MEC_ME1_HEADER_DUMP)));
+			i++;
+		}
+		printk("\n");
+
+		i = 0;
+		while (i < 8) {
+			printk("ME2[%02d] = %x\n", i, RREG32_NO_KIQ(SOC15_REG_OFFSET(GC, 0, mmCP_MEC_ME2_HEADER_DUMP)));
+			i++;
+		}
+		printk("\n");
+
 	}
-	printk("\n");
 }
 
 static int gfx_v9_0_sw_init(void *handle)
@@ -1180,6 +1207,8 @@ static int gfx_v9_0_sw_init(void *handle)
 		return r;
 
 	adev->gfx.dump_last_header = gfx_v9_dump;
+	adev->gfx.debug = gfx_v9_debug;
+
 
 	return 0;
 }

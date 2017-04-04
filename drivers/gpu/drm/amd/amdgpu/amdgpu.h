@@ -1082,7 +1082,8 @@ struct amdgpu_gfx {
 	bool                            in_reset;
 	/* NGG */
 	struct amdgpu_ngg		ngg;
-	void (*dump_last_header)(struct amdgpu_device *adev);
+	void (*dump_last_header)(struct amdgpu_device *adev, struct amdgpu_ring *ring);
+	void (*debug)(struct amdgpu_device *, struct amdgpu_ring *ring);
 };
 
 int amdgpu_ib_get(struct amdgpu_device *adev, struct amdgpu_vm *vm,

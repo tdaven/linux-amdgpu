@@ -31,6 +31,7 @@
 static void amdgpu_job_timedout(struct amd_sched_job *s_job)
 {
 	struct amdgpu_job *job = container_of(s_job, struct amdgpu_job, base);
+	int idx = 0;
 
 	DRM_ERROR("ring %s timeout, last signaled seq=%u, last emitted seq=%u\n",
 		  job->base.sched->name,
@@ -38,11 +39,21 @@ static void amdgpu_job_timedout(struct amd_sched_job *s_job)
 		  job->ring->fence_drv.sync_seq);
 	amdgpu_gpu_reset(job->adev);
 
-	if (job->ring->funcs->type != AMDGPU_RING_TYPE_GFX)
-		return;
+	if (job->ring->funcs->type == AMDGPU_RING_TYPE_GFX ||
+		job->ring->funcs->type == AMDGPU_RING_TYPE_COMPUTE) {
+		if (job->adev->gfx.dump_last_header)
+			job->adev->gfx.dump_last_header(job->adev, job->ring);
 
-	if (job->adev->gfx.dump_last_header)
-		job->adev->gfx.dump_last_header(job->adev);
+		if (job->adev->gfx.debug)
+			job->adev->gfx.debug(job->adev, job->ring);
+	}
+
+	printk("rptr=%d, rptr_mod = %d\n", amdgpu_ring_get_rptr(job->ring),
+			amdgpu_ring_get_rptr(job->ring) % (job->ring->buf_mask+1));
+	while (idx <= job->ring->buf_mask) {
+		printk("%04d:%08x", idx, job->ring->ring[idx]);
+		idx ++;
+	}
 }
 
 int amdgpu_job_alloc(struct amdgpu_device *adev, unsigned num_ibs,
