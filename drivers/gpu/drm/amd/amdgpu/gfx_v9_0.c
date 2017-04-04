@@ -2680,12 +2680,19 @@ static void gfx_v9_0_ring_emit_gds_switch(struct amdgpu_ring *ring,
 				   (1 << (oa_size + oa_base)) - (1 << oa_base));
 }
 
+
+extern int amdgpu_disable_kcq;
 static int gfx_v9_0_early_init(void *handle)
 {
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
 	adev->gfx.num_gfx_rings = GFX9_NUM_GFX_RINGS;
 	adev->gfx.num_compute_rings = GFX9_NUM_COMPUTE_RINGS;
+	if (amdgpu_disable_kcq != 0) {
+		adev->gfx.num_compute_rings = 0;
+		printk("no compute ring\n");
+	}
+
 	gfx_v9_0_set_ring_funcs(adev);
 	gfx_v9_0_set_irq_funcs(adev);
 	gfx_v9_0_set_gds_init(adev);
