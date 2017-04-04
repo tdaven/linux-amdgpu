@@ -1295,7 +1295,7 @@ static void gfx_v9_0_init_compute_vmid(struct amdgpu_device *adev)
 
 	sh_mem_config = SH_MEM_ADDRESS_MODE_64 |
 			SH_MEM_ALIGNMENT_MODE_UNALIGNED <<
-			SH_MEM_CONFIG__ALIGNMENT_MODE__SHIFT; 
+			SH_MEM_CONFIG__ALIGNMENT_MODE__SHIFT;
 
 	mutex_lock(&adev->srbm_mutex);
 	for (i = FIRST_COMPUTE_VMID; i < LAST_COMPUTE_VMID; i++) {
@@ -1456,7 +1456,7 @@ static void gfx_v9_0_rlc_start(struct amdgpu_device *adev)
 		 * default is 0x9C4 to create a 100us interval */
 		WREG32(SOC15_REG_OFFSET(GC, 0, mmRLC_GPM_TIMER_INT_3), 0x9C4);
 		/* RLC_GPM_GENERAL_12 : Minimum gap between wptr and rptr
-		 * to disable the page fault retry interrupts, default is 
+		 * to disable the page fault retry interrupts, default is
 		 * 0x100 (256) */
 		WREG32(SOC15_REG_OFFSET(GC, 0, mmRLC_GPM_GENERAL_12), 0x100);
 	}
@@ -1799,7 +1799,7 @@ static int gfx_v9_0_cp_compute_load_microcode(struct amdgpu_device *adev)
 		adev->gfx.mec.mec_fw_gpu_addr & 0xFFFFF000);
 	WREG32(SOC15_REG_OFFSET(GC, 0, mmCP_CPC_IC_BASE_HI),
 		upper_32_bits(adev->gfx.mec.mec_fw_gpu_addr));
- 
+
 	/* MEC1 */
 	WREG32(SOC15_REG_OFFSET(GC, 0, mmCP_MEC_ME1_UCODE_ADDR),
 			 mec_hdr->jt_offset);
@@ -2363,7 +2363,7 @@ static bool gfx_v9_0_is_idle(void *handle)
 {
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
-	if (REG_GET_FIELD(RREG32(SOC15_REG_OFFSET(GC, 0, mmGRBM_STATUS)), 
+	if (REG_GET_FIELD(RREG32(SOC15_REG_OFFSET(GC, 0, mmGRBM_STATUS)),
 				GRBM_STATUS, GUI_ACTIVE))
 		return false;
 	else
@@ -2378,7 +2378,7 @@ static int gfx_v9_0_wait_for_idle(void *handle)
 
 	for (i = 0; i < adev->usec_timeout; i++) {
 		/* read MC_STATUS */
-		tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmGRBM_STATUS)) & 
+		tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmGRBM_STATUS)) &
 			GRBM_STATUS__GUI_ACTIVE_MASK;
 
 		if (!REG_GET_FIELD(tmp, GRBM_STATUS, GUI_ACTIVE))
