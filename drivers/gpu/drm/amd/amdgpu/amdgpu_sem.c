@@ -55,7 +55,6 @@ static void amdgpu_sem_free(struct kref *kref)
 	struct amdgpu_sem *sem = container_of(
 		kref, struct amdgpu_sem, kref);
 
-	list_del(&sem->list);
 	kref_put(&sem->base->kref, amdgpu_sem_core_free);
 	kfree(sem);
 }
