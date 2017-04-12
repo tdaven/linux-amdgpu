@@ -1781,6 +1781,7 @@ static int gfx_v9_0_cp_gfx_resume(struct amdgpu_device *adev)
 
 
 	/* start the ring */
+	amdgpu_ring_clear_ring(ring);
 	gfx_v9_0_cp_gfx_start(adev);
 	ring->ready = true;
 
@@ -2221,11 +2222,16 @@ static int gfx_v9_0_kiq_init_queue(struct amdgpu_ring *ring,
 		soc15_grbm_select(adev, 0, 0, 0, 0);
 		mutex_unlock(&adev->srbm_mutex);
 
+		if (adev->gfx.mec.mqd_backup[mqd_idx])
+			memcpy(adev->gfx.mec.mqd_backup[mqd_idx], mqd, sizeof(*mqd));
 	} else { /* for GPU_RESET case */
 		/* reset MQD to a clean status */
+		if (adev->gfx.mec.mqd_backup[mqd_idx])
+			memcpy(mqd, adev->gfx.mec.mqd_backup[mqd_idx], sizeof(*mqd));
 
 		/* reset ring buffer */
 		ring->wptr = 0;
+		amdgpu_ring_clear_ring(ring);
 
 		if (is_kiq) {
 		    mutex_lock(&adev->srbm_mutex);
@@ -2253,7 +2259,9 @@ static int gfx_v9_0_kiq_resume(struct amdgpu_device *adev)
 
 	ring = &adev->gfx.kiq.ring;
 	if (!amdgpu_bo_kmap(ring->mqd_obj, (void **)&ring->mqd_ptr)) {
-		r = gfx_v9_0_kiq_init_queue(ring, ring->mqd_ptr, ring->mqd_gpu_addr);
+		r = gfx_v9_0_kiq_init_queue(ring,
+					(struct v9_mqd*)ring->mqd_ptr,
+					ring->mqd_gpu_addr);
 		amdgpu_bo_kunmap(ring->mqd_obj);
 		ring->mqd_ptr = NULL;
 		if (r)
@@ -2265,11 +2273,13 @@ static int gfx_v9_0_kiq_resume(struct amdgpu_device *adev)
 	for (i = 0; i < adev->gfx.num_compute_rings; i++) {
 		ring = &adev->gfx.compute_ring[i];
 		if (!amdgpu_bo_kmap(ring->mqd_obj, (void **)&ring->mqd_ptr)) {
-			r = gfx_v9_0_kiq_init_queue(ring, ring->mqd_ptr, ring->mqd_gpu_addr);
+			r = gfx_v9_0_kiq_init_queue(ring,
+							(struct v9_mqd *)ring->mqd_ptr,
+							ring->mqd_gpu_addr);
 			amdgpu_bo_kunmap(ring->mqd_obj);
 			ring->mqd_ptr = NULL;
 			if (r)
-			return r;
+				return r;
 		} else {
 			return r;
 		}
@@ -2372,10 +2382,13 @@ static int gfx_v9_0_hw_fini(void *handle)
 
 	amdgpu_irq_put(adev, &adev->gfx.priv_reg_irq, 0);
 	amdgpu_irq_put(adev, &adev->gfx.priv_inst_irq, 0);
+
 	if (amdgpu_sriov_vf(adev)) {
+		/* we are in full access mode, so don't touch any GFX register */
 		pr_debug("For SRIOV client, shouldn't do anything.\n");
 		return 0;
 	}
+
 	gfx_v9_0_cp_enable(adev, false);
 	gfx_v9_0_rlc_stop(adev);
 	gfx_v9_0_cp_compute_fini(adev);
