@@ -2358,8 +2358,6 @@ int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm,
 
 	vm->is_kfd_vm = is_kfd_vm;
 	if (is_kfd_vm) {
-		mutex_lock(&adev->vm_manager.lock);
-
 		if (adev->vm_manager.n_kfd_vms++ == 0) {
 			/* First KFD VM: enable compute power profile */
 			if (adev->pp_enabled)
@@ -2369,7 +2367,6 @@ int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm,
 				adev->pm.funcs->switch_power_profile(adev,
 						AMD_PP_COMPUTE_PROFILE);
 		}
-		mutex_unlock(&adev->vm_manager.lock);
 	}
 
 	return 0;
@@ -2424,8 +2421,6 @@ void amdgpu_vm_fini(struct amdgpu_device *adev, struct amdgpu_vm *vm)
 	int i;
 
 	if (vm->is_kfd_vm) {
-		mutex_lock(&adev->vm_manager.lock);
-
 		WARN(adev->vm_manager.n_kfd_vms == 0, "Unbalanced number of KFD VMs");
 
 		if (--adev->vm_manager.n_kfd_vms == 0) {
@@ -2437,7 +2432,6 @@ void amdgpu_vm_fini(struct amdgpu_device *adev, struct amdgpu_vm *vm)
 				adev->pm.funcs->switch_power_profile(adev,
 						AMD_PP_GFX_PROFILE);
 		}
-		mutex_unlock(&adev->vm_manager.lock);
 	}
 
 	amd_sched_entity_fini(vm->entity.sched, &vm->entity);
