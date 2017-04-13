@@ -525,19 +525,13 @@ static int vce_v4_0_sw_fini(void *handle)
 	if (r)
 		return r;
 
-	r = amdgpu_vce_sw_fini(adev);
-	if (r)
-		return r;
-
-	return r;
+	return amdgpu_vce_sw_fini(adev);
 }
 
 static int vce_v4_0_hw_init(void *handle)
 {
-	int r, i, t;
+	int r, i;
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
-	t = RREG32(SOC15_REG_OFFSET(VCE, 0, mmVCE_RB_ARB_CTRL));
-	WREG32(SOC15_REG_OFFSET(VCE, 0, mmVCE_RB_ARB_CTRL), VCE_RB_ARB_CTRL__VCE_CGTT_OVERRIDE_MASK & t);
 
 	if (amdgpu_sriov_vf(adev))
 		r = vce_v4_0_sriov_start(adev);
@@ -584,11 +578,7 @@ static int vce_v4_0_suspend(void *handle)
 	if (r)
 		return r;
 
-	r = amdgpu_vce_suspend(adev);
-	if (r)
-		return r;
-
-	return r;
+	return amdgpu_vce_suspend(adev);
 }
 
 static int vce_v4_0_resume(void *handle)
@@ -600,11 +590,7 @@ static int vce_v4_0_resume(void *handle)
 	if (r)
 		return r;
 
-	r = vce_v4_0_hw_init(adev);
-	if (r)
-		return r;
-
-	return r;
+	return vce_v4_0_hw_init(adev);
 }
 
 static void vce_v4_0_mc_resume(struct amdgpu_device *adev)
