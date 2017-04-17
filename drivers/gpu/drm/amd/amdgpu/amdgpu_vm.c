@@ -488,7 +488,7 @@ int amdgpu_vm_flush(struct amdgpu_ring *ring, struct amdgpu_job *job)
 		amdgpu_vm_ring_has_compute_vm_bug(ring)) {
 		unsigned patch_offset = 0;
 
-		if (ring->funcs->init_cond_exec)
+		if (ring->funcs->init_cond_exec && amdgpu_mcbp == 1)
 			patch_offset = amdgpu_ring_init_cond_exec(ring);
 
 		if (ring->funcs->emit_pipeline_sync &&
@@ -527,7 +527,7 @@ int amdgpu_vm_flush(struct amdgpu_ring *ring, struct amdgpu_job *job)
 							job->oa_base, job->oa_size);
 		}
 
-		if (ring->funcs->patch_cond_exec)
+		if (ring->funcs->patch_cond_exec && amdgpu_mcbp == 1)
 			amdgpu_ring_patch_cond_exec(ring, patch_offset);
 
 		/* the double SWITCH_BUFFER here *cannot* be skipped by COND_EXEC */

@@ -177,7 +177,7 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 		}
 	}
 
-	if (ring->funcs->init_cond_exec)
+	if (ring->funcs->init_cond_exec && amdgpu_mcbp == 1)
 		patch_offset = amdgpu_ring_init_cond_exec(ring);
 
 		if (ring->funcs->emit_hdp_flush
@@ -239,7 +239,7 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 				       AMDGPU_FENCE_FLAG_64BIT);
 	}
 
-	if (patch_offset != ~0 && ring->funcs->patch_cond_exec)
+	if (patch_offset != ~0 && ring->funcs->patch_cond_exec && amdgpu_mcbp == 1)
 		amdgpu_ring_patch_cond_exec(ring, patch_offset);
 
 	ring->current_ctx = fence_ctx;

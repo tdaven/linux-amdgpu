@@ -112,6 +112,7 @@ int amdgpu_cntl_sb_buf_per_se = 0;
 int amdgpu_param_buf_per_se = 0;
 int amdgpu_disable_kcq = 0;
 int amdgpu_print_va_info = 0;
+int amdgpu_mcbp = -1;
 
 MODULE_PARM_DESC(vramlimit, "Restrict VRAM for testing, in megabytes");
 module_param_named(vramlimit, amdgpu_vram_limit, int, 0600);
@@ -245,6 +246,9 @@ module_param_named(disable_kcq, amdgpu_disable_kcq, int, 0444);
 
 MODULE_PARM_DESC(print_va_info, "print debug VA map or clr footprint (default off)");
 module_param_named(print_va_info, amdgpu_print_va_info, int ,0444);
+
+MODULE_PARM_DESC(mcbp, "enable or disable MCBP (default off)");
+module_param_named(mcbp, amdgpu_mcbp, int ,0444);
 
 
 static const struct pci_device_id pciidlist[] = {

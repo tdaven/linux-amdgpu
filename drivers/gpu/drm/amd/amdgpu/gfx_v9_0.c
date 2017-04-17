@@ -3107,7 +3107,7 @@ static void gfx_v9_0_ring_emit_ib_gfx(struct amdgpu_ring *ring,
 
         control |= ib->length_dw | (vm_id << 24);
 
-		if (amdgpu_sriov_vf(ring->adev) && (ib->flags & AMDGPU_IB_FLAG_PREEMPT))
+		if (amdgpu_mcbp == 1 && amdgpu_sriov_vf(ring->adev) && (ib->flags & AMDGPU_IB_FLAG_PREEMPT))
 			control |= INDIRECT_BUFFER_PRE_ENB(1);
 
         amdgpu_ring_write(ring, header);
