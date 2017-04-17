@@ -50,63 +50,6 @@ static void vce_v4_0_mc_resume(struct amdgpu_device *adev);
 static void vce_v4_0_set_ring_funcs(struct amdgpu_device *adev);
 static void vce_v4_0_set_irq_funcs(struct amdgpu_device *adev);
 
-static inline void mmsch_insert_direct_wt(struct mmsch_v1_0_cmd_direct_write *direct_wt,
-					  uint32_t *init_table,
-					  uint32_t reg_offset,
-					  uint32_t value)
-{
-	direct_wt->cmd_header.reg_offset = reg_offset;
-	direct_wt->reg_value = value;
-	memcpy((void *)init_table, direct_wt, sizeof(struct mmsch_v1_0_cmd_direct_write));
-}
-
-static inline void mmsch_insert_direct_rd_mod_wt(struct mmsch_v1_0_cmd_direct_read_modify_write *direct_rd_mod_wt,
-						 uint32_t *init_table,
-						 uint32_t reg_offset,
-						 uint32_t mask, uint32_t data)
-{
-	direct_rd_mod_wt->cmd_header.reg_offset = reg_offset;
-	direct_rd_mod_wt->mask_value = mask;
-	direct_rd_mod_wt->write_data = data;
-	memcpy((void *)init_table, direct_rd_mod_wt,
-	       sizeof(struct mmsch_v1_0_cmd_direct_read_modify_write));
-}
-
-static inline void mmsch_insert_direct_poll(struct mmsch_v1_0_cmd_direct_polling *direct_poll,
-					    uint32_t *init_table,
-					    uint32_t reg_offset,
-					    uint32_t mask, uint32_t wait)
-{
-	direct_poll->cmd_header.reg_offset = reg_offset;
-	direct_poll->mask_value = mask;
-	direct_poll->wait_value = wait;
-	memcpy((void *)init_table, direct_poll, sizeof(struct mmsch_v1_0_cmd_direct_polling));
-}
-
-#define INSERT_DIRECT_RD_MOD_WT(reg, mask, data) { \
-	mmsch_insert_direct_rd_mod_wt(&direct_rd_mod_wt, \
-				      init_table, (reg), \
-				      (mask), (data)); \
-	init_table += sizeof(struct mmsch_v1_0_cmd_direct_read_modify_write)/4; \
-	table_size += sizeof(struct mmsch_v1_0_cmd_direct_read_modify_write)/4; \
-}
-
-#define INSERT_DIRECT_WT(reg, value) { \
-	mmsch_insert_direct_wt(&direct_wt, \
-			       init_table, (reg), \
-			       (value)); \
-	init_table += sizeof(struct mmsch_v1_0_cmd_direct_write)/4; \
-	table_size += sizeof(struct mmsch_v1_0_cmd_direct_write)/4; \
-}
-
-#define INSERT_DIRECT_POLL(reg, mask, wait) { \
-	mmsch_insert_direct_poll(&direct_poll, \
-				 init_table, (reg), \
-				 (mask), (wait)); \
-	init_table += sizeof(struct mmsch_v1_0_cmd_direct_polling)/4; \
-	table_size += sizeof(struct mmsch_v1_0_cmd_direct_polling)/4; \
-}
-
 /**
  * vce_v4_0_ring_get_rptr - get read pointer
  *
