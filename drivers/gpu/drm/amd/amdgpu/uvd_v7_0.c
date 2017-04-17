@@ -28,6 +28,7 @@
 #include "soc15d.h"
 #include "soc15_common.h"
 #include "mmsch_v1_0.h"
+#include "gmc_v9_0.h"
 
 #include "vega10/soc15ip.h"
 #include "vega10/UVD/uvd_7_0_offset.h"
@@ -1336,44 +1337,48 @@ static void uvd_v7_0_enc_ring_insert_end(struct amdgpu_ring *ring)
 static void uvd_v7_0_enc_ring_emit_vm_flush(struct amdgpu_ring *ring,
 			 unsigned int vm_id, uint64_t pd_addr)
 {
+	struct amdgpu_device *adev = ring->adev;
 	unsigned eng = ring->idx;
-	unsigned i;
+	struct amdgpu_vmhub *hub = &ring->adev->vmhub[AMDGPU_MMHUB];
+	uint32_t req = hub->get_invalidate_req(vm_id);
 
 	pd_addr = pd_addr | 0x1; /* valid bit */
 	/* now only use physical base address of PDE and valid */
 	BUG_ON(pd_addr & 0xFFFF00000000003EULL);
 
-	for (i = 0; i < AMDGPU_MAX_VMHUBS; ++i) {
-		struct amdgpu_vmhub *hub = &ring->adev->vmhub[i];
-		uint32_t req = hub->get_invalidate_req(vm_id);
+	amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WRITE);
+	amdgpu_ring_write(ring,
+		(hub->ctx0_ptb_addr_hi32 + vm_id * 2) << 2);
+	amdgpu_ring_write(ring, upper_32_bits(pd_addr));
 
-		amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WRITE);
-		amdgpu_ring_write(ring,
-			(hub->ctx0_ptb_addr_hi32 + vm_id * 2) << 2);
-		amdgpu_ring_write(ring, upper_32_bits(pd_addr));
+	amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WRITE);
+	amdgpu_ring_write(ring,
+		(hub->ctx0_ptb_addr_lo32 + vm_id * 2) << 2);
+	amdgpu_ring_write(ring, lower_32_bits(pd_addr));
 
-		amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WRITE);
-		amdgpu_ring_write(ring,
-			(hub->ctx0_ptb_addr_lo32 + vm_id * 2) << 2);
-		amdgpu_ring_write(ring, lower_32_bits(pd_addr));
+	amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WAIT);
+	amdgpu_ring_write(ring,
+		(hub->ctx0_ptb_addr_lo32 + vm_id * 2) << 2);
+	amdgpu_ring_write(ring, 0xffffffff);
+	amdgpu_ring_write(ring, lower_32_bits(pd_addr));
 
-		amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WAIT);
-		amdgpu_ring_write(ring,
-			(hub->ctx0_ptb_addr_lo32 + vm_id * 2) << 2);
-		amdgpu_ring_write(ring, 0xffffffff);
-		amdgpu_ring_write(ring, lower_32_bits(pd_addr));
+	/* flush TLB */
+	amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WRITE);
+	amdgpu_ring_write(ring, (hub->vm_inv_eng0_req + eng) << 2);
+	amdgpu_ring_write(ring, req);
 
-		/* flush TLB */
-		amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WRITE);
-		amdgpu_ring_write(ring,	(hub->vm_inv_eng0_req + eng) << 2);
-		amdgpu_ring_write(ring, req);
+	/* wait for flush */
+	amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WAIT);
+	amdgpu_ring_write(ring, (hub->vm_inv_eng0_ack + eng) << 2);
+	amdgpu_ring_write(ring, 1 << vm_id);
+	amdgpu_ring_write(ring, 1 << vm_id);
 
-		/* wait for flush */
-		amdgpu_ring_write(ring, HEVC_ENC_CMD_REG_WAIT);
-		amdgpu_ring_write(ring, (hub->vm_inv_eng0_ack + eng) << 2);
-		amdgpu_ring_write(ring, 1 << vm_id);
-		amdgpu_ring_write(ring, 1 << vm_id);
-	}
+	hub = &ring->adev->vmhub[AMDGPU_GFXHUB];
+	WREG32_NO_KIQ(hub->ctx0_ptb_addr_lo32 + vm_id * 2,
+			  lower_32_bits(pd_addr));
+	WREG32_NO_KIQ(hub->ctx0_ptb_addr_hi32 + vm_id * 2,
+			  upper_32_bits(pd_addr));
+	gmc_v9_0_flush_vmhub(ring->adev, hub, eng, vm_id);
 }
 
 #if 0
