@@ -479,9 +479,10 @@ int soc15_set_ip_blocks(struct amdgpu_device *adev)
 {
 	nbio_v6_1_detect_hw_virt(adev);
 
-	if (amdgpu_sriov_vf(adev))
+	if (amdgpu_sriov_vf(adev)) {
 		adev->virt.ops = &xgpu_ai_virt_ops;
-
+		adev->virt.mm_table.gpu_addr = 0;
+	}
 	switch (adev->asic_type) {
 	case CHIP_VEGA10:
 		amdgpu_ip_block_add(adev, &vega10_common_ip_block);
