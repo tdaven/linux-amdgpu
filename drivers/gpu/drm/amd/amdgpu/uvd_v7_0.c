@@ -369,7 +369,10 @@ static int uvd_v7_0_early_init(void *handle)
 {
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
-	adev->uvd.num_enc_rings = 2;
+	if (amdgpu_sriov_vf(adev))
+		adev->uvd.num_enc_rings = 1;
+	else
+		adev->uvd.num_enc_rings = 2;
 	uvd_v7_0_set_ring_funcs(adev);
 	uvd_v7_0_set_enc_ring_funcs(adev);
 	uvd_v7_0_set_irq_funcs(adev);
@@ -422,12 +425,14 @@ static int uvd_v7_0_sw_init(void *handle)
 	r = amdgpu_uvd_resume(adev);
 	if (r)
 		return r;
+	if (!amdgpu_sriov_vf(adev)) {
+		ring = &adev->uvd.ring;
+		sprintf(ring->name, "uvd");
+		r = amdgpu_ring_init(adev, ring, 512, &adev->uvd.irq, 0);
+		if (r)
+			return r;
+	}
 
-	ring = &adev->uvd.ring;
-	sprintf(ring->name, "uvd");
-	r = amdgpu_ring_init(adev, ring, 512, &adev->uvd.irq, 0);
-	if (r)
-		return r;
 
 	for (i = 0; i < adev->uvd.num_enc_rings; ++i) {
 		ring = &adev->uvd.ring_enc[i];
@@ -484,48 +489,53 @@ static int uvd_v7_0_hw_init(void *handle)
 	uint32_t tmp;
 	int i, r;
 
-	r = uvd_v7_0_start(adev);
+	if (amdgpu_sriov_vf(adev))
+		r = uvd_v7_0_sriov_start(adev);
+	else
+		r = uvd_v7_0_start(adev);
 	if (r)
 		goto done;
 
-	ring->ready = true;
-	r = amdgpu_ring_test_ring(ring);
-	if (r) {
-		ring->ready = false;
-		goto done;
+	if (!amdgpu_sriov_vf(adev)) {
+		ring->ready = true;
+		r = amdgpu_ring_test_ring(ring);
+		if (r) {
+			ring->ready = false;
+			goto done;
+		}
+
+		r = amdgpu_ring_alloc(ring, 10);
+		if (r) {
+			DRM_ERROR("amdgpu: ring failed to lock UVD ring (%d).\n", r);
+			goto done;
+		}
+
+		tmp = PACKET0(SOC15_REG_OFFSET(UVD, 0,
+			mmUVD_SEMA_WAIT_FAULT_TIMEOUT_CNTL), 0);
+		amdgpu_ring_write(ring, tmp);
+		amdgpu_ring_write(ring, 0xFFFFF);
+
+		tmp = PACKET0(SOC15_REG_OFFSET(UVD, 0,
+			mmUVD_SEMA_WAIT_INCOMPLETE_TIMEOUT_CNTL), 0);
+		amdgpu_ring_write(ring, tmp);
+		amdgpu_ring_write(ring, 0xFFFFF);
+
+		tmp = PACKET0(SOC15_REG_OFFSET(UVD, 0,
+			mmUVD_SEMA_SIGNAL_INCOMPLETE_TIMEOUT_CNTL), 0);
+		amdgpu_ring_write(ring, tmp);
+		amdgpu_ring_write(ring, 0xFFFFF);
+
+		/* Clear timeout status bits */
+		amdgpu_ring_write(ring, PACKET0(SOC15_REG_OFFSET(UVD, 0,
+			mmUVD_SEMA_TIMEOUT_STATUS), 0));
+		amdgpu_ring_write(ring, 0x8);
+
+		amdgpu_ring_write(ring, PACKET0(SOC15_REG_OFFSET(UVD, 0,
+			mmUVD_SEMA_CNTL), 0));
+		amdgpu_ring_write(ring, 3);
+
+		amdgpu_ring_commit(ring);
 	}
-
-	r = amdgpu_ring_alloc(ring, 10);
-	if (r) {
-		DRM_ERROR("amdgpu: ring failed to lock UVD ring (%d).\n", r);
-		goto done;
-	}
-
-	tmp = PACKET0(SOC15_REG_OFFSET(UVD, 0,
-		mmUVD_SEMA_WAIT_FAULT_TIMEOUT_CNTL), 0);
-	amdgpu_ring_write(ring, tmp);
-	amdgpu_ring_write(ring, 0xFFFFF);
-
-	tmp = PACKET0(SOC15_REG_OFFSET(UVD, 0,
-		mmUVD_SEMA_WAIT_INCOMPLETE_TIMEOUT_CNTL), 0);
-	amdgpu_ring_write(ring, tmp);
-	amdgpu_ring_write(ring, 0xFFFFF);
-
-	tmp = PACKET0(SOC15_REG_OFFSET(UVD, 0,
-		mmUVD_SEMA_SIGNAL_INCOMPLETE_TIMEOUT_CNTL), 0);
-	amdgpu_ring_write(ring, tmp);
-	amdgpu_ring_write(ring, 0xFFFFF);
-
-	/* Clear timeout status bits */
-	amdgpu_ring_write(ring, PACKET0(SOC15_REG_OFFSET(UVD, 0,
-		mmUVD_SEMA_TIMEOUT_STATUS), 0));
-	amdgpu_ring_write(ring, 0x8);
-
-	amdgpu_ring_write(ring, PACKET0(SOC15_REG_OFFSET(UVD, 0,
-		mmUVD_SEMA_CNTL), 0));
-	amdgpu_ring_write(ring, 3);
-
-	amdgpu_ring_commit(ring);
 
 	for (i = 0; i < adev->uvd.num_enc_rings; ++i) {
 		ring = &adev->uvd.ring_enc[i];
