@@ -1474,7 +1474,10 @@ static int amdgpu_early_init(struct amdgpu_device *adev)
 			}
 		}
 	}
-
+	if (amdgpu_sriov_vf(adev)) {
+		amdgpu_cg_mask = 0;
+		amdgpu_pg_mask = 0;
+	}
 	adev->cg_flags &= amdgpu_cg_mask;
 	adev->pg_flags &= amdgpu_pg_mask;
 
