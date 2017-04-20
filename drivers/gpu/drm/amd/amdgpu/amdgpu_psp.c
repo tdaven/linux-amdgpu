@@ -303,6 +303,14 @@ static int psp_load_fw(struct amdgpu_device *adev)
 		if (ucode->ucode_id == AMDGPU_UCODE_ID_SMC &&
 		    psp_smu_reload_quirk(psp))
 			continue;
+		if(amdgpu_sriov_vf(adev)  &&
+			(ucode->ucode_id == AMDGPU_UCODE_ID_SDMA0
+			|| ucode->ucode_id == AMDGPU_UCODE_ID_SDMA1
+			|| ucode->ucode_id == AMDGPU_UCODE_ID_RLC_G ))
+		{
+		    DRM_INFO("skip ucode loading in SRIOV VF for ucode id = %x\n", ucode->ucode_id);
+		    continue;
+		}
 
 		ret = psp_prep_cmd_buf(ucode, cmd);
 		if (ret)
