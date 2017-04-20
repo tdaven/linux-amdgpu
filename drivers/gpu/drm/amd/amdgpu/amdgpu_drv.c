@@ -250,6 +250,12 @@ module_param_named(param_buf_per_se, amdgpu_param_buf_per_se, int, 0444);
 MODULE_PARM_DESC(job_hang_limit, "how much time allow a job hang and not drop it (default 0)");
 module_param_named(job_hang_limit, amdgpu_job_hang_limit, int ,0444);
 
+#ifdef CONFIG_DRM_AMDGPU_CIK
+int amdgpu_cik_support = 1;
+MODULE_PARM_DESC(cik_support, "CIK support (1 = enabled (default), 0 = disabled)");
+module_param_named(cik_support, amdgpu_cik_support, int, 0444);
+#endif
+
 
 static const struct pci_device_id pciidlist[] = {
 #ifdef  CONFIG_DRM_AMDGPU_SI
