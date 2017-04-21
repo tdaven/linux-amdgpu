@@ -773,6 +773,8 @@ static int uvd_v7_0_sriov_start(struct amdgpu_device *adev)
 								~UVD_POWER_STATUS__UVD_PG_MODE_MASK, 0);
 		INSERT_DIRECT_RD_MOD_WT(SOC15_REG_OFFSET(UVD, 0, mmUVD_STATUS),
 								0xFFFFFFFF, 0x00000004);
+		
+		size = AMDGPU_GPU_PAGE_ALIGN(adev->uvd.fw->size + 4);
 		/* mc resume*/
 		if (adev->firmware.load_type == AMDGPU_FW_LOAD_PSP) {
 			INSERT_DIRECT_WT(SOC15_REG_OFFSET(UVD, 0, mmUVD_LMI_VCPU_CACHE_64BIT_BAR_LOW),
