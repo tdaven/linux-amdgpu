@@ -655,7 +655,8 @@ static int amdgpu_debugfs_gpu_reset(struct seq_file *m, void *data)
 	struct amdgpu_device *adev = dev->dev_private;
 
 	seq_printf(m, "gpu reset\n");
-	amdgpu_gpu_reset(adev);
+	if (!amdgpu_sriov_vf(adev))
+		amdgpu_gpu_reset(adev);
 
 	return 0;
 }

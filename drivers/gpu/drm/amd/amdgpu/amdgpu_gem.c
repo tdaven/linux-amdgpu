@@ -272,7 +272,7 @@ void amdgpu_gem_object_close(struct drm_gem_object *obj,
 
 static int amdgpu_gem_handle_lockup(struct amdgpu_device *adev, int r)
 {
-	if (r == -EDEADLK) {
+	if (r == -EDEADLK && !amdgpu_sriov_vf(adev)) {
 		r = amdgpu_gpu_reset(adev);
 		if (!r)
 			r = -EAGAIN;
