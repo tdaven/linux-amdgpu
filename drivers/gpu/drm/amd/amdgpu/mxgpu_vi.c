@@ -538,7 +538,7 @@ static int xgpu_vi_mailbox_rcv_irq(struct amdgpu_device *adev,
 	int r;
 
 	/* trigger gpu-reset by hypervisor only if TDR disbaled */
-	if (msecs_to_jiffies(amdgpu_lockup_timeout) == MAX_SCHEDULE_TIMEOUT) {
+	if (amdgpu_lockup_timeout == 0) {
 		/* see what event we get */
 		r = xgpu_vi_mailbox_rcv_msg(adev, IDH_FLR_NOTIFICATION);
 
