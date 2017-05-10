@@ -2477,6 +2477,8 @@ struct radeon_device {
 };
 
 bool radeon_is_px(struct drm_device *dev);
+void radeon_device_switcheroo_init(struct radeon_device *rdev);
+void radeon_device_switcheroo_fini(struct radeon_device *rdev);
 int radeon_device_init(struct radeon_device *rdev,
 		       struct drm_device *ddev,
 		       struct pci_dev *pdev,

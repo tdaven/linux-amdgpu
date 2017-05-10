@@ -1298,6 +1298,29 @@ static const struct vga_switcheroo_client_ops radeon_switcheroo_ops = {
 	.can_switch = radeon_switcheroo_can_switch,
 };
 
+void radeon_device_switcheroo_init(struct radeon_device *rdev)
+{
+	bool runtime = false;
+
+	if (rdev->flags & RADEON_IS_PX) {
+		radeon_device_handle_px_quirks(rdev);
+		runtime = true;
+	}
+	if (!pci_is_thunderbolt_attached(rdev->pdev))
+		vga_switcheroo_register_client(rdev->pdev,
+					       &radeon_switcheroo_ops, runtime);
+	if (runtime)
+		vga_switcheroo_init_domain_pm_ops(rdev->dev, &rdev->vga_pm_domain);
+}
+
+void radeon_device_switcheroo_fini(struct radeon_device *rdev)
+{
+	if (!pci_is_thunderbolt_attached(rdev->pdev))
+		vga_switcheroo_unregister_client(rdev->pdev);
+	if (rdev->flags & RADEON_IS_PX)
+		vga_switcheroo_fini_domain_pm_ops(rdev->dev);
+}
+
 /**
  * radeon_device_init - initialize the driver
  *
@@ -1317,7 +1340,6 @@ int radeon_device_init(struct radeon_device *rdev,
 {
 	int r, i;
 	int dma_bits;
-	bool runtime = false;
 
 	rdev->shutdown = false;
 	rdev->dev = &pdev->dev;
@@ -1458,21 +1480,10 @@ int radeon_device_init(struct radeon_device *rdev,
 	if (rdev->rio_mem == NULL)
 		DRM_ERROR("Unable to find PCI I/O BAR\n");
 
-	if (rdev->flags & RADEON_IS_PX)
-		radeon_device_handle_px_quirks(rdev);
-
 	/* if we have > 1 VGA cards, then disable the radeon VGA resources */
 	/* this will fail for cards that aren't VGA class devices, just
 	 * ignore it */
 	vga_client_register(rdev->pdev, rdev, NULL, radeon_vga_set_decode);
-
-	if (rdev->flags & RADEON_IS_PX)
-		runtime = true;
-	if (!pci_is_thunderbolt_attached(rdev->pdev))
-		vga_switcheroo_register_client(rdev->pdev,
-					       &radeon_switcheroo_ops, runtime);
-	if (runtime)
-		vga_switcheroo_init_domain_pm_ops(rdev->dev, &rdev->vga_pm_domain);
 
 	r = radeon_init(rdev);
 	if (r)
@@ -1540,11 +1551,6 @@ int radeon_device_init(struct radeon_device *rdev,
 	return 0;
 
 failed:
-	/* balance pm_runtime_get_sync() in radeon_driver_unload_kms() */
-	if (radeon_is_px(ddev))
-		pm_runtime_put_noidle(ddev->dev);
-	if (runtime)
-		vga_switcheroo_fini_domain_pm_ops(rdev->dev);
 	return r;
 }
 
@@ -1563,10 +1569,6 @@ void radeon_device_fini(struct radeon_device *rdev)
 	/* evict vram memory */
 	radeon_bo_evict_vram(rdev);
 	radeon_fini(rdev);
-	if (!pci_is_thunderbolt_attached(rdev->pdev))
-		vga_switcheroo_unregister_client(rdev->pdev);
-	if (rdev->flags & RADEON_IS_PX)
-		vga_switcheroo_fini_domain_pm_ops(rdev->dev);
 	vga_client_register(rdev->pdev, NULL, NULL, NULL);
 	if (rdev->rio_mem)
 		pci_iounmap(rdev->pdev, rdev->rio_mem);

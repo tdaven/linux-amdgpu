@@ -71,9 +71,10 @@ void radeon_driver_unload_kms(struct drm_device *dev)
 	radeon_kfd_device_fini(rdev);
 
 	radeon_acpi_fini(rdev);
-	
+
 	radeon_modeset_fini(rdev);
 	radeon_device_fini(rdev);
+	radeon_device_switcheroo_fini(rdev);
 
 done_free:
 	kfree(rdev);
@@ -148,6 +149,8 @@ int radeon_driver_load_kms(struct drm_device *dev, unsigned long flags)
 		dev_dbg(&dev->pdev->dev,
 				"Error during ACPI methods call\n");
 	}
+
+	radeon_device_switcheroo_init(rdev);
 
 	radeon_kfd_device_probe(rdev);
 	radeon_kfd_device_init(rdev);
