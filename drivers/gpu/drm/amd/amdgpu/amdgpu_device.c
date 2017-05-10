@@ -2073,16 +2073,6 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 	 * ignore it */
 	vga_client_register(adev->pdev, adev, NULL, amdgpu_vga_set_decode);
 
-	if (amdgpu_runtime_pm == 1)
-		runtime = true;
-	if (amdgpu_device_is_px(ddev))
-		runtime = true;
-	if (!pci_is_thunderbolt_attached(adev->pdev))
-		vga_switcheroo_register_client(adev->pdev,
-					       &amdgpu_switcheroo_ops, runtime);
-	if (runtime)
-		vga_switcheroo_init_domain_pm_ops(adev->dev, &adev->vga_pm_domain);
-
 	/* Read BIOS */
 	if (!amdgpu_get_bios(adev)) {
 		r = -EINVAL;
@@ -2199,11 +2189,19 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 		goto failed;
 	}
 
+	if (amdgpu_runtime_pm == 1)
+		runtime = true;
+	if (amdgpu_device_is_px(ddev))
+		runtime = true;
+	if (!pci_is_thunderbolt_attached(adev->pdev))
+		vga_switcheroo_register_client(adev->pdev,
+					       &amdgpu_switcheroo_ops, runtime);
+	if (runtime)
+		vga_switcheroo_init_domain_pm_ops(adev->dev, &adev->vga_pm_domain);
+
 	return 0;
 
 failed:
-	if (runtime)
-		vga_switcheroo_fini_domain_pm_ops(adev->dev);
 	return r;
 }
 
