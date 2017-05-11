@@ -16,6 +16,7 @@
 #include <linux/platform_device.h>
 #include <linux/module.h>
 #include <linux/err.h>
+#include <linux/io.h>
 
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
