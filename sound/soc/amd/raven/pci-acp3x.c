@@ -15,6 +15,7 @@
 
 #include <linux/pci.h>
 #include <linux/module.h>
+#include <linux/io.h>
 
 #include "acp3x.h"
 
