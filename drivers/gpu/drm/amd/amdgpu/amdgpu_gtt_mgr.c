@@ -260,10 +260,16 @@ static void amdgpu_gtt_mgr_debug(struct ttm_mem_type_manager *man,
 				  const char *prefix)
 {
 	struct amdgpu_gtt_mgr *mgr = man->priv;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
 	struct drm_printer p = drm_debug_printer(prefix);
+#endif
 
 	spin_lock(&mgr->lock);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
 	drm_mm_print(&mgr->mm, &p);
+#else
+	drm_mm_debug_table(&mgr->mm, prefix);
+#endif
 	spin_unlock(&mgr->lock);
 }
 
