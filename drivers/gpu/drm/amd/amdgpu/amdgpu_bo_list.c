@@ -70,10 +70,17 @@ static void amdgpu_bo_list_destroy(struct amdgpu_fpriv *fpriv, int id)
 	struct amdgpu_bo_list *list;
 
 	mutex_lock(&fpriv->bo_list_lock);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
+	list = idr_find(&fpriv->bo_list_handles, id);
+#else
 	list = idr_remove(&fpriv->bo_list_handles, id);
+#endif
 	if (list) {
 		/* Another user may have a reference to this list still */
 		mutex_lock(&list->lock);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
+		idr_remove(&fpriv->bo_list_handles, id);
+#endif
 		mutex_unlock(&list->lock);
 		amdgpu_bo_list_free(list);
 	}
