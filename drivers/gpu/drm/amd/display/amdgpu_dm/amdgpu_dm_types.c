@@ -2998,7 +2998,11 @@ static int dm_force_atomic_commit(struct drm_connector *connector)
 
 err:
 	DRM_ERROR("Restoring old state failed with %i\n", ret);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)
+	drm_atomic_state_free(state);
+#else
 	drm_atomic_state_put(state);
+#endif
 
 	return ret;
 }
