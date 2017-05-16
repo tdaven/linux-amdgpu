@@ -29,7 +29,7 @@
 #else
 #include <linux/kfifo.h>
 #endif
-#include <linux/dma-fence.h>
+#include <kcl/kcl_fence.h>
 
 struct amd_gpu_scheduler;
 struct amd_sched_rq;
