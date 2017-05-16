@@ -34,7 +34,6 @@
 #include <linux/kref.h>
 #include <linux/rbtree.h>
 #include <linux/hashtable.h>
-#include <linux/dma-fence.h>
 
 #include <ttm/ttm_bo_api.h>
 #include <ttm/ttm_bo_driver.h>
