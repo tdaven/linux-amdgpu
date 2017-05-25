@@ -646,10 +646,6 @@ static int gmc_v9_0_sw_init(void *handle)
 		adev->vm_manager.num_level = 3;
 	amdgpu_vm_manager_init(adev);
 
-	/* base offset of vram pages */
-	/*XXX This value is not zero for APU*/
-	adev->vm_manager.vram_base_offset = 0;
-
 	return 0;
 }
 
