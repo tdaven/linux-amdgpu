@@ -1145,6 +1145,7 @@ struct amdgpu_gfx {
 	bool                            in_suspend;
 	/* NGG */
 	struct amdgpu_ngg		ngg;
+	bool                            kiq_en;
 };
 
 int amdgpu_ib_get(struct amdgpu_device *adev, struct amdgpu_vm *vm,
