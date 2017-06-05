@@ -5139,8 +5139,10 @@ static int gfx_v8_0_kcq_init_queue(struct amdgpu_ring *ring)
 		mutex_lock(&adev->srbm_mutex);
 		vi_srbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
 		gfx_v8_0_mqd_init(ring);
-		if (!(adev->flags & AMD_IS_APU))
-			gfx_v8_0_kiq_init_register(ring);
+		if (!(adev->flags & AMD_IS_APU)) {
+			gfx_v8_0_deactivate_hqd(adev, 1);
+			gfx_v8_0_mqd_commit(ring);
+		}
 		vi_srbm_select(adev, 0, 0, 0, 0);
 		mutex_unlock(&adev->srbm_mutex);
 
