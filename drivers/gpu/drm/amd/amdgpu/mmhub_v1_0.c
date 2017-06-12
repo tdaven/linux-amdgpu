@@ -200,8 +200,7 @@ static void mmhub_v1_0_setup_vmid_config(struct amdgpu_device *adev)
 	uint32_t tmp;
 
 	for (i = 0; i <= 14; i++) {
-		tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, mmVM_CONTEXT1_CNTL)
-				+ i);
+		tmp = RREG32_SOC15_OFFSET(MMHUB, 0, mmVM_CONTEXT1_CNTL, i);
 		tmp = REG_SET_FIELD(tmp, VM_CONTEXT1_CNTL,
 				ENABLE_CONTEXT, 1);
 		tmp = REG_SET_FIELD(tmp, VM_CONTEXT1_CNTL,
@@ -226,12 +225,12 @@ static void mmhub_v1_0_setup_vmid_config(struct amdgpu_device *adev)
 		/* Send no-retry XNACK on fault to suppress VM fault storm. */
 		tmp = REG_SET_FIELD(tmp, VM_CONTEXT1_CNTL,
 				    RETRY_PERMISSION_OR_INVALID_PAGE_FAULT, 0);
-		WREG32(SOC15_REG_OFFSET(MMHUB, 0, mmVM_CONTEXT1_CNTL) + i, tmp);
-		WREG32(SOC15_REG_OFFSET(MMHUB, 0, mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32) + i*2, 0);
-		WREG32(SOC15_REG_OFFSET(MMHUB, 0, mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32) + i*2, 0);
-		WREG32(SOC15_REG_OFFSET(MMHUB, 0, mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32) + i*2,
+		WREG32_SOC15_OFFSET(MMHUB, 0, mmVM_CONTEXT1_CNTL, i, tmp);
+		WREG32_SOC15_OFFSET(MMHUB, 0, mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32, i*2, 0);
+		WREG32_SOC15_OFFSET(MMHUB, 0, mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32, i*2, 0);
+		WREG32_SOC15_OFFSET(MMHUB, 0, mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32, i*2,
 			lower_32_bits(adev->vm_manager.max_pfn - 1));
-		WREG32(SOC15_REG_OFFSET(MMHUB, 0, mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32) + i*2,
+		WREG32_SOC15_OFFSET(MMHUB, 0, mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32, i*2,
 			upper_32_bits(adev->vm_manager.max_pfn - 1));
 	}
 }
@@ -241,12 +240,10 @@ static void mmhub_v1_0_program_invalidation(struct amdgpu_device *adev)
 	unsigned i;
 
 	for (i = 0; i < 18; ++i) {
-		WREG32(SOC15_REG_OFFSET(MMHUB, 0,
-					mmVM_INVALIDATE_ENG0_ADDR_RANGE_LO32) +
-		       2 * i, 0xffffffff);
-		WREG32(SOC15_REG_OFFSET(MMHUB, 0,
-					mmVM_INVALIDATE_ENG0_ADDR_RANGE_HI32) +
-		       2 * i, 0x1f);
+		WREG32_SOC15_OFFSET(MMHUB, 0, mmVM_INVALIDATE_ENG0_ADDR_RANGE_LO32,
+				    2 * i, 0xffffffff);
+		WREG32_SOC15_OFFSET(MMHUB, 0, mmVM_INVALIDATE_ENG0_ADDR_RANGE_HI32,
+				    2 * i, 0x1f);
 	}
 }
 
@@ -285,7 +282,7 @@ void mmhub_v1_0_gart_disable(struct amdgpu_device *adev)
 
 	/* Disable all tables */
 	for (i = 0; i < 16; i++)
-		WREG32(SOC15_REG_OFFSET(MMHUB, 0, mmVM_CONTEXT0_CNTL) + i, 0);
+		WREG32_SOC15_OFFSET(MMHUB, 0, mmVM_CONTEXT0_CNTL, i, 0);
 
 	/* Setup TLB control */
 	tmp = RREG32_SOC15(MMHUB, 0, mmMC_VM_MX_L1_TLB_CNTL);
