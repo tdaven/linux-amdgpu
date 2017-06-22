@@ -71,10 +71,12 @@ int amdgpu_amdkfd_init(void)
 bool amdgpu_amdkfd_load_interface(struct amdgpu_device *adev)
 {
 	switch (adev->asic_type) {
+#ifdef CONFIG_DRM_AMDGPU_CIK
 	case CHIP_KAVERI:
 	case CHIP_HAWAII:
 		kfd2kgd = amdgpu_amdkfd_gfx_7_get_functions();
 		break;
+#endif
 	case CHIP_CARRIZO:
 	case CHIP_TONGA:
 	case CHIP_FIJI:
@@ -114,11 +116,10 @@ void amdgpu_amdkfd_device_init(struct amdgpu_device *adev)
 	if (adev->kfd) {
 		struct kgd2kfd_shared_resources gpu_resources = {
 			.compute_vmid_bitmap = global_compute_vmid_bitmap,
-
-			.gpuvm_size = (uint64_t)amdgpu_vm_size << 30,
 			.num_mec = adev->gfx.mec.num_mec,
 			.num_pipe_per_mec = adev->gfx.mec.num_pipe_per_mec,
-			.num_queue_per_pipe = adev->gfx.mec.num_queue_per_pipe
+			.num_queue_per_pipe = adev->gfx.mec.num_queue_per_pipe,
+			.gpuvm_size = (uint64_t)amdgpu_vm_size << 30
 		};
 
 		/* this is going to have a few of the MSBs set that we need to
