@@ -36,8 +36,8 @@
 
 #include "hdcp_types.h"
 
-#define FIRMWARE_CARRIZO	"amdgpu/hdcp14tx_ta.bin"
-#define ASD_BIN_CARRIZO		"amdgpu/asd.bin"
+#define FIRMWARE_CARRIZO	"amdgpu/carrizo_hdcptx_ta.bin"
+#define ASD_BIN_CARRIZO		"amdgpu/carrizo_asd.bin"
 MODULE_FIRMWARE(FIRMWARE_CARRIZO);
 MODULE_FIRMWARE(ASD_BIN_CARRIZO);
 
