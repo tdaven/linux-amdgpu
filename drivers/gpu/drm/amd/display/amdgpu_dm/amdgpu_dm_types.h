@@ -29,6 +29,7 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0) || defined(OS_NAME_RHEL_7_4)
 
 #include <drm/drmP.h>
+#include <drm/drm_atomic.h>
 
 struct amdgpu_framebuffer;
 struct amdgpu_display_manager;
@@ -50,10 +51,11 @@ struct dm_crtc_state {
 
 #define to_dm_crtc_state(x)    container_of(x, struct dm_crtc_state, base)
 
-struct dm_plane_state {
-	struct drm_plane_state base;
-	struct dc_surface *dc_surface;
+struct dm_atomic_state {
+	struct drm_atomic_state base;
 };
+
+#define to_dm_atomic_state(x) container_of(x, struct dm_atomic_state, base)
 
 
 /*TODO Jodan Hersen use the one in amdgpu_dm*/
