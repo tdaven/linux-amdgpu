@@ -38,6 +38,9 @@
 #define AMDGPU_PL_FLAG_DGMA		(TTM_PL_FLAG_PRIV << 3)
 #define AMDGPU_PL_FLAG_DGMA_IMPORT	(TTM_PL_FLAG_PRIV << 4)
 
+#define AMDGPU_GTT_MAX_TRANSFER_SIZE	512
+#define AMDGPU_GTT_NUM_TRANSFER_WINDOWS	2
+
 struct amdgpu_mman {
 	struct ttm_bo_global_ref        bo_global_ref;
 	struct drm_global_reference	mem_global_ref;
