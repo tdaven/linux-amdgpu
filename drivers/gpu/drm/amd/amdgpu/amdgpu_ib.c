@@ -178,9 +178,8 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 	if (ring->funcs->insert_start)
 		ring->funcs->insert_start(ring);
 
-	if (vm) {
+	if (job) {
 		amdgpu_ring_insert_nop(ring, extra_nop); /* prevent CE go too fast than DE */
-
 		r = amdgpu_vm_flush(ring, job);
 		if (r) {
 			amdgpu_ring_undo(ring);
