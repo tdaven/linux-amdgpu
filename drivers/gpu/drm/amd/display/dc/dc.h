@@ -493,8 +493,6 @@ struct dc_stream {
 	/* TODO: ABM info (DMCU) */
 	/* TODO: PSR info */
 	/* TODO: CEA VIC */
-
-	void *priv;
 };
 
 struct dc_stream_update {
