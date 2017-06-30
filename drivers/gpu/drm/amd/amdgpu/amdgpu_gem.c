@@ -56,7 +56,6 @@ int amdgpu_gem_object_create(struct amdgpu_device *adev, unsigned long size,
 {
 	struct amdgpu_bo *robj;
 	struct amdgpu_gem_object *gobj;
-	unsigned long max_size;
 	int r;
 
 	*obj = NULL;
@@ -65,27 +64,6 @@ int amdgpu_gem_object_create(struct amdgpu_device *adev, unsigned long size,
 		alignment = PAGE_SIZE;
 	}
 
-	if (!(initial_domain & (AMDGPU_GEM_DOMAIN_GDS | AMDGPU_GEM_DOMAIN_GWS | AMDGPU_GEM_DOMAIN_OA))) {
-		if (initial_domain & AMDGPU_GEM_DOMAIN_DGMA) {
-			max_size = (unsigned long)amdgpu_direct_gma_size << 20;
-			max_size -= atomic64_read(&adev->direct_gma.vram_usage);
-			flags |= AMDGPU_GEM_CREATE_NO_EVICT;
-		} else if (initial_domain & AMDGPU_GEM_DOMAIN_DGMA_IMPORT) {
-			max_size = (unsigned long)amdgpu_direct_gma_size << 20;
-			max_size -= atomic64_read(&adev->direct_gma.gart_usage);
-			flags |= AMDGPU_GEM_CREATE_NO_EVICT;
-		} else {
-			/* Maximum bo size is the unpinned gtt size since we use the gtt to
-			 * handle vram to system pool migrations.
-			 */
-			max_size = adev->mc.gtt_size - adev->gart_pin_size;
-		}
-		if (size > max_size) {
-			DRM_DEBUG("Allocation size %ldMb bigger than %ldMb limit\n",
-				  size >> 20, max_size >> 20);
-			return -ENOMEM;
-		}
-	}
 retry:
 	r = amdgpu_bo_create(adev, size, alignment, kernel, initial_domain,
 			     flags, NULL, NULL, &robj);
