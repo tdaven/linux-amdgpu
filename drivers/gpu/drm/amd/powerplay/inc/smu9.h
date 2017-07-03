@@ -56,7 +56,7 @@
 #define FEATURE_LED_DISPLAY_BIT         24
 #define FEATURE_FAN_CONTROL_BIT         25
 #define FEATURE_VOLTAGE_CONTROLLER_BIT  26
-#define FEATURE_GFX_EDC_BIT             27
+#define FEATURE_SPARE_27_BIT            27
 #define FEATURE_SPARE_28_BIT            28
 #define FEATURE_SPARE_29_BIT            29
 #define FEATURE_SPARE_30_BIT            30
@@ -91,7 +91,7 @@
 #define FFEATURE_LED_DISPLAY_MASK        (1 << FEATURE_LED_DISPLAY_BIT        )
 #define FFEATURE_FAN_CONTROL_MASK        (1 << FEATURE_FAN_CONTROL_BIT        )
 #define FFEATURE_VOLTAGE_CONTROLLER_MASK (1 << FEATURE_VOLTAGE_CONTROLLER_BIT )
-#define FEATURE_GFX_EDC_MASK             (1 << FEATURE_GFX_EDC_BIT            )
+#define FFEATURE_SPARE_27_MASK           (1 << FEATURE_SPARE_27_BIT           )
 #define FFEATURE_SPARE_28_MASK           (1 << FEATURE_SPARE_28_BIT           )
 #define FFEATURE_SPARE_29_MASK           (1 << FEATURE_SPARE_29_BIT           )
 #define FFEATURE_SPARE_30_MASK           (1 << FEATURE_SPARE_30_BIT           )

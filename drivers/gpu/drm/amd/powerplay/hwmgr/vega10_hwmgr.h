@@ -65,7 +65,6 @@ enum {
 	GNLD_LED_DISPLAY,
 	GNLD_FAN_CONTROL,
 	GNLD_VOLTAGE_CONTROLLER,
-	GNLD_DIDT,
 	GNLD_FEATURES_MAX
 };
 
@@ -231,9 +230,7 @@ struct vega10_registry_data {
 	uint8_t   cac_support;
 	uint8_t   clock_stretcher_support;
 	uint8_t   db_ramping_support;
-	uint8_t   didt_mode;
 	uint8_t   didt_support;
-	uint8_t   edc_didt_support;
 	uint8_t   dynamic_state_patching_support;
 	uint8_t   enable_pkg_pwr_tracking_feature;
 	uint8_t   enable_tdc_limit_feature;
@@ -262,12 +259,10 @@ struct vega10_registry_data {
 	uint8_t   socclk_dpm_key_disabled;
 	uint8_t   spll_shutdown_support;
 	uint8_t   sq_ramping_support;
+	uint32_t  stable_pstate_sclk_dpm_percentage;
 	uint8_t   tcp_ramping_support;
 	uint8_t   tdc_support;
 	uint8_t   td_ramping_support;
-	uint8_t   dbr_ramping_support;
-	uint8_t   gc_didt_support;
-	uint8_t   psm_didt_support;
 	uint8_t   thermal_out_gpio_support;
 	uint8_t   thermal_support;
 	uint8_t   fw_ctf_enabled;
@@ -279,7 +274,6 @@ struct vega10_registry_data {
 	uint8_t   disable_water_mark;
 	uint8_t   zrpm_stop_temp;
 	uint8_t   zrpm_start_temp;
-	uint32_t  stable_pstate_sclk_dpm_percentage;
 	uint8_t   led_dpm_enabled;
 	uint8_t   vr0hot_enabled;
 	uint8_t   vr1hot_enabled;

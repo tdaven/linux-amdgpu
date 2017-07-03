@@ -145,19 +145,6 @@ static void vega10_set_default_registry_data(struct pp_hwmgr *hwmgr)
 	data->registry_data.vr1hot_enabled = 1;
 	data->registry_data.regulator_hot_gpio_support = 1;
 
-	data->registry_data.didt_support = 1;
-	if (data->registry_data.didt_support) {
-		data->registry_data.didt_mode = 6;
-		data->registry_data.sq_ramping_support = 1;
-		data->registry_data.db_ramping_support = 0;
-		data->registry_data.td_ramping_support = 0;
-		data->registry_data.tcp_ramping_support = 0;
-		data->registry_data.dbr_ramping_support = 0;
-		data->registry_data.edc_didt_support = 1;
-		data->registry_data.gc_didt_support = 0;
-		data->registry_data.psm_didt_support = 0;
-	}
-
 	data->display_voltage_mode = PPVEGA10_VEGA10DISPLAYVOLTAGEMODE_DFLT;
 	data->dcef_clk_quad_eqn_a = PPREGKEY_VEGA10QUADRATICEQUATION_DFLT;
 	data->dcef_clk_quad_eqn_b = PPREGKEY_VEGA10QUADRATICEQUATION_DFLT;
@@ -235,8 +222,6 @@ static int vega10_set_features_platform_caps(struct pp_hwmgr *hwmgr)
 	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
 			PHM_PlatformCaps_PowerContainment);
 	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
-			PHM_PlatformCaps_DiDtSupport);
-	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
 			PHM_PlatformCaps_SQRamping);
 	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
 			PHM_PlatformCaps_DBRamping);
@@ -244,34 +229,6 @@ static int vega10_set_features_platform_caps(struct pp_hwmgr *hwmgr)
 			PHM_PlatformCaps_TDRamping);
 	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
 			PHM_PlatformCaps_TCPRamping);
-	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
-			PHM_PlatformCaps_DBRRamping);
-	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
-			PHM_PlatformCaps_DiDtEDCEnable);
-	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
-			PHM_PlatformCaps_GCEDC);
-	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
-			PHM_PlatformCaps_PSM);
-
-	if (data->registry_data.didt_support) {
-		phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_DiDtSupport);
-		if (data->registry_data.sq_ramping_support)
-			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_SQRamping);
-		if (data->registry_data.db_ramping_support)
-			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_DBRamping);
-		if (data->registry_data.td_ramping_support)
-			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_TDRamping);
-		if (data->registry_data.tcp_ramping_support)
-			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_TCPRamping);
-		if (data->registry_data.dbr_ramping_support)
-			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_DBRRamping);
-		if (data->registry_data.edc_didt_support)
-			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_DiDtEDCEnable);
-		if (data->registry_data.gc_didt_support)
-			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_GCEDC);
-		if (data->registry_data.psm_didt_support)
-			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_PSM);
-	}
 
 	if (data->registry_data.power_containment_support)
 		phm_cap_set(hwmgr->platform_descriptor.platformCaps,
@@ -365,7 +322,6 @@ static void vega10_init_dpm_defaults(struct pp_hwmgr *hwmgr)
 			FEATURE_FAN_CONTROL_BIT;
 	data->smu_features[GNLD_VOLTAGE_CONTROLLER].smu_feature_id =
 			FEATURE_VOLTAGE_CONTROLLER_BIT;
-	data->smu_features[GNLD_DIDT].smu_feature_id = FEATURE_GFX_EDC_BIT;
 
 	if (!data->registry_data.prefetcher_dpm_key_disabled)
 		data->smu_features[GNLD_DPM_PREFETCHER].supported = true;
@@ -428,9 +384,6 @@ static void vega10_init_dpm_defaults(struct pp_hwmgr *hwmgr)
 
 	if (data->registry_data.vr0hot_enabled)
 		data->smu_features[GNLD_VR0HOT].supported = true;
-
-	if (data->registry_data.didt_support)
-		data->smu_features[GNLD_DIDT].supported = true;
 
 }
 
@@ -2884,11 +2837,6 @@ static int vega10_enable_dpm_tasks(struct pp_hwmgr *hwmgr)
 	PP_ASSERT_WITH_CODE(!tmp_result,
 			"Failed to start DPM!", result = tmp_result);
 
-	/* enable didt, do not abort if failed didt */
-	tmp_result = vega10_enable_didt_config(hwmgr);
-	PP_ASSERT(!tmp_result,
-			"Failed to enable didt config!");
-
 	tmp_result = vega10_enable_power_containment(hwmgr);
 	PP_ASSERT_WITH_CODE(!tmp_result,
 			"Failed to enable power containment!",
@@ -4717,10 +4665,6 @@ static int vega10_disable_dpm_tasks(struct pp_hwmgr *hwmgr)
 	tmp_result = vega10_disable_power_containment(hwmgr);
 	PP_ASSERT_WITH_CODE((tmp_result == 0),
 			"Failed to disable power containment!", result = tmp_result);
-
-	tmp_result = vega10_disable_didt_config(hwmgr);
-	PP_ASSERT_WITH_CODE((tmp_result == 0),
-			"Failed to disable didt config!", result = tmp_result);
 
 	tmp_result = vega10_avfs_enable(hwmgr, false);
 	PP_ASSERT_WITH_CODE((tmp_result == 0),
