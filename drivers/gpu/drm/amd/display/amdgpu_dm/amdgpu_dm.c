@@ -1574,6 +1574,7 @@ static int dm_early_init(void *handle)
 {
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
+	adev->ddev->driver->driver_features |= DRIVER_ATOMIC;
 	amdgpu_dm_set_irq_funcs(adev);
 
 	switch (adev->asic_type) {
