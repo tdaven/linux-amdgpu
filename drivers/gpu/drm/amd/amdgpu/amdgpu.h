@@ -1766,6 +1766,8 @@ struct amdgpu_device {
 
 	spinlock_t tlb_invalidation_lock;
 
+	/* record last mm index being written through WREG32*/
+	unsigned long last_mm_index;
 };
 
 static inline struct amdgpu_device *amdgpu_ttm_adev(struct ttm_bo_device *bdev)
