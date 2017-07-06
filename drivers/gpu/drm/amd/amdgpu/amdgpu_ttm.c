@@ -298,7 +298,7 @@ static int amdgpu_verify_access(struct ttm_buffer_object *bo, struct file *filp)
 			continue;
 
 		ww_mutex_unlock(&abo->tbo.resv->lock);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0) && !defined(OS_NAME_RHEL_7_4)
 		return drm_vma_node_verify_access(&gobj->base.vma_node, filp);
 #else
 		return drm_vma_node_verify_access(&gobj->base.vma_node,
