@@ -23,7 +23,7 @@
  *
  */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0) || defined(OS_NAME_RHEL_7_4)
 
 #include <linux/types.h>
 #include <linux/version.h>
@@ -1023,7 +1023,7 @@ static int amdgpu_atomic_helper_page_flip(struct drm_crtc *crtc,
 		goto fail;
 	}
 	acrtc->flip_flags = flags;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 7, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 7, 0) && !defined(OS_NAME_RHEL_7_4)
 	ret = drm_atomic_async_commit(state);
 #else
 	ret = drm_atomic_nonblocking_commit(state);
@@ -1607,7 +1607,8 @@ static const struct drm_plane_funcs dm_plane_funcs = {
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0) || \
 	defined(OS_NAME_RHEL_6) || \
-	defined(OS_NAME_RHEL_7_3)
+	defined(OS_NAME_RHEL_7_3) || \
+	defined(OS_NAME_RHEL_7_4)
 static int dm_plane_helper_prepare_fb(
 	struct drm_plane *plane,
 	struct drm_plane_state *new_state)
@@ -1666,7 +1667,8 @@ static int dm_plane_helper_prepare_fb(
 }
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0) || \
 	defined(OS_NAME_RHEL_6) || \
-	defined(OS_NAME_RHEL_7_3)
+	defined(OS_NAME_RHEL_7_3) || \
+	defined(OS_NAME_RHEL_7_4)
 static void dm_plane_helper_cleanup_fb(
 	struct drm_plane *plane,
 	struct drm_plane_state *old_state)
@@ -2930,7 +2932,7 @@ static int dm_force_atomic_commit(struct drm_connector *connector)
 
 err:
 	DRM_ERROR("Restoring old state failed with %i\n", ret);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) && !defined(OS_NAME_RHEL_7_4)
 	drm_atomic_state_free(state);
 #else
 	drm_atomic_state_put(state);

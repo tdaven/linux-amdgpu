@@ -23,7 +23,7 @@
  *
  */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0) || defined(OS_NAME_RHEL_7_4)
 
 #include "dm_services_types.h"
 #include "dc.h"
@@ -662,7 +662,7 @@ static int dm_display_resume(struct drm_device *ddev)
 
 err:
 	DRM_ERROR("Restoring old state failed with %i\n", ret);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) && !defined(OS_NAME_RHEL_7_4)
 	drm_atomic_state_free(state);
 #else
 	drm_atomic_state_put(state);
