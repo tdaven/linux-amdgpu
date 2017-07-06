@@ -2,7 +2,7 @@
 #include <kcl/kcl_fence.h>
 #include "kcl_common.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) && !defined(OS_NAME_RHEL_7_4)
 #define CREATE_TRACE_POINTS
 #include <kcl/kcl_trace.h>
 
