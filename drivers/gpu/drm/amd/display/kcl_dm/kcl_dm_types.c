@@ -23,7 +23,7 @@
  *
  */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0) && !defined(OS_NAME_RHEL_7_4)
 
 #include <linux/types.h>
 #include <linux/version.h>
@@ -1199,7 +1199,7 @@ retry:
 		goto fail;
 	}
 	acrtc->flip_flags = flags;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 7, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 7, 0) && !defined(OS_NAME_RHEL_7_4)
 	ret = drm_atomic_async_commit(state);
 #else
 	ret = drm_atomic_nonblocking_commit(state);
