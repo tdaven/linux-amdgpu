@@ -977,9 +977,9 @@ static bool dc_commit_context_no_check(struct dc *dc, struct validate_context *c
 
 	dc_release_validate_context(core_dc->current_context);
 
-	dc_retain_validate_context(context);
-
 	core_dc->current_context = context;
+
+	dc_retain_validate_context(core_dc->current_context);
 
 	return (result == DC_OK);
 }
@@ -1064,8 +1064,6 @@ bool dc_commit_streams(
 	}
 
 	result = dc_commit_context_no_check(dc, context);
-
-	return (result == DC_OK);
 
 fail:
 	dc_release_validate_context(context);
@@ -1763,6 +1761,7 @@ void dc_set_power_state(
 	enum dc_video_power_state video_power_state)
 {
 	struct core_dc *core_dc = DC_TO_CORE(dc);
+	int ref_count;
 
 	core_dc->previous_power_state = core_dc->current_power_state;
 	core_dc->current_power_state = video_power_state;
@@ -1781,8 +1780,13 @@ void dc_set_power_state(
 		 * clean state, and dc hw programming optimizations will not
 		 * cause any trouble.
 		 */
+
+		/* Preserve refcount */
+		ref_count = core_dc->current_context->ref_count;
+		dc_resource_validate_ctx_destruct(core_dc->current_context);
 		memset(core_dc->current_context, 0,
 				sizeof(*core_dc->current_context));
+		core_dc->current_context->ref_count = ref_count;
 
 		break;
 	}
