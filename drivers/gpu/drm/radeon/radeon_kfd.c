@@ -251,9 +251,7 @@ void radeon_kfd_device_init(struct radeon_device *rdev)
 	if (rdev->kfd) {
 		struct kgd2kfd_shared_resources gpu_resources = {
 			.compute_vmid_bitmap = 0xFF00,
-
 			.gpuvm_size = (uint64_t)radeon_vm_size << 30,
-			.num_mec = 1,
 			.num_pipe_per_mec = 4,
 			.num_queue_per_pipe = 8
 		};
