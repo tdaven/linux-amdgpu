@@ -61,6 +61,8 @@ struct amdgpu_hpd;
 #define to_amdgpu_framebuffer(x) container_of(x, struct amdgpu_framebuffer, base)
 #define to_amdgpu_plane(x)	container_of(x, struct amdgpu_plane, base)
 
+#define to_dm_plane_state(x)	container_of(x, struct dm_plane_state, base);
+
 #define AMDGPU_MAX_HPD_PINS 6
 #define AMDGPU_MAX_CRTCS 6
 #define AMDGPU_MAX_PLANES 6
@@ -447,16 +449,18 @@ struct amdgpu_crtc {
 	struct drm_pending_vblank_event *event;
 };
 
-struct amdgpu_drm_plane_state {
+/* TODO rename to dc_plane_state */
+struct  dc_surface;
+
+struct dm_plane_state {
 	struct drm_plane_state base;
-	unsigned int h_ratio;
-	unsigned int v_ratio;
+	struct  dc_surface* dc_surface;
 };
 
-static inline struct amdgpu_drm_plane_state *
+static inline struct dm_plane_state *
 to_amdgpu_plane_state(struct drm_plane_state *state)
 {
-	return container_of(state, struct amdgpu_drm_plane_state, base);
+	return container_of(state, struct dm_plane_state, base);
 }
 
 struct amdgpu_plane {
@@ -658,7 +662,9 @@ int amdgpu_get_crtc_scanoutpos(struct drm_device *dev, unsigned int pipe,
 
 int amdgpu_framebuffer_init(struct drm_device *dev,
 			     struct amdgpu_framebuffer *rfb,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) || defined(OS_NAME_RHEL_7_3)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) || \
+			defined(OS_NAME_RHEL_7_3) || \
+			defined(OS_NAME_RHEL_7_4)
 				const struct drm_mode_fb_cmd2 *mode_cmd,
 #else
 				struct drm_mode_fb_cmd2 *mode_cmd,
@@ -693,7 +699,7 @@ int amdgpu_align_pitch(struct amdgpu_device *adev, int width, int bpp, bool tile
 void amdgpu_print_display_setup(struct drm_device *dev);
 int amdgpu_modeset_create_props(struct amdgpu_device *adev);
 int amdgpu_crtc_set_config(struct drm_mode_set *set);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0) || defined(OS_NAME_RHEL_7_4)
 int amdgpu_crtc_page_flip_target(struct drm_crtc *crtc,
 				 struct drm_framebuffer *fb,
 				 struct drm_pending_vblank_event *event,

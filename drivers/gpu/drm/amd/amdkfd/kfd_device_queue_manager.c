@@ -310,7 +310,8 @@ static int allocate_hqd(struct device_queue_manager *dqm, struct queue *q)
 
 	set = false;
 
-	for (pipe = dqm->next_pipe_to_allocate, i = 0; i < get_pipes_per_mec(dqm);
+	for (pipe = dqm->next_pipe_to_allocate, i = 0;
+			i < get_pipes_per_mec(dqm);
 			pipe = ((pipe + 1) % get_pipes_per_mec(dqm)), ++i) {
 
 		if (!is_pipe_enabled(dqm, 0, pipe))
@@ -425,8 +426,6 @@ static int destroy_queue_nocpsch_locked(struct device_queue_manager *dqm,
 				KFD_PREEMPT_TYPE_WAVEFRONT_RESET,
 				KFD_HIQ_TIMEOUT,
 				q->pipe, q->queue);
-	if (retval != 0)
-		return retval;
 
 	mqd->uninit_mqd(mqd, q->mqd, q->mqd_mem_obj);
 
@@ -911,7 +910,8 @@ static int set_sched_resources(struct device_queue_manager *dqm)
 
 		/* This situation may be hit in the future if a new HW
 		 * generation exposes more than 64 queues. If so, the
-		 * definition of res.queue_mask needs updating */
+		 * definition of res.queue_mask needs updating
+		 */
 		if (WARN_ON(i > (sizeof(res.queue_mask)*8))) {
 			pr_err("Invalid queue enabled by amdgpu: %d\n", i);
 			break;
@@ -1231,7 +1231,7 @@ static int unmap_queues_cpsch(struct device_queue_manager *dqm,
 	retval = amdkfd_fence_wait_timeout(dqm->fence_addr, KFD_FENCE_COMPLETED,
 				QUEUE_PREEMPT_DEFAULT_TIMEOUT_MS);
 	if (retval != 0) {
-		pr_err("Unmapping queues failed.");
+		pr_err("%s queues failed.", reset ? "Resetting" : "Unmapping");
 		return retval;
 	}
 
@@ -1654,7 +1654,7 @@ void device_queue_manager_uninit(struct device_queue_manager *dqm)
 }
 
 int kfd_process_vm_fault(struct device_queue_manager *dqm,
-				unsigned int pasid)
+			 unsigned int pasid, bool reset)
 {
 	struct kfd_process_device *pdd;
 	struct kfd_process *p = kfd_lookup_process_by_pasid(pasid);
@@ -1664,7 +1664,7 @@ int kfd_process_vm_fault(struct device_queue_manager *dqm,
 		return -EINVAL;
 	pdd = kfd_get_process_device_data(dqm->dev, p);
 	if (pdd)
-		ret = process_evict_queues(dqm, &pdd->qpd, true);
+		ret = process_evict_queues(dqm, &pdd->qpd, reset);
 	kfd_unref_process(p);
 
 	return ret;

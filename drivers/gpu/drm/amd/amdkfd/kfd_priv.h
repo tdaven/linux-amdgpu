@@ -807,7 +807,6 @@ void run_rdma_free_callback(struct kfd_bo *buf_obj);
 struct kfd_process *kfd_lookup_process_by_pid(struct pid *pid);
 
 /* kfd dgpu memory */
-int kfd_map_memory_to_gpu(void *mem, struct kfd_process_device *pdd);
 int kfd_unmap_memory_from_gpu(void *mem, struct kfd_process_device *pdd);
 
 /* Process device data iterator */
@@ -908,7 +907,7 @@ struct kernel_queue *kernel_queue_init(struct kfd_dev *dev,
 					enum kfd_queue_type type);
 void kernel_queue_uninit(struct kernel_queue *kq);
 int kfd_process_vm_fault(struct device_queue_manager *dqm,
-				unsigned int pasid);
+			 unsigned int pasid, bool reset);
 
 /* Process Queue Manager */
 struct process_queue_node {

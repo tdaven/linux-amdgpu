@@ -189,6 +189,7 @@ static const struct kfd2kgd_calls kfd2kgd = {
 			get_atc_vmid_pasid_mapping_valid,
 	.write_vmid_invalidate_request = write_vmid_invalidate_request,
 	.invalidate_tlbs = invalidate_tlbs,
+	.sync_memory = amdgpu_amdkfd_gpuvm_sync_memory,
 	.alloc_memory_of_gpu = amdgpu_amdkfd_gpuvm_alloc_memory_of_gpu,
 	.free_memory_of_gpu = amdgpu_amdkfd_gpuvm_free_memory_of_gpu,
 	.map_memory_to_gpu = amdgpu_amdkfd_gpuvm_map_memory_to_gpu,
@@ -338,7 +339,8 @@ static int kgd_init_interrupts(struct kgd_dev *kgd, uint32_t pipe_id)
 
 	lock_srbm(kgd, mec, pipe, 0, 0);
 
-	WREG32(mmCPC_INT_CNTL, CP_INT_CNTL_RING0__TIME_STAMP_INT_ENABLE_MASK);
+	WREG32(mmCPC_INT_CNTL, CP_INT_CNTL_RING0__TIME_STAMP_INT_ENABLE_MASK |
+			CP_INT_CNTL_RING0__OPCODE_ERROR_INT_ENABLE_MASK);
 
 	unlock_srbm(kgd);
 

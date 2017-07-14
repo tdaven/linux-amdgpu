@@ -64,7 +64,9 @@ enum {
 	GNLD_FW_CTF,
 	GNLD_LED_DISPLAY,
 	GNLD_FAN_CONTROL,
-	GNLD_VOLTAGE_CONTROLLER,
+	GNLD_FEATURE_FAST_PPT_BIT,
+	GNLD_DIDT,
+	GNLD_ACG,
 	GNLD_FEATURES_MAX
 };
 
@@ -230,7 +232,9 @@ struct vega10_registry_data {
 	uint8_t   cac_support;
 	uint8_t   clock_stretcher_support;
 	uint8_t   db_ramping_support;
+	uint8_t   didt_mode;
 	uint8_t   didt_support;
+	uint8_t   edc_didt_support;
 	uint8_t   dynamic_state_patching_support;
 	uint8_t   enable_pkg_pwr_tracking_feature;
 	uint8_t   enable_tdc_limit_feature;
@@ -263,6 +267,9 @@ struct vega10_registry_data {
 	uint8_t   tcp_ramping_support;
 	uint8_t   tdc_support;
 	uint8_t   td_ramping_support;
+	uint8_t   dbr_ramping_support;
+	uint8_t   gc_didt_support;
+	uint8_t   psm_didt_support;
 	uint8_t   thermal_out_gpio_support;
 	uint8_t   thermal_support;
 	uint8_t   fw_ctf_enabled;
@@ -381,6 +388,8 @@ struct vega10_hwmgr {
 	struct vega10_smc_state_table  smc_state_table;
 
 	uint32_t                       config_telemetry;
+	uint32_t                       smu_version;
+	uint32_t                       acg_loop_state;
 };
 
 #define VEGA10_DPM2_NEAR_TDP_DEC                      10

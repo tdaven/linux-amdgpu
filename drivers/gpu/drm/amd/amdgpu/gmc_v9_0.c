@@ -23,6 +23,7 @@
 #include <linux/firmware.h>
 #include "amdgpu.h"
 #include "gmc_v9_0.h"
+#include "amdgpu_atomfirmware.h"
 
 #include "vega10/soc15ip.h"
 #include "vega10/HDP/hdp_4_0_offset.h"
@@ -419,8 +420,7 @@ static void gmc_v9_0_vram_gtt_location(struct amdgpu_device *adev,
 	if (!amdgpu_sriov_vf(adev))
 		base = mmhub_v1_0_get_fb_location(adev);
 	amdgpu_vram_location(adev, &adev->mc, base);
-	adev->mc.gtt_base_align = 0;
-	amdgpu_gtt_location(adev, mc);
+	amdgpu_gart_location(adev, mc);
 	/* base offset of vram pages */
 	if (adev->flags & AMD_IS_APU)
 		adev->vm_manager.vram_base_offset = gfxhub_v1_0_get_mc_fb_offset(adev);
@@ -442,43 +442,46 @@ static int gmc_v9_0_mc_init(struct amdgpu_device *adev)
 	u32 tmp;
 	int chansize, numchan;
 
-	/* hbm memory channel size */
-	chansize = 128;
+	adev->mc.vram_width = amdgpu_atomfirmware_get_vram_width(adev);
+	if (!adev->mc.vram_width) {
+		/* hbm memory channel size */
+		chansize = 128;
 
-	tmp = RREG32_SOC15(DF, 0, mmDF_CS_AON0_DramBaseAddress0);
-	tmp &= DF_CS_AON0_DramBaseAddress0__IntLvNumChan_MASK;
-	tmp >>= DF_CS_AON0_DramBaseAddress0__IntLvNumChan__SHIFT;
-	switch (tmp) {
-	case 0:
-	default:
-		numchan = 1;
-		break;
-	case 1:
-		numchan = 2;
-		break;
-	case 2:
-		numchan = 0;
-		break;
-	case 3:
-		numchan = 4;
-		break;
-	case 4:
-		numchan = 0;
-		break;
-	case 5:
-		numchan = 8;
-		break;
-	case 6:
-		numchan = 0;
-		break;
-	case 7:
-		numchan = 16;
-		break;
-	case 8:
-		numchan = 2;
-		break;
+		tmp = RREG32_SOC15(DF, 0, mmDF_CS_AON0_DramBaseAddress0);
+		tmp &= DF_CS_AON0_DramBaseAddress0__IntLvNumChan_MASK;
+		tmp >>= DF_CS_AON0_DramBaseAddress0__IntLvNumChan__SHIFT;
+		switch (tmp) {
+		case 0:
+		default:
+			numchan = 1;
+			break;
+		case 1:
+			numchan = 2;
+			break;
+		case 2:
+			numchan = 0;
+			break;
+		case 3:
+			numchan = 4;
+			break;
+		case 4:
+			numchan = 0;
+			break;
+		case 5:
+			numchan = 8;
+			break;
+		case 6:
+			numchan = 0;
+			break;
+		case 7:
+			numchan = 16;
+			break;
+		case 8:
+			numchan = 2;
+			break;
+		}
+		adev->mc.vram_width = numchan * chansize;
 	}
-	adev->mc.vram_width = numchan * chansize;
 
 	/* Could aper size report 0 ? */
 	adev->mc.aper_base = pci_resource_start(adev->pdev, 0);
@@ -494,34 +497,7 @@ static int gmc_v9_0_mc_init(struct amdgpu_device *adev)
 	if (adev->mc.visible_vram_size > adev->mc.real_vram_size)
 		adev->mc.visible_vram_size = adev->mc.real_vram_size;
 
-	/* unless the user had overridden it, set the gart
-	 * size equal to the 1024 or vram, whichever is larger.
-	 */
-	if (amdgpu_gart_size == -1) {
-		struct sysinfo si;
-
-		/* Maximum GTT size is limited by the GART table size
-		 * in visible VRAM. Use at most half of visible VRAM
-		 * or 256MB, whichever is less.
-		 */
-		uint64_t max_gtt_size =
-			min(adev->mc.visible_vram_size / 2, 256ULL << 20)
-			/ 8 * AMDGPU_GPU_PAGE_SIZE;
-
-		si_meminfo(&si);
-		/* Set the GART to map the largest size between either
-		 * VRAM capacity or double the available physical RAM
-		 */
-		adev->mc.gtt_size = min(
-			max(
-				((uint64_t)si.totalram * si.mem_unit * 2),
-				adev->mc.mc_vram_size
-			),
-			max_gtt_size
-		);
-	} else
-		adev->mc.gtt_size = (uint64_t)amdgpu_gart_size << 20;
-
+	amdgpu_gart_set_defaults(adev);
 	gmc_v9_0_vram_gtt_location(adev, &adev->mc);
 
 	return 0;
@@ -760,7 +736,7 @@ static int gmc_v9_0_gart_enable(struct amdgpu_device *adev)
 	gmc_v9_0_gart_flush_gpu_tlb(adev, 0);
 
 	DRM_INFO("PCIE GART of %uM enabled (table at 0x%016llX).\n",
-		 (unsigned)(adev->mc.gtt_size >> 20),
+		 (unsigned)(adev->mc.gart_size >> 20),
 		 (unsigned long long)adev->gart.table_addr);
 	adev->gart.ready = true;
 	return 0;

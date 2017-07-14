@@ -69,13 +69,16 @@
 
 #include "gpu_scheduler.h"
 #include "amdgpu_virt.h"
+#include "amdgpu_gart.h"
 
 /*
  * Modules parameters.
  */
 extern int amdgpu_modeset;
 extern int amdgpu_vram_limit;
-extern int amdgpu_gart_size;
+extern int amdgpu_vis_vram_limit;
+extern unsigned amdgpu_gart_size;
+extern int amdgpu_gtt_size;
 extern int amdgpu_moverate;
 extern int amdgpu_benchmarking;
 extern int amdgpu_testing;
@@ -552,49 +555,6 @@ int amdgpu_fence_slab_init(void);
 void amdgpu_fence_slab_fini(void);
 
 /*
- * GART structures, functions & helpers
- */
-struct amdgpu_mc;
-
-#define AMDGPU_GPU_PAGE_SIZE 4096
-#define AMDGPU_GPU_PAGE_MASK (AMDGPU_GPU_PAGE_SIZE - 1)
-#define AMDGPU_GPU_PAGE_SHIFT 12
-#define AMDGPU_GPU_PAGE_ALIGN(a) (((a) + AMDGPU_GPU_PAGE_MASK) & ~AMDGPU_GPU_PAGE_MASK)
-
-struct amdgpu_gart {
-	dma_addr_t			table_addr;
-	struct amdgpu_bo		*robj;
-	void				*ptr;
-	unsigned			num_gpu_pages;
-	unsigned			num_cpu_pages;
-	unsigned			table_size;
-#ifdef CONFIG_DRM_AMDGPU_GART_DEBUGFS
-	struct page			**pages;
-#endif
-	bool				ready;
-
-	/* Asic default pte flags */
-	uint64_t			gart_pte_flags;
-
-	const struct amdgpu_gart_funcs *gart_funcs;
-};
-
-int amdgpu_gart_table_ram_alloc(struct amdgpu_device *adev);
-void amdgpu_gart_table_ram_free(struct amdgpu_device *adev);
-int amdgpu_gart_table_vram_alloc(struct amdgpu_device *adev);
-void amdgpu_gart_table_vram_free(struct amdgpu_device *adev);
-int amdgpu_gart_table_vram_pin(struct amdgpu_device *adev);
-void amdgpu_gart_table_vram_unpin(struct amdgpu_device *adev);
-int amdgpu_gart_init(struct amdgpu_device *adev);
-void amdgpu_gart_fini(struct amdgpu_device *adev);
-int amdgpu_gart_unbind(struct amdgpu_device *adev, uint64_t offset,
-			int pages);
-int amdgpu_gart_bind(struct amdgpu_device *adev, uint64_t offset,
-		     int pages, struct page **pagelist,
-		     dma_addr_t *dma_addr, uint64_t flags);
-int amdgpu_ttm_recover_gart(struct amdgpu_device *adev);
-
-/*
  * VMHUB structures, functions & helpers
  */
 struct amdgpu_vmhub {
@@ -618,15 +578,14 @@ struct amdgpu_mc {
 	 * about vram size near mc fb location */
 	u64			mc_vram_size;
 	u64			visible_vram_size;
-	u64			gtt_size;
-	u64			gtt_start;
-	u64			gtt_end;
+	u64			gart_size;
+	u64			gart_start;
+	u64			gart_end;
 	u64			vram_start;
 	u64			vram_end;
 	unsigned		vram_width;
 	u64			real_vram_size;
 	int			vram_mtrr;
-	u64                     gtt_base_align;
 	u64                     mc_mask;
 	const struct firmware   *fw;	/* MC firmware */
 	uint32_t                fw_version;
@@ -766,7 +725,7 @@ void amdgpu_doorbell_get_kfd_info(struct amdgpu_device *adev,
  */
 
 struct amdgpu_flip_work {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0) || defined(OS_NAME_RHEL_7_4)
 	struct delayed_work		flip_work;
 #else
 	struct work_struct		flip_work;
@@ -1058,13 +1017,16 @@ struct amdgpu_gfx_config {
 };
 
 struct amdgpu_cu_info {
-	uint32_t number; /* total active CU number */
-	uint32_t ao_cu_mask;
 	uint32_t simd_per_cu;
 	uint32_t max_waves_per_simd;
 	uint32_t wave_front_size;
 	uint32_t max_scratch_slots_per_cu;
 	uint32_t lds_size;
+
+	/* total active CU number */
+	uint32_t number;
+	uint32_t ao_cu_mask;
+	uint32_t ao_cu_bitmap[4][4];
 	uint32_t bitmap[4][4];
 };
 
@@ -1146,7 +1108,6 @@ struct amdgpu_gfx {
 	bool                            in_suspend;
 	/* NGG */
 	struct amdgpu_ngg		ngg;
-	bool                            kiq_en;
 };
 
 int amdgpu_ib_get(struct amdgpu_device *adev, struct amdgpu_vm *vm,
@@ -1188,7 +1149,9 @@ struct amdgpu_cs_parser {
 	struct list_head		validated;
 	struct dma_fence		*fence;
 	uint64_t			bytes_moved_threshold;
+	uint64_t			bytes_moved_vis_threshold;
 	uint64_t			bytes_moved;
+	uint64_t			bytes_moved_vis;
 	struct amdgpu_bo_list_entry	*evictable;
 
 	/* user fence */
@@ -1537,7 +1500,10 @@ struct amdgpu_direct_gma {
 };
 
 #if defined(CONFIG_ZONE_DEVICE) && \
-	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) || defined(OS_NAME_RHEL_7_3) || defined(OS_NAME_SLE))
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0) || \
+	defined(OS_NAME_RHEL_7_3) || \
+	defined(OS_NAME_RHEL_7_4) || \
+	defined(OS_NAME_SLE))
 #define CONFIG_ENABLE_SSG
 #endif
 
@@ -1626,6 +1592,10 @@ struct amdgpu_device {
 	spinlock_t gc_cac_idx_lock;
 	amdgpu_rreg_t			gc_cac_rreg;
 	amdgpu_wreg_t			gc_cac_wreg;
+	/* protects concurrent se_cac register access */
+	spinlock_t se_cac_idx_lock;
+	amdgpu_rreg_t			se_cac_rreg;
+	amdgpu_wreg_t			se_cac_wreg;
 	/* protects concurrent ENDPOINT (audio) register access */
 	spinlock_t audio_endpt_idx_lock;
 	amdgpu_block_rreg_t		audio_endpt_rreg;
@@ -1662,6 +1632,7 @@ struct amdgpu_device {
 		spinlock_t		lock;
 		s64			last_update_us;
 		s64			accum_us; /* accumulated microseconds */
+		s64			accum_us_vis; /* for visible VRAM */
 		u32			log2_max_MBps;
 	} mm_stats;
 
@@ -1763,6 +1734,8 @@ struct amdgpu_device {
 
 	spinlock_t tlb_invalidation_lock;
 
+	/* record last mm index being written through WREG32*/
+	unsigned long last_mm_index;
 };
 
 static inline struct amdgpu_device *amdgpu_ttm_adev(struct ttm_bo_device *bdev)
@@ -1821,6 +1794,8 @@ bool amdgpu_device_has_dc_support(struct amdgpu_device *adev);
 #define WREG32_DIDT(reg, v) adev->didt_wreg(adev, (reg), (v))
 #define RREG32_GC_CAC(reg) adev->gc_cac_rreg(adev, (reg))
 #define WREG32_GC_CAC(reg, v) adev->gc_cac_wreg(adev, (reg), (v))
+#define RREG32_SE_CAC(reg) adev->se_cac_rreg(adev, (reg))
+#define WREG32_SE_CAC(reg, v) adev->se_cac_wreg(adev, (reg), (v))
 #define RREG32_AUDIO_ENDPT(block, reg) adev->audio_endpt_rreg(adev, (block), (reg))
 #define WREG32_AUDIO_ENDPT(block, reg, v) adev->audio_endpt_wreg(adev, (block), (reg), (v))
 #define WREG32_P(reg, val, mask)				\
@@ -1870,50 +1845,6 @@ bool amdgpu_device_has_dc_support(struct amdgpu_device *adev);
 #define RBIOS8(i) (adev->bios[i])
 #define RBIOS16(i) (RBIOS8(i) | (RBIOS8((i)+1) << 8))
 #define RBIOS32(i) ((RBIOS16(i)) | (RBIOS16((i)+2) << 16))
-
-/*
- * RING helpers.
- */
-static inline void amdgpu_ring_write(struct amdgpu_ring *ring, uint32_t v)
-{
-	if (ring->count_dw <= 0)
-		DRM_ERROR("amdgpu: writing more dwords to the ring than expected!\n");
-	ring->ring[ring->wptr++ & ring->buf_mask] = v;
-	ring->wptr &= ring->ptr_mask;
-	ring->count_dw--;
-}
-
-static inline void amdgpu_ring_write_multiple(struct amdgpu_ring *ring, void *src, int count_dw)
-{
-	unsigned occupied, chunk1, chunk2;
-	void *dst;
-
-	if (unlikely(ring->count_dw < count_dw)) {
-		DRM_ERROR("amdgpu: writing more dwords to the ring than expected!\n");
-		return;
-	}
-
-	occupied = ring->wptr & ring->buf_mask;
-	dst = (void *)&ring->ring[occupied];
-	chunk1 = ring->buf_mask + 1 - occupied;
-	chunk1 = (chunk1 >= count_dw) ? count_dw: chunk1;
-	chunk2 = count_dw - chunk1;
-	chunk1 <<= 2;
-	chunk2 <<= 2;
-
-	if (chunk1)
-		memcpy(dst, src, chunk1);
-
-	if (chunk2) {
-		src += chunk1;
-		dst = (void *)ring->ring;
-		memcpy(dst, src, chunk2);
-	}
-
-	ring->wptr += count_dw;
-	ring->wptr &= ring->ptr_mask;
-	ring->count_dw -= count_dw;
-}
 
 static inline struct amdgpu_sdma_instance *
 amdgpu_get_sdma_instance(struct amdgpu_ring *ring)
@@ -2003,8 +1934,8 @@ void amdgpu_pci_config_reset(struct amdgpu_device *adev);
 bool amdgpu_need_post(struct amdgpu_device *adev);
 void amdgpu_update_display_priority(struct amdgpu_device *adev);
 
-int amdgpu_cs_parser_init(struct amdgpu_cs_parser *p, void *data);
-void amdgpu_cs_report_moved_bytes(struct amdgpu_device *adev, u64 num_bytes);
+void amdgpu_cs_report_moved_bytes(struct amdgpu_device *adev, u64 num_bytes,
+				  u64 num_vis_bytes);
 void amdgpu_ttm_placement_from_domain(struct amdgpu_bo *abo, u32 domain);
 bool amdgpu_ttm_bo_is_amdgpu_bo(struct ttm_buffer_object *bo);
 int amdgpu_ttm_tt_get_user_pages(struct ttm_tt *ttm, struct page **pages);
@@ -2020,7 +1951,7 @@ bool amdgpu_ttm_tt_is_readonly(struct ttm_tt *ttm);
 uint64_t amdgpu_ttm_tt_pte_flags(struct amdgpu_device *adev, struct ttm_tt *ttm,
 				 struct ttm_mem_reg *mem);
 void amdgpu_vram_location(struct amdgpu_device *adev, struct amdgpu_mc *mc, u64 base);
-void amdgpu_gtt_location(struct amdgpu_device *adev, struct amdgpu_mc *mc);
+void amdgpu_gart_location(struct amdgpu_device *adev, struct amdgpu_mc *mc);
 void amdgpu_ttm_set_active_vram_size(struct amdgpu_device *adev, u64 size);
 int amdgpu_ttm_init(struct amdgpu_device *adev);
 void amdgpu_ttm_fini(struct amdgpu_device *adev);

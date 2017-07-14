@@ -131,6 +131,7 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 	unsigned i;
 	int r = 0;
 	unsigned extra_nop = 0;
+	bool need_pipe_sync = false;
 
 	if (num_ibs == 0)
 		return -EINVAL;
@@ -171,17 +172,16 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
 	if (ring->funcs->emit_pipeline_sync && job &&
 	    ((tmp = amdgpu_sync_get_fence(&job->sched_sync)) ||
 	     amdgpu_vm_need_pipeline_sync(ring, job))) {
-		amdgpu_ring_emit_pipeline_sync(ring);
+		need_pipe_sync = true;
 		dma_fence_put(tmp);
 	}
 
 	if (ring->funcs->insert_start)
 		ring->funcs->insert_start(ring);
 
-	if (vm) {
+	if (job) {
 		amdgpu_ring_insert_nop(ring, extra_nop); /* prevent CE go too fast than DE */
-
-		r = amdgpu_vm_flush(ring, job);
+		r = amdgpu_vm_flush(ring, job, need_pipe_sync);
 		if (r) {
 			amdgpu_ring_undo(ring);
 			return r;

@@ -145,6 +145,19 @@ static void vega10_set_default_registry_data(struct pp_hwmgr *hwmgr)
 	data->registry_data.vr1hot_enabled = 1;
 	data->registry_data.regulator_hot_gpio_support = 1;
 
+	data->registry_data.didt_support = 1;
+	if (data->registry_data.didt_support) {
+		data->registry_data.didt_mode = 6;
+		data->registry_data.sq_ramping_support = 1;
+		data->registry_data.db_ramping_support = 0;
+		data->registry_data.td_ramping_support = 0;
+		data->registry_data.tcp_ramping_support = 0;
+		data->registry_data.dbr_ramping_support = 0;
+		data->registry_data.edc_didt_support = 1;
+		data->registry_data.gc_didt_support = 0;
+		data->registry_data.psm_didt_support = 0;
+	}
+
 	data->display_voltage_mode = PPVEGA10_VEGA10DISPLAYVOLTAGEMODE_DFLT;
 	data->dcef_clk_quad_eqn_a = PPREGKEY_VEGA10QUADRATICEQUATION_DFLT;
 	data->dcef_clk_quad_eqn_b = PPREGKEY_VEGA10QUADRATICEQUATION_DFLT;
@@ -222,6 +235,8 @@ static int vega10_set_features_platform_caps(struct pp_hwmgr *hwmgr)
 	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
 			PHM_PlatformCaps_PowerContainment);
 	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
+			PHM_PlatformCaps_DiDtSupport);
+	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
 			PHM_PlatformCaps_SQRamping);
 	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
 			PHM_PlatformCaps_DBRamping);
@@ -229,6 +244,34 @@ static int vega10_set_features_platform_caps(struct pp_hwmgr *hwmgr)
 			PHM_PlatformCaps_TDRamping);
 	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
 			PHM_PlatformCaps_TCPRamping);
+	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
+			PHM_PlatformCaps_DBRRamping);
+	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
+			PHM_PlatformCaps_DiDtEDCEnable);
+	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
+			PHM_PlatformCaps_GCEDC);
+	phm_cap_unset(hwmgr->platform_descriptor.platformCaps,
+			PHM_PlatformCaps_PSM);
+
+	if (data->registry_data.didt_support) {
+		phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_DiDtSupport);
+		if (data->registry_data.sq_ramping_support)
+			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_SQRamping);
+		if (data->registry_data.db_ramping_support)
+			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_DBRamping);
+		if (data->registry_data.td_ramping_support)
+			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_TDRamping);
+		if (data->registry_data.tcp_ramping_support)
+			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_TCPRamping);
+		if (data->registry_data.dbr_ramping_support)
+			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_DBRRamping);
+		if (data->registry_data.edc_didt_support)
+			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_DiDtEDCEnable);
+		if (data->registry_data.gc_didt_support)
+			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_GCEDC);
+		if (data->registry_data.psm_didt_support)
+			phm_cap_set(hwmgr->platform_descriptor.platformCaps, PHM_PlatformCaps_PSM);
+	}
 
 	if (data->registry_data.power_containment_support)
 		phm_cap_set(hwmgr->platform_descriptor.platformCaps,
@@ -320,8 +363,8 @@ static void vega10_init_dpm_defaults(struct pp_hwmgr *hwmgr)
 			FEATURE_LED_DISPLAY_BIT;
 	data->smu_features[GNLD_FAN_CONTROL].smu_feature_id =
 			FEATURE_FAN_CONTROL_BIT;
-	data->smu_features[GNLD_VOLTAGE_CONTROLLER].smu_feature_id =
-			FEATURE_VOLTAGE_CONTROLLER_BIT;
+	data->smu_features[GNLD_ACG].smu_feature_id = FEATURE_ACG_BIT;
+	data->smu_features[GNLD_DIDT].smu_feature_id = FEATURE_GFX_EDC_BIT;
 
 	if (!data->registry_data.prefetcher_dpm_key_disabled)
 		data->smu_features[GNLD_DPM_PREFETCHER].supported = true;
@@ -384,6 +427,15 @@ static void vega10_init_dpm_defaults(struct pp_hwmgr *hwmgr)
 
 	if (data->registry_data.vr0hot_enabled)
 		data->smu_features[GNLD_VR0HOT].supported = true;
+
+	smum_send_msg_to_smc(hwmgr->smumgr, PPSMC_MSG_GetSmuVersion);
+	vega10_read_arg_from_smc(hwmgr->smumgr, &(data->smu_version));
+		/* ACG firmware has major version 5 */
+	if ((data->smu_version & 0xff000000) == 0x5000000)
+		data->smu_features[GNLD_ACG].supported = true;
+
+	if (data->registry_data.didt_support)
+		data->smu_features[GNLD_DIDT].supported = true;
 
 }
 
@@ -2227,8 +2279,72 @@ static int vega10_populate_avfs_parameters(struct pp_hwmgr *hwmgr)
 			pp_table->DisplayClock2Gfxclk[DSPCLK_PHYCLK].m1_shift = 24;
 			pp_table->DisplayClock2Gfxclk[DSPCLK_PHYCLK].m2_shift = 12;
 			pp_table->DisplayClock2Gfxclk[DSPCLK_PHYCLK].b_shift = 12;
+
+			pp_table->AcgBtcGbVdroopTable.a0       = avfs_params.ulAcgGbVdroopTableA0;
+			pp_table->AcgBtcGbVdroopTable.a0_shift = 20;
+			pp_table->AcgBtcGbVdroopTable.a1       = avfs_params.ulAcgGbVdroopTableA1;
+			pp_table->AcgBtcGbVdroopTable.a1_shift = 20;
+			pp_table->AcgBtcGbVdroopTable.a2       = avfs_params.ulAcgGbVdroopTableA2;
+			pp_table->AcgBtcGbVdroopTable.a2_shift = 20;
+
+			pp_table->AcgAvfsGb.m1                   = avfs_params.ulAcgGbFuseTableM1;
+			pp_table->AcgAvfsGb.m2                   = avfs_params.ulAcgGbFuseTableM2;
+			pp_table->AcgAvfsGb.b                    = avfs_params.ulAcgGbFuseTableB;
+			pp_table->AcgAvfsGb.m1_shift             = 0;
+			pp_table->AcgAvfsGb.m2_shift             = 0;
+			pp_table->AcgAvfsGb.b_shift              = 0;
+
 		} else {
 			data->smu_features[GNLD_AVFS].supported = false;
+		}
+	}
+
+	return 0;
+}
+
+static int vega10_acg_enable(struct pp_hwmgr *hwmgr)
+{
+	struct vega10_hwmgr *data =
+			(struct vega10_hwmgr *)(hwmgr->backend);
+	uint32_t agc_btc_response;
+
+	if (data->smu_features[GNLD_ACG].supported) {
+		if (0 == vega10_enable_smc_features(hwmgr->smumgr, true,
+					data->smu_features[GNLD_DPM_PREFETCHER].smu_feature_bitmap))
+			data->smu_features[GNLD_DPM_PREFETCHER].enabled = true;
+
+		smum_send_msg_to_smc(hwmgr->smumgr, PPSMC_MSG_InitializeAcg);
+
+		smum_send_msg_to_smc(hwmgr->smumgr, PPSMC_MSG_RunAcgBtc);
+		vega10_read_arg_from_smc(hwmgr->smumgr, &agc_btc_response);;
+
+		if (1 == agc_btc_response) {
+			if (1 == data->acg_loop_state)
+				smum_send_msg_to_smc(hwmgr->smumgr, PPSMC_MSG_RunAcgInClosedLoop);
+			else if (2 == data->acg_loop_state)
+				smum_send_msg_to_smc(hwmgr->smumgr, PPSMC_MSG_RunAcgInOpenLoop);
+			if (0 == vega10_enable_smc_features(hwmgr->smumgr, true,
+				data->smu_features[GNLD_ACG].smu_feature_bitmap))
+					data->smu_features[GNLD_ACG].enabled = true;
+		} else {
+			pr_info("[ACG_Enable] ACG BTC Returned Failed Status!\n");
+			data->smu_features[GNLD_ACG].enabled = false;
+		}
+	}
+
+	return 0;
+}
+
+static int vega10_acg_disable(struct pp_hwmgr *hwmgr)
+{
+	struct vega10_hwmgr *data =
+			(struct vega10_hwmgr *)(hwmgr->backend);
+
+	if (data->smu_features[GNLD_ACG].supported) {
+		if (data->smu_features[GNLD_ACG].enabled) {
+		if (0 == vega10_enable_smc_features(hwmgr->smumgr, false,
+				data->smu_features[GNLD_ACG].smu_feature_bitmap))
+			data->smu_features[GNLD_ACG].enabled = false;
 		}
 	}
 
@@ -2505,7 +2621,7 @@ static int vega10_init_smc_table(struct pp_hwmgr *hwmgr)
 	result = vega10_avfs_enable(hwmgr, true);
 	PP_ASSERT_WITH_CODE(!result, "Attempt to enable AVFS feature Failed!",
 					return result);
-
+	vega10_acg_enable(hwmgr);
 	vega10_save_default_power_profile(hwmgr);
 
 	return 0;
@@ -2836,6 +2952,11 @@ static int vega10_enable_dpm_tasks(struct pp_hwmgr *hwmgr)
 	tmp_result = vega10_start_dpm(hwmgr, SMC_DPM_FEATURES);
 	PP_ASSERT_WITH_CODE(!tmp_result,
 			"Failed to start DPM!", result = tmp_result);
+
+	/* enable didt, do not abort if failed didt */
+	tmp_result = vega10_enable_didt_config(hwmgr);
+	PP_ASSERT(!tmp_result,
+			"Failed to enable didt config!");
 
 	tmp_result = vega10_enable_power_containment(hwmgr);
 	PP_ASSERT_WITH_CODE(!tmp_result,
@@ -3831,13 +3952,18 @@ static int vega10_dpm_get_mclk(struct pp_hwmgr *hwmgr, bool low)
 static int vega10_get_gpu_power(struct pp_hwmgr *hwmgr,
 		struct pp_gpu_power *query)
 {
+	uint32_t value;
+
 	PP_ASSERT_WITH_CODE(!smum_send_msg_to_smc(hwmgr->smumgr,
 			PPSMC_MSG_GetCurrPkgPwr),
 			"Failed to get current package power!",
 			return -EINVAL);
 
-	return vega10_read_arg_from_smc(hwmgr->smumgr,
-			&query->average_gpu_power);
+	vega10_read_arg_from_smc(hwmgr->smumgr, &value);
+	/* power value is an integer */
+	query->average_gpu_power = value << 8;
+
+	return 0;
 }
 
 static int vega10_read_sensor(struct pp_hwmgr *hwmgr, int idx,
@@ -4661,6 +4787,10 @@ static int vega10_disable_dpm_tasks(struct pp_hwmgr *hwmgr)
 	PP_ASSERT_WITH_CODE((tmp_result == 0),
 			"Failed to disable power containment!", result = tmp_result);
 
+	tmp_result = vega10_disable_didt_config(hwmgr);
+	PP_ASSERT_WITH_CODE((tmp_result == 0),
+			"Failed to disable didt config!", result = tmp_result);
+
 	tmp_result = vega10_avfs_enable(hwmgr, false);
 	PP_ASSERT_WITH_CODE((tmp_result == 0),
 			"Failed to disable AVFS!", result = tmp_result);
@@ -4677,6 +4807,9 @@ static int vega10_disable_dpm_tasks(struct pp_hwmgr *hwmgr)
 	PP_ASSERT_WITH_CODE((tmp_result == 0),
 			"Failed to disable ulv!", result = tmp_result);
 
+	tmp_result =  vega10_acg_disable(hwmgr);
+	PP_ASSERT_WITH_CODE((tmp_result == 0),
+			"Failed to disable acg!", result = tmp_result);
 	return result;
 }
 

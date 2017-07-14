@@ -332,6 +332,37 @@ struct dma_fence *amdgpu_sync_get_fence(struct amdgpu_sync *sync)
 	return NULL;
 }
 
+int amdgpu_sync_clone(struct amdgpu_device *adev,
+					 struct amdgpu_sync *source,
+					 struct amdgpu_sync *clone)
+{
+	struct amdgpu_sync_entry *e;
+	struct hlist_node *tmp;
+	struct dma_fence *f;
+	int i, r;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 9, 0)
+	struct hlist_node *node;
+
+	hash_for_each_safe(source->fences, i, node, tmp, e, node) {
+#else
+	hash_for_each_safe(source->fences, i, tmp, e, node) {
+#endif
+
+		f = e->fence;
+		if (!dma_fence_is_signaled(f)) {
+			r = amdgpu_sync_fence(adev, clone, f);
+			if (r)
+				return r;
+		} else {
+			hash_del(&e->node);
+			dma_fence_put(f);
+			kmem_cache_free(amdgpu_sync_slab, e);
+		}
+	}
+	return 0;
+}
+
 int amdgpu_sync_wait(struct amdgpu_sync *sync, bool intr)
 {
 	struct amdgpu_sync_entry *e;

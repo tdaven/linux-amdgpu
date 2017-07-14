@@ -245,8 +245,7 @@ static void gmc_v7_0_vram_gtt_location(struct amdgpu_device *adev,
 		mc->mc_vram_size = 0xFFC0000000ULL;
 	}
 	amdgpu_vram_location(adev, &adev->mc, base);
-	adev->mc.gtt_base_align = 0;
-	amdgpu_gtt_location(adev, mc);
+	amdgpu_gart_location(adev, mc);
 }
 
 /**
@@ -374,32 +373,7 @@ static int gmc_v7_0_mc_init(struct amdgpu_device *adev)
 	if (adev->mc.visible_vram_size > adev->mc.real_vram_size)
 		adev->mc.visible_vram_size = adev->mc.real_vram_size;
 
-	/* Unless the user has overridden it, compute the GART size */
-	if (amdgpu_gart_size == -1) {
-		struct sysinfo si;
-
-		/* Maximum GTT size is limited by the GART table size
-		 * in visible VRAM. Use at most half of visible VRAM
-		 * or 256MB, whichever is less.
-		 */
-		uint64_t max_gtt_size =
-			min(adev->mc.visible_vram_size / 2, 256ULL << 20)
-			/ 8 * AMDGPU_GPU_PAGE_SIZE;
-
-		si_meminfo(&si);
-		/* Set the GART to map the largest size between either
-		 * VRAM capacity or double the available physical RAM
-		 */
-		adev->mc.gtt_size = min(
-			max(
-				((uint64_t)si.totalram * si.mem_unit * 2),
-				adev->mc.mc_vram_size
-			),
-			max_gtt_size
-		);
-	} else
-		adev->mc.gtt_size = (uint64_t)amdgpu_gart_size << 20;
-
+	amdgpu_gart_set_defaults(adev);
 	gmc_v7_0_vram_gtt_location(adev, &adev->mc);
 
 	return 0;
@@ -611,8 +585,8 @@ static int gmc_v7_0_gart_enable(struct amdgpu_device *adev)
 	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL3, L2_CACHE_BIGK_FRAGMENT_SIZE, 4);
 	WREG32(mmVM_L2_CNTL3, tmp);
 	/* setup context0 */
-	WREG32(mmVM_CONTEXT0_PAGE_TABLE_START_ADDR, adev->mc.gtt_start >> 12);
-	WREG32(mmVM_CONTEXT0_PAGE_TABLE_END_ADDR, adev->mc.gtt_end >> 12);
+	WREG32(mmVM_CONTEXT0_PAGE_TABLE_START_ADDR, adev->mc.gart_start >> 12);
+	WREG32(mmVM_CONTEXT0_PAGE_TABLE_END_ADDR, adev->mc.gart_end >> 12);
 	WREG32(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR, adev->gart.table_addr >> 12);
 	WREG32(mmVM_CONTEXT0_PROTECTION_FAULT_DEFAULT_ADDR,
 			(u32)(adev->dummy_page.addr >> 12));
@@ -666,7 +640,7 @@ static int gmc_v7_0_gart_enable(struct amdgpu_device *adev)
 
 	gmc_v7_0_gart_flush_gpu_tlb(adev, 0);
 	DRM_INFO("PCIE GART of %uM enabled (table at 0x%016llX).\n",
-		 (unsigned)(adev->mc.gtt_size >> 20),
+		 (unsigned)(adev->mc.gart_size >> 20),
 		 (unsigned long long)adev->gart.table_addr);
 	adev->gart.ready = true;
 	return 0;

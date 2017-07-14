@@ -108,7 +108,7 @@ static void dce_virtual_bandwidth_update(struct amdgpu_device *adev)
 	return;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0) && !defined(OS_NAME_RHEL_7_4)
 static void dce_virtual_crtc_gamma_set(struct drm_crtc *crtc, u16 *red, u16 *green,
 				    u16 *blue, uint32_t start, uint32_t size)
 {
@@ -154,7 +154,7 @@ static const struct drm_crtc_funcs dce_virtual_crtc_funcs = {
 	.gamma_set = dce_virtual_crtc_gamma_set,
 	.set_config = amdgpu_crtc_set_config,
 	.destroy = dce_virtual_crtc_destroy,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0) || defined(OS_NAME_RHEL_7_4)
 	.page_flip_target = amdgpu_crtc_page_flip_target,
 #else
 	.page_flip = amdgpu_crtc_page_flip,
@@ -392,6 +392,14 @@ dce_virtual_dpms(struct drm_connector *connector, int mode)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0)
+static enum drm_connector_status
+dce_virtual_detect(struct drm_connector *connector, bool force)
+{
+	return connector_status_connected;
+}
+#endif
+
 static int
 dce_virtual_set_property(struct drm_connector *connector,
 			 struct drm_property *property,
@@ -421,6 +429,9 @@ static const struct drm_connector_helper_funcs dce_virtual_connector_helper_func
 static const struct drm_connector_funcs dce_virtual_connector_funcs = {
 	.dpms = dce_virtual_dpms,
 	.fill_modes = drm_helper_probe_single_connector_modes,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0)
+	.detect = dce_virtual_detect,
+#endif
 	.set_property = dce_virtual_set_property,
 	.destroy = dce_virtual_destroy,
 	.force = dce_virtual_force,
