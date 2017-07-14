@@ -480,10 +480,6 @@ bool kgd2kfd_device_init(struct kfd_dev *kfd,
 
 	kfd->shared_resources = *gpu_resources;
 
-	/* We only use the first MEC */
-	if (kfd->shared_resources.num_mec > 1)
-		kfd->shared_resources.num_mec = 1;
-
 	vmid_bitmap_kfd = kfd->shared_resources.compute_vmid_bitmap;
 	kfd->vm_info.first_vmid_kfd = ffs(vmid_bitmap_kfd) - 1;
 	kfd->vm_info.last_vmid_kfd = fls(vmid_bitmap_kfd) - 1;
