@@ -718,7 +718,7 @@ static void get_pixel_clock_parameters(
 	const struct pipe_ctx *pipe_ctx,
 	struct pixel_clk_params *pixel_clk_params)
 {
-	const struct dc_stream *stream = pipe_ctx->stream;
+	const struct dc_stream_state *stream = pipe_ctx->stream;
 
 	/*TODO: is this halved for YCbCr 420? in that case we might want to move
 	 * the pixel clock normalization for hdmi up to here instead of doing it
@@ -764,9 +764,9 @@ static bool is_surface_pixel_format_supported(struct pipe_ctx *pipe_ctx, unsigne
 {
 	if (pipe_ctx->pipe_idx != underlay_idx)
 		return true;
-	if (!pipe_ctx->surface)
+	if (!pipe_ctx->plane_state)
 		return false;
-	if (pipe_ctx->surface->format < SURFACE_PIXEL_FORMAT_VIDEO_BEGIN)
+	if (pipe_ctx->plane_state->format < SURFACE_PIXEL_FORMAT_VIDEO_BEGIN)
 		return false;
 	return true;
 }
@@ -780,7 +780,7 @@ static enum dc_status build_mapped_resource(
 	uint8_t i, j;
 
 	for (i = 0; i < context->stream_count; i++) {
-		struct dc_stream *stream = context->streams[i];
+		struct dc_stream_state *stream = context->streams[i];
 
 		if (old_context && resource_is_stream_unchanged(old_context, stream))
 			continue;
@@ -901,22 +901,22 @@ static bool dce110_validate_surface_sets(
 	int i;
 
 	for (i = 0; i < set_count; i++) {
-		if (set[i].surface_count == 0)
+		if (set[i].plane_count == 0)
 			continue;
 
-		if (set[i].surface_count > 2)
+		if (set[i].plane_count > 2)
 			return false;
 
-		if (set[i].surfaces[0]->format
+		if (set[i].plane_states[0]->format
 				>= SURFACE_PIXEL_FORMAT_VIDEO_BEGIN)
 			return false;
 
-		if (set[i].surface_count == 2) {
-			if (set[i].surfaces[1]->format
+		if (set[i].plane_count == 2) {
+			if (set[i].plane_states[1]->format
 					< SURFACE_PIXEL_FORMAT_VIDEO_BEGIN)
 				return false;
-			if (set[i].surfaces[1]->src_rect.width > 1920
-					|| set[i].surfaces[1]->src_rect.height > 1080)
+			if (set[i].plane_states[1]->src_rect.width > 1920
+					|| set[i].plane_states[1]->src_rect.height > 1080)
 				return false;
 
 			if (set[i].stream->timing.pixel_encoding != PIXEL_ENCODING_RGB)
@@ -973,7 +973,7 @@ enum dc_status dce110_validate_with_context(
 
 enum dc_status dce110_validate_guaranteed(
 		const struct core_dc *dc,
-		struct dc_stream *dc_stream,
+		struct dc_stream_state *dc_stream,
 		struct validate_context *context)
 {
 	enum dc_status result = DC_ERROR_UNEXPECTED;
@@ -1006,7 +1006,7 @@ enum dc_status dce110_validate_guaranteed(
 static struct pipe_ctx *dce110_acquire_underlay(
 		struct validate_context *context,
 		const struct resource_pool *pool,
-		struct dc_stream *stream)
+		struct dc_stream_state *stream)
 {
 	struct core_dc *dc = DC_TO_CORE(stream->ctx->dc);
 	struct resource_context *res_ctx = &context->res_ctx;
@@ -1351,7 +1351,7 @@ static bool construct(
 	if (!dce110_hw_sequencer_construct(dc))
 		goto res_create_fail;
 
-	dc->public.caps.max_surfaces =  pool->base.pipe_count;
+	dc->public.caps.max_planes =  pool->base.pipe_count;
 
 	bw_calcs_init(&dc->bw_dceip, &dc->bw_vbios, dc->ctx->asic_id);
 

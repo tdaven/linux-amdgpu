@@ -47,7 +47,7 @@ struct dc_caps {
 	uint32_t max_links;
 	uint32_t max_audios;
 	uint32_t max_slave_planes;
-	uint32_t max_surfaces;
+	uint32_t max_planes;
 	uint32_t max_downscale_ratio;
 	uint32_t i2c_speed_in_khz;
 
@@ -101,30 +101,30 @@ struct dc_cap_funcs {
 			struct dc_surface_dcc_cap *output);
 };
 
-struct dc_stream_funcs {
+struct dc_stream_state_funcs {
 	bool (*adjust_vmin_vmax)(struct dc *dc,
-			struct dc_stream **stream,
+			struct dc_stream_state **stream,
 			int num_streams,
 			int vmin,
 			int vmax);
 	bool (*get_crtc_position)(struct dc *dc,
-			struct dc_stream **stream,
+			struct dc_stream_state **stream,
 			int num_streams,
 			unsigned int *v_pos,
 			unsigned int *nom_v_pos);
 
 	bool (*set_gamut_remap)(struct dc *dc,
-			const struct dc_stream *stream);
+			const struct dc_stream_state *stream);
 
 	bool (*program_csc_matrix)(struct dc *dc,
-			struct dc_stream *stream);
+			struct dc_stream_state *stream);
 
 	void (*set_static_screen_events)(struct dc *dc,
-			struct dc_stream **stream,
+			struct dc_stream_state **stream,
 			int num_streams,
 			const struct dc_static_screen_events *events);
 
-	void (*set_dither_option)(struct dc_stream *stream,
+	void (*set_dither_option)(struct dc_stream_state *stream,
 			enum dc_dither_option option);
 };
 
@@ -190,7 +190,7 @@ struct dc_debug {
 struct dc {
 	struct dc_caps caps;
 	struct dc_cap_funcs cap_funcs;
-	struct dc_stream_funcs stream_funcs;
+	struct dc_stream_state_funcs stream_funcs;
 	struct dc_link_funcs link_funcs;
 	struct dc_config config;
 	struct dc_debug debug;
@@ -303,7 +303,7 @@ struct dc_transfer_func {
  * the last requested address and the currently active address so the called
  * can determine if there are any outstanding flips
  */
-struct dc_surface_status {
+struct dc_plane_status {
 	struct dc_plane_address requested_address;
 	struct dc_plane_address current_address;
 	bool is_flip_pending;
@@ -338,7 +338,7 @@ struct dc_plane_state {
 	bool horizontal_mirror;
 
 	/* private to DC core */
-	struct dc_surface_status status;
+	struct dc_plane_status status;
 	struct dc_context *ctx;
 
 	/* private to dc_surface.c */
@@ -385,12 +385,12 @@ struct dc_surface_update {
 /*
  * Create a new surface with default parameters;
  */
-struct dc_plane_state *dc_create_surface(const struct dc *dc);
-const struct dc_surface_status *dc_surface_get_status(
-		const struct dc_plane_state *dc_surface);
+struct dc_plane_state *dc_create_plane_state(const struct dc *dc);
+const struct dc_plane_status *dc_plane_get_status(
+		const struct dc_plane_state *plane_state);
 
-void dc_surface_retain(struct dc_plane_state *dc_surface);
-void dc_surface_release(struct dc_plane_state *dc_surface);
+void dc_plane_state_retain(struct dc_plane_state *plane_state);
+void dc_plane_state_release(struct dc_plane_state *plane_state);
 
 void dc_gamma_retain(struct dc_gamma *dc_gamma);
 void dc_gamma_release(struct dc_gamma **dc_gamma);
@@ -434,11 +434,11 @@ void dc_flip_surface_addrs(struct dc *dc,
  *   This does not trigger a flip.  No surface address is programmed.
  */
 
-bool dc_commit_surfaces_to_stream(
+bool dc_commit_planes_to_stream(
 		struct dc *dc,
-		struct dc_plane_state **dc_surfaces,
-		uint8_t surface_count,
-		struct dc_stream *stream);
+		struct dc_plane_state **plane_states,
+		uint8_t new_plane_count,
+		struct dc_stream_state *stream);
 
 bool dc_post_update_surfaces_to_stream(
 		struct dc *dc);
@@ -481,8 +481,8 @@ enum surface_update_type {
 
 struct dc_stream_status {
 	int primary_otg_inst;
-	int surface_count;
-	struct dc_plane_state *surfaces[MAX_SURFACE_NUM];
+	int plane_count;
+	struct dc_plane_state *plane_states[MAX_SURFACE_NUM];
 
 	/*
 	 * link this stream passes through
@@ -490,7 +490,7 @@ struct dc_stream_status {
 	struct dc_link *link;
 };
 
-struct dc_stream {
+struct dc_stream_state {
 	struct dc_sink *sink;
 	struct dc_crtc_timing timing;
 
@@ -541,7 +541,7 @@ struct dc_stream_update {
 };
 
 bool dc_is_stream_unchanged(
-	struct dc_stream *old_stream, struct dc_stream *stream);
+	struct dc_stream_state *old_stream, struct dc_stream_state *stream);
 
 /*
  * Setup stream attributes if no stream updates are provided
@@ -558,32 +558,32 @@ bool dc_is_stream_unchanged(
  *
  */
 
-void dc_update_surfaces_and_stream(struct dc *dc,
+void dc_update_planes_and_stream(struct dc *dc,
 		struct dc_surface_update *surface_updates, int surface_count,
-		struct dc_stream *dc_stream,
+		struct dc_stream_state *dc_stream,
 		struct dc_stream_update *stream_update);
 
 /*
  * Log the current stream state.
  */
 void dc_stream_log(
-	const struct dc_stream *stream,
+	const struct dc_stream_state *stream,
 	struct dal_logger *dc_logger,
 	enum dc_log_type log_type);
 
 uint8_t dc_get_current_stream_count(const struct dc *dc);
-struct dc_stream *dc_get_stream_at_index(const struct dc *dc, uint8_t i);
+struct dc_stream_state *dc_get_stream_at_index(const struct dc *dc, uint8_t i);
 
 /*
  * Return the current frame counter.
  */
-uint32_t dc_stream_get_vblank_counter(const struct dc_stream *stream);
+uint32_t dc_stream_get_vblank_counter(const struct dc_stream_state *stream);
 
 /* TODO: Return parsed values rather than direct register read
  * This has a dependency on the caller (amdgpu_get_crtc_scanoutpos)
  * being refactored properly to be dce-specific
  */
-bool dc_stream_get_scanoutpos(const struct dc_stream *stream,
+bool dc_stream_get_scanoutpos(const struct dc_stream_state *stream,
 				  uint32_t *v_blank_start,
 				  uint32_t *v_blank_end,
 				  uint32_t *h_position,
@@ -593,12 +593,12 @@ bool dc_stream_get_scanoutpos(const struct dc_stream *stream,
  * Structure to store surface/stream associations for validation
  */
 struct dc_validation_set {
-	struct dc_stream *stream;
-	struct dc_plane_state *surfaces[MAX_SURFACES];
-	uint8_t surface_count;
+	struct dc_stream_state *stream;
+	struct dc_plane_state *plane_states[MAX_SURFACES];
+	uint8_t plane_count;
 };
 
-bool dc_validate_stream(const struct dc *dc, struct dc_stream *stream);
+bool dc_validate_stream(const struct dc *dc, struct dc_stream_state *stream);
 
 bool dc_validate_plane(const struct dc *dc, const struct dc_plane_state *plane_state);
 /*
@@ -627,7 +627,7 @@ bool dc_validate_resources(
 
 bool dc_validate_guaranteed(
 		const struct dc *dc,
-		struct dc_stream *stream);
+		struct dc_stream_state *stream);
 
 void dc_resource_validate_ctx_copy_construct(
 		const struct validate_context *src_ctx,
@@ -656,7 +656,7 @@ bool dc_commit_context(struct dc *dc, struct validate_context *context);
  */
 bool dc_commit_streams(
 		struct dc *dc,
-		struct dc_stream *streams[],
+		struct dc_stream_state *streams[],
 		uint8_t stream_count);
 /*
  * Enable stereo when commit_streams is not required,
@@ -665,19 +665,19 @@ bool dc_commit_streams(
 bool dc_enable_stereo(
 	struct dc *dc,
 	struct validate_context *context,
-	struct dc_stream *streams[],
+	struct dc_stream_state *streams[],
 	uint8_t stream_count);
 
 /**
  * Create a new default stream for the requested sink
  */
-struct dc_stream *dc_create_stream_for_sink(struct dc_sink *dc_sink);
+struct dc_stream_state *dc_create_stream_for_sink(struct dc_sink *dc_sink);
 
-void dc_stream_retain(struct dc_stream *dc_stream);
-void dc_stream_release(struct dc_stream *dc_stream);
+void dc_stream_retain(struct dc_stream_state *dc_stream);
+void dc_stream_release(struct dc_stream_state *dc_stream);
 
 struct dc_stream_status *dc_stream_get_status(
-	struct dc_stream *dc_stream);
+	struct dc_stream_state *dc_stream);
 
 enum surface_update_type dc_check_update_surfaces_for_stream(
 		struct dc *dc,
@@ -816,7 +816,7 @@ const struct graphics_object_id dc_get_link_id_at_index(
 
 /* Set backlight level of an embedded panel (eDP, LVDS). */
 bool dc_link_set_backlight_level(const struct dc_link *dc_link, uint32_t level,
-		uint32_t frame_ramp, const struct dc_stream *stream);
+		uint32_t frame_ramp, const struct dc_stream_state *stream);
 
 bool dc_link_set_abm_disable(const struct dc_link *dc_link);
 
@@ -825,7 +825,7 @@ bool dc_link_set_psr_enable(const struct dc_link *dc_link, bool enable);
 bool dc_link_get_psr_state(const struct dc_link *dc_link, uint32_t *psr_state);
 
 bool dc_link_setup_psr(struct dc_link *dc_link,
-		const struct dc_stream *stream, struct psr_config *psr_config,
+		const struct dc_stream_state *stream, struct psr_config *psr_config,
 		struct psr_context *psr_context);
 
 /* Request DC to detect if there is a Panel connected.
@@ -939,11 +939,11 @@ bool dc_sink_set_container_id(struct dc_sink *dc_sink, const struct dc_container
  ******************************************************************************/
 /* TODO: Deprecated once we switch to dc_set_cursor_position */
 bool dc_stream_set_cursor_attributes(
-	const struct dc_stream *stream,
+	const struct dc_stream_state *stream,
 	const struct dc_cursor_attributes *attributes);
 
 bool dc_stream_set_cursor_position(
-	struct dc_stream *stream,
+	struct dc_stream_state *stream,
 	const struct dc_cursor_position *position);
 
 /* Newer interfaces  */

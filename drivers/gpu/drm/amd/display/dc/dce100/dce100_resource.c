@@ -660,7 +660,7 @@ static enum dc_status build_mapped_resource(
 	uint8_t i, j;
 
 	for (i = 0; i < context->stream_count; i++) {
-		struct dc_stream *stream = context->streams[i];
+		struct dc_stream_state *stream = context->streams[i];
 
 		if (old_context && resource_is_stream_unchanged(old_context, stream))
 			continue;
@@ -705,13 +705,13 @@ static bool dce100_validate_surface_sets(
 	int i;
 
 	for (i = 0; i < set_count; i++) {
-		if (set[i].surface_count == 0)
+		if (set[i].plane_count == 0)
 			continue;
 
-		if (set[i].surface_count > 1)
+		if (set[i].plane_count > 1)
 			return false;
 
-		if (set[i].surfaces[0]->format
+		if (set[i].plane_states[0]->format
 				>= SURFACE_PIXEL_FORMAT_VIDEO_BEGIN)
 			return false;
 	}
@@ -765,7 +765,7 @@ enum dc_status dce100_validate_with_context(
 
 enum dc_status dce100_validate_guaranteed(
 		const struct core_dc *dc,
-		struct dc_stream *dc_stream,
+		struct dc_stream_state *dc_stream,
 		struct validate_context *context)
 {
 	enum dc_status result = DC_ERROR_UNEXPECTED;
@@ -958,7 +958,7 @@ static bool construct(
 		}
 	}
 
-	dc->public.caps.max_surfaces =  pool->base.pipe_count;
+	dc->public.caps.max_planes =  pool->base.pipe_count;
 
 	if (!resource_construct(num_virtual_links, dc, &pool->base,
 			&res_create_funcs))

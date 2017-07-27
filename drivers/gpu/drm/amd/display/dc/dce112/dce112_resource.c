@@ -700,7 +700,7 @@ static void destruct(struct dce110_resource_pool *pool)
 static struct clock_source *find_matching_pll(
 		struct resource_context *res_ctx,
 		const struct resource_pool *pool,
-		const struct dc_stream *const stream)
+		const struct dc_stream_state *const stream)
 {
 	switch (stream->sink->link->link_enc->transmitter) {
 	case TRANSMITTER_UNIPHY_A:
@@ -731,7 +731,7 @@ static enum dc_status build_mapped_resource(
 	uint8_t i, j;
 
 	for (i = 0; i < context->stream_count; i++) {
-		struct dc_stream *stream = context->streams[i];
+		struct dc_stream_state *stream = context->streams[i];
 
 		if (old_context && resource_is_stream_unchanged(old_context, stream))
 			continue;
@@ -845,7 +845,7 @@ enum dc_status resource_map_phy_clock_resources(
 
 	/* acquire new resources */
 	for (i = 0; i < context->stream_count; i++) {
-		struct dc_stream *stream = context->streams[i];
+		struct dc_stream_state *stream = context->streams[i];
 
 		if (old_context && resource_is_stream_unchanged(old_context, stream))
 			continue;
@@ -889,13 +889,13 @@ static bool dce112_validate_surface_sets(
 	int i;
 
 	for (i = 0; i < set_count; i++) {
-		if (set[i].surface_count == 0)
+		if (set[i].plane_count == 0)
 			continue;
 
-		if (set[i].surface_count > 1)
+		if (set[i].plane_count > 1)
 			return false;
 
-		if (set[i].surfaces[0]->format
+		if (set[i].plane_states[0]->format
 				>= SURFACE_PIXEL_FORMAT_VIDEO_BEGIN)
 			return false;
 	}
@@ -949,7 +949,7 @@ enum dc_status dce112_validate_with_context(
 
 enum dc_status dce112_validate_guaranteed(
 		const struct core_dc *dc,
-		struct dc_stream *stream,
+		struct dc_stream_state *stream,
 		struct validate_context *context)
 {
 	enum dc_status result = DC_ERROR_UNEXPECTED;
@@ -1319,7 +1319,7 @@ static bool construct(
 			  &res_create_funcs))
 		goto res_create_fail;
 
-	dc->public.caps.max_surfaces =  pool->base.pipe_count;
+	dc->public.caps.max_planes =  pool->base.pipe_count;
 
 	/* Create hardware sequencer */
 	if (!dce112_hw_sequencer_construct(dc))
