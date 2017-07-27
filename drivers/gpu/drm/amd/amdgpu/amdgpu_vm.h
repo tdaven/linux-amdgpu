@@ -144,10 +144,14 @@ struct amdgpu_vm {
 	/* each VM will map on CSA */
 	struct amdgpu_bo_va *csa_bo_va;
 
-	/* Flag to indicate if VM tables are updated by CPU or GPU (SDMA) */
-	bool                    use_cpu_for_update;
 	/* Whether this is a Compute or GFX Context */
 	int			vm_context;
+
+	/* Flag to indicate if VM tables are updated by CPU or GPU (SDMA) */
+	bool                    use_cpu_for_update;
+
+	/* Flag to indicate ATS support from PTE for GFX9 */
+	bool			pte_support_ats;
 };
 
 struct amdgpu_vm_id {
