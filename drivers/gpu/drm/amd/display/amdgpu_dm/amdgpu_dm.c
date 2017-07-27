@@ -742,9 +742,6 @@ int amdgpu_dm_display_resume(struct amdgpu_device *adev )
 	ret = dm_display_resume(ddev);
 	drm_modeset_unlock_all(ddev);
 
-	drm_atomic_state_put(adev->dm.cached_state);
-	adev->dm.cached_state = NULL;
-
 	amdgpu_dm_irq_resume_late(adev);
 
 	return ret;
