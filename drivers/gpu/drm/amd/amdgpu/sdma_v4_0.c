@@ -1278,8 +1278,8 @@ static int sdma_v4_0_sw_init(void *handle)
 				     AMDGPU_SDMA_IRQ_TRAP1);
 
 		if (amdgpu_sriov_vf(adev)) {
-			r = amdgpu_wb_get_64bit(adev,
-						&adev->sdma.instance[i].poll_mem_offs);
+			r = amdgpu_wb_get(adev,
+					  &adev->sdma.instance[i].poll_mem_offs);
 			if (r) {
 				dev_err(adev->dev, "(%d) failed to allocate SDMA poll mem wb.\n", r);
 				return r;
@@ -1301,8 +1301,8 @@ static int sdma_v4_0_sw_fini(void *handle)
 		amdgpu_ring_fini(&adev->sdma.instance[i].ring);
 
 		if (amdgpu_sriov_vf(adev))
-			amdgpu_wb_free_64bit(adev,
-					     adev->sdma.instance[i].poll_mem_offs);
+			amdgpu_wb_free(adev,
+				       adev->sdma.instance[i].poll_mem_offs);
 	}
 	return 0;
 }
