@@ -75,12 +75,10 @@
 	BREAK_TO_DEBUGGER(); \
 } while (0)
 
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0)
 #include <asm/fpu/api.h>
 #else
 #include <asm/i387.h>
-#endif
 #endif
 
 #define dm_alloc(size) kzalloc(size, GFP_KERNEL)
