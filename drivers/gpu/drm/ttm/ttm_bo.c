@@ -403,11 +403,11 @@ static int ttm_bo_individualize_resv(struct ttm_buffer_object *bo)
 		return 0;
 
 	reservation_object_init(&bo->ttm_resv);
-	BUG_ON(reservation_object_lock(&bo->ttm_resv, NULL));
+	BUG_ON(kcl_reservation_object_lock(&bo->ttm_resv, NULL));
 
-	r = reservation_object_copy_fences(&bo->ttm_resv, bo->resv);
+	r = kcl_reservation_object_copy_fences(&bo->ttm_resv, bo->resv);
 	if (r) {
-		reservation_object_unlock(&bo->ttm_resv);
+		kcl_reservation_object_unlock(&bo->ttm_resv);
 		reservation_object_fini(&bo->ttm_resv);
 	}
 
@@ -475,7 +475,7 @@ static void ttm_bo_cleanup_refs_or_queue(struct ttm_buffer_object *bo)
 		}
 
 		if (bo->resv != &bo->ttm_resv)
-			reservation_object_unlock(&bo->ttm_resv);
+			kcl_reservation_object_unlock(&bo->ttm_resv);
 		__ttm_bo_unreserve(bo);
 	}
 
