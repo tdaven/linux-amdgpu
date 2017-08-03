@@ -1069,7 +1069,11 @@ fail:
 	if (ret == -EDEADLK)
 		goto backoff;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) && !defined(OS_NAME_RHEL_7_4)
+	drm_atomic_state_free(state);
+#else
 	drm_atomic_state_put(state);
+#endif
 
 	return ret;
 backoff:
