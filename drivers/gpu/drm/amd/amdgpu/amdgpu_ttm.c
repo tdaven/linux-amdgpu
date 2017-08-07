@@ -1931,8 +1931,6 @@ error_free:
 
 #if defined(CONFIG_DEBUG_FS)
 
-extern void amdgpu_gtt_mgr_print(struct seq_file *m, struct ttm_mem_type_manager
-				 *man);
 static int amdgpu_mm_dump_table(struct seq_file *m, void *data)
 {
 	struct drm_info_node *node = (struct drm_info_node *)m->private;
@@ -1952,23 +1950,9 @@ static int amdgpu_mm_dump_table(struct seq_file *m, void *data)
 	spin_lock(&glob->lru_lock);
 	ret = drm_mm_dump_table(m, mm);
 	spin_unlock(&glob->lru_lock);
-#else
-	man->func->debug(man, &p);
-#endif
-	switch (ttm_pl) {
-	case TTM_PL_VRAM:
-		seq_printf(m, "man size:%llu pages, ram usage:%lluMB, vis usage:%lluMB\n",
-			   adev->mman.bdev.man[ttm_pl].size,
-			   (u64)atomic64_read(&adev->vram_usage) >> 20,
-			   (u64)atomic64_read(&adev->vram_vis_usage) >> 20);
-		break;
-	case TTM_PL_TT:
-		amdgpu_gtt_mgr_print(m, &adev->mman.bdev.man[TTM_PL_TT]);
-		break;
-	}
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
 	return ret;
 #else
+	man->func->debug(man, &p);
 	return 0;
 #endif
 }
