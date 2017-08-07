@@ -225,21 +225,18 @@ static void amdgpu_vram_mgr_del(struct ttm_mem_type_manager *man,
  * amdgpu_vram_mgr_debug - dump VRAM table
  *
  * @man: TTM memory type manager
- * @prefix: text prefix
+ * @printer: DRM printer to use
  *
  * Dump the table content using printk.
  */
 static void amdgpu_vram_mgr_debug(struct ttm_mem_type_manager *man,
-				  const char *prefix)
+				  struct drm_printer *printer)
 {
 	struct amdgpu_vram_mgr *mgr = man->priv;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
-	struct drm_printer p = drm_debug_printer(prefix);
-#endif
 
 	spin_lock(&mgr->lock);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
-	drm_mm_print(&mgr->mm, &p);
+	drm_mm_print(&mgr->mm, printer);
 #else
 	drm_mm_debug_table(&mgr->mm, prefix);
 #endif
