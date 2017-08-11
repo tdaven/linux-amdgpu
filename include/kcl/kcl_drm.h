@@ -374,4 +374,13 @@ extern struct dma_buf_ops *_kcl_drm_gem_prime_dmabuf_ops;
 #define drm_gem_prime_dmabuf_ops (*_kcl_drm_gem_prime_dmabuf_ops)
 #endif
 
+static inline void kcl_drm_gem_object_put_unlocked(struct drm_gem_object *obj)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)
+	return drm_gem_object_unreference_unlocked(obj);
+#else
+	return drm_gem_object_put_unlocked(obj);
+#endif
+}
+
 #endif /* AMDKCL_DRM_H */
