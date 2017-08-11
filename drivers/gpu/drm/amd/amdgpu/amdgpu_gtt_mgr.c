@@ -272,11 +272,16 @@ static void amdgpu_gtt_mgr_del(struct ttm_mem_type_manager *man,
  *
  * @man: TTM memory type manager
  * @printer: DRM printer to use
+ * @prefix: text prefix
  *
  * Dump the table content using printk.
  */
 static void amdgpu_gtt_mgr_debug(struct ttm_mem_type_manager *man,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
 				 struct drm_printer *printer)
+#else
+				 const char *prefix)
+#endif
 {
 	struct amdgpu_gtt_mgr *mgr = man->priv;
 
