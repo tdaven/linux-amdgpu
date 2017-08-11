@@ -248,10 +248,17 @@ static void amdgpu_vram_mgr_debug(struct ttm_mem_type_manager *man,
 #endif
 	spin_unlock(&mgr->lock);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
 	drm_printf(printer, "man size:%llu pages, ram usage:%lluMB, vis usage:%lluMB\n",
 		   adev->mman.bdev.man[TTM_PL_VRAM].size,
 		   (u64)atomic64_read(&adev->vram_usage) >> 20,
 		   (u64)atomic64_read(&adev->vram_vis_usage) >> 20);
+#else
+	DRM_DEBUG("man size:%llu pages, ram usage:%lluMB, vis usage:%lluMB\n",
+		 adev->mman.bdev.man[TTM_PL_VRAM].size,
+		 (u64)atomic64_read(&adev->vram_usage) >> 20,
+		 (u64)atomic64_read(&adev->vram_vis_usage) >> 20);
+#endif
 }
 
 const struct ttm_mem_type_manager_func amdgpu_vram_mgr_func = {

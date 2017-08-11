@@ -296,9 +296,15 @@ static void amdgpu_gtt_mgr_debug(struct ttm_mem_type_manager *man,
 #endif
 	spin_unlock(&mgr->lock);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
 	drm_printf(printer, "man size:%llu pages, gtt available:%llu pages, usage:%lluMB\n",
 		   man->size, (u64)atomic64_read(&mgr->available),
 		   amdgpu_gtt_mgr_usage(man) >> 20);
+#else
+	DRM_DEBUG("man size:%llu pages, gtt available:%llu pages, usage:%lluMB\n",
+		 man->size, (u64)atomic64_read(&mgr->available),
+		 amdgpu_gtt_mgr_usage(man) >> 20);
+#endif
 }
 
 const struct ttm_mem_type_manager_func amdgpu_gtt_mgr_func = {
