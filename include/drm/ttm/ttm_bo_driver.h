@@ -41,6 +41,7 @@
 #include <linux/fs.h>
 #include <linux/spinlock.h>
 #include <linux/reservation.h>
+#include <linux/version.h>
 
 #define TTM_MAX_BO_PRIORITY	4U
 
