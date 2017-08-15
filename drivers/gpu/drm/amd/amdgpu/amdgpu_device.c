@@ -1101,6 +1101,12 @@ static void amdgpu_check_arguments(struct amdgpu_device *adev)
 		amdgpu_vm_size = amdgpu_vm_size_aligned;
 	}
 
+	/* valid range is between 4 and 9 inclusive */
+	if (amdgpu_vm_fragment_size > 9 || amdgpu_vm_fragment_size < 4) {
+		dev_warn(adev->dev, "valid rang is between 4 and 9\n");
+		amdgpu_vm_fragment_size = -1;
+	}
+
 	amdgpu_check_vm_size(adev);
 
 	amdgpu_check_block_size(adev);
