@@ -16,13 +16,13 @@
 #include "dpcd_defs.h"
 
 enum dc_status core_link_read_dpcd(
-	struct core_link* link,
+	struct dc_link *link,
 	uint32_t address,
 	uint8_t *data,
 	uint32_t size)
 {
 	if (!dm_helpers_dp_read_dpcd(link->ctx,
-			&link->public,
+			link,
 			address, data, size))
 			return DC_ERROR_UNEXPECTED;
 
@@ -30,20 +30,20 @@ enum dc_status core_link_read_dpcd(
 }
 
 enum dc_status core_link_write_dpcd(
-	struct core_link* link,
+	struct dc_link *link,
 	uint32_t address,
 	const uint8_t *data,
 	uint32_t size)
 {
 	if (!dm_helpers_dp_write_dpcd(link->ctx,
-			&link->public,
+			link,
 			address, data, size))
 				return DC_ERROR_UNEXPECTED;
 
 	return DC_OK;
 }
 
-void dp_receiver_power_ctrl(struct core_link *link, bool on)
+void dp_receiver_power_ctrl(struct dc_link *link, bool on)
 {
 	uint8_t state;
 
@@ -54,7 +54,7 @@ void dp_receiver_power_ctrl(struct core_link *link, bool on)
 }
 
 void dp_enable_link_phy(
-	struct core_link *link,
+	struct dc_link *link,
 	enum signal_type signal,
 	enum clock_source_id clock_source,
 	const struct dc_link_settings *link_settings)
@@ -77,11 +77,11 @@ void dp_enable_link_phy(
 			if (pipes[i].clock_source != NULL &&
 					pipes[i].clock_source->id != CLOCK_SOURCE_ID_DP_DTO) {
 				pipes[i].clock_source = dp_cs;
-				pipes[i].pix_clk_params.requested_pix_clk =
-						pipes[i].stream->public.timing.pix_clk_khz;
+				pipes[i].stream_res.pix_clk_params.requested_pix_clk =
+						pipes[i].stream->timing.pix_clk_khz;
 				pipes[i].clock_source->funcs->program_pix_clk(
 							pipes[i].clock_source,
-							&pipes[i].pix_clk_params,
+							&pipes[i].stream_res.pix_clk_params,
 							&pipes[i].pll_settings);
 			}
 		}
@@ -90,10 +90,13 @@ void dp_enable_link_phy(
 	if (dc_is_dp_sst_signal(signal)) {
 		if (signal == SIGNAL_TYPE_EDP) {
 			link_enc->funcs->power_control(link_enc, true);
+			link_enc->funcs->enable_dp_output(
+						link_enc,
+						link_settings,
+						clock_source);
 			link_enc->funcs->backlight_control(link_enc, true);
-		}
-
-		link_enc->funcs->enable_dp_output(
+		} else
+			link_enc->funcs->enable_dp_output(
 						link_enc,
 						link_settings,
 						clock_source);
@@ -107,24 +110,24 @@ void dp_enable_link_phy(
 	dp_receiver_power_ctrl(link, true);
 }
 
-void dp_disable_link_phy(struct core_link *link, enum signal_type signal)
+void dp_disable_link_phy(struct dc_link *link, enum signal_type signal)
 {
 	if (!link->wa_flags.dp_keep_receiver_powered)
 		dp_receiver_power_ctrl(link, false);
 
 	if (signal == SIGNAL_TYPE_EDP) {
 		link->link_enc->funcs->backlight_control(link->link_enc, false);
+		link->link_enc->funcs->disable_output(link->link_enc, signal);
 		link->link_enc->funcs->power_control(link->link_enc, false);
-	}
-
-	link->link_enc->funcs->disable_output(link->link_enc, signal);
+	} else
+		link->link_enc->funcs->disable_output(link->link_enc, signal);
 
 	/* Clear current link setting.*/
-	memset(&link->public.cur_link_settings, 0,
-			sizeof(link->public.cur_link_settings));
+	memset(&link->cur_link_settings, 0,
+			sizeof(link->cur_link_settings));
 }
 
-void dp_disable_link_phy_mst(struct core_link *link, enum signal_type signal)
+void dp_disable_link_phy_mst(struct dc_link *link, enum signal_type signal)
 {
 	/* MST disable link only when no stream use the link */
 	if (link->mst_stream_alloc_table.stream_count > 0)
@@ -137,7 +140,7 @@ void dp_disable_link_phy_mst(struct core_link *link, enum signal_type signal)
 }
 
 bool dp_set_hw_training_pattern(
-	struct core_link *link,
+	struct dc_link *link,
 	enum hw_dp_training_pattern pattern)
 {
 	enum dp_test_pattern test_pattern = DP_TEST_PATTERN_UNSUPPORTED;
@@ -165,7 +168,7 @@ bool dp_set_hw_training_pattern(
 }
 
 void dp_set_hw_lane_settings(
-	struct core_link *link,
+	struct dc_link *link,
 	const struct link_training_settings *link_settings)
 {
 	struct link_encoder *encoder = link->link_enc;
@@ -174,13 +177,13 @@ void dp_set_hw_lane_settings(
 	encoder->funcs->dp_set_lane_settings(encoder, link_settings);
 }
 
-enum dp_panel_mode dp_get_panel_mode(struct core_link *link)
+enum dp_panel_mode dp_get_panel_mode(struct dc_link *link)
 {
 	/* We need to explicitly check that connector
 	 * is not DP. Some Travis_VGA get reported
 	 * by video bios as DP.
 	 */
-	if (link->public.connector_signal != SIGNAL_TYPE_DISPLAY_PORT) {
+	if (link->connector_signal != SIGNAL_TYPE_DISPLAY_PORT) {
 
 		switch (link->dpcd_caps.branch_dev_id) {
 		case DP_BRANCH_DEVICE_ID_2:
@@ -215,7 +218,7 @@ enum dp_panel_mode dp_get_panel_mode(struct core_link *link)
 }
 
 void dp_set_hw_test_pattern(
-	struct core_link *link,
+	struct dc_link *link,
 	enum dp_test_pattern test_pattern,
 	uint8_t *custom_pattern,
 	uint32_t custom_pattern_size)
@@ -231,7 +234,7 @@ void dp_set_hw_test_pattern(
 	encoder->funcs->dp_set_phy_pattern(encoder, &pattern_param);
 }
 
-void dp_retrain_link_dp_test(struct core_link *link,
+void dp_retrain_link_dp_test(struct dc_link *link,
 			struct dc_link_settings *link_setting,
 			bool skip_video_pattern)
 {
@@ -243,12 +246,12 @@ void dp_retrain_link_dp_test(struct core_link *link,
 		if (pipes[i].stream != NULL &&
 			pipes[i].stream->sink != NULL &&
 			pipes[i].stream->sink->link != NULL &&
-			pipes[i].stream_enc != NULL &&
+			pipes[i].stream_res.stream_enc != NULL &&
 			pipes[i].stream->sink->link == link) {
 			dm_delay_in_microseconds(link->ctx, 100);
 
-			pipes[i].stream_enc->funcs->dp_blank(
-					pipes[i].stream_enc);
+			pipes[i].stream_res.stream_enc->funcs->dp_blank(
+					pipes[i].stream_res.stream_enc);
 
 			/* disable any test pattern that might be active */
 			dp_set_hw_test_pattern(link,
@@ -263,8 +266,8 @@ void dp_retrain_link_dp_test(struct core_link *link,
 					SIGNAL_TYPE_DISPLAY_PORT);
 
 			/* Clear current link setting. */
-			memset(&link->public.cur_link_settings, 0,
-				sizeof(link->public.cur_link_settings));
+			memset(&link->cur_link_settings, 0,
+				sizeof(link->cur_link_settings));
 
 			link->link_enc->funcs->enable_dp_output(
 						link->link_enc,
@@ -274,11 +277,11 @@ void dp_retrain_link_dp_test(struct core_link *link,
 			dp_receiver_power_ctrl(link, true);
 
 			dc_link_dp_perform_link_training(
-					&link->public,
+					link,
 					link_setting,
 					skip_video_pattern);
 
-			link->public.cur_link_settings = *link_setting;
+			link->cur_link_settings = *link_setting;
 
 			link->dc->hwss.enable_stream(&pipes[i]);
 

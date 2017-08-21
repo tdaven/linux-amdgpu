@@ -324,29 +324,19 @@ static const struct dcn_dpp_mask tf_mask = {
 	TF_REG_LIST_SH_MASK_DCN10(_MASK),
 };
 
-
-#define mpcc_regs(id)\
-[id] = {\
-	MPCC_COMMON_REG_LIST_DCN1_0(id),\
-	MPC_COMMON_REG_LIST_DCN1_0(0),\
-	MPC_COMMON_REG_LIST_DCN1_0(1),\
-	MPC_COMMON_REG_LIST_DCN1_0(2),\
-	MPC_COMMON_REG_LIST_DCN1_0(3),\
-}
-
-static const struct dcn_mpcc_registers mpcc_regs[] = {
-	mpcc_regs(0),
-	mpcc_regs(1),
-	mpcc_regs(2),
-	mpcc_regs(3),
+static const struct dcn_mpc_registers mpc_regs = {
+		MPC_COMMON_REG_LIST_DCN1_0(0),
+		MPC_COMMON_REG_LIST_DCN1_0(1),
+		MPC_COMMON_REG_LIST_DCN1_0(2),
+		MPC_COMMON_REG_LIST_DCN1_0(3)
 };
 
-static const struct dcn_mpcc_shift mpcc_shift = {
-	MPCC_COMMON_MASK_SH_LIST_DCN1_0(__SHIFT)
+static const struct dcn_mpc_shift mpc_shift = {
+	MPC_COMMON_MASK_SH_LIST_DCN1_0(__SHIFT)
 };
 
-static const struct dcn_mpcc_mask mpcc_mask = {
-	MPCC_COMMON_MASK_SH_LIST_DCN1_0(_MASK),
+static const struct dcn_mpc_mask mpc_mask = {
+	MPC_COMMON_MASK_SH_LIST_DCN1_0(_MASK),
 };
 
 #define tg_regs(id)\
@@ -424,6 +414,7 @@ static const struct resource_caps res_cap = {
 
 static const struct dc_debug debug_defaults_drv = {
 		.disable_dcc = false,
+		.sanity_checks = true,
 		.disable_dmcu = true,
 		.force_abm_enable = false,
 		.timing_trace = false,
@@ -507,22 +498,20 @@ static struct output_pixel_processor *dcn10_opp_create(
 	return &opp->base;
 }
 
-static struct mpcc *dcn10_mpcc_create(
-	struct dc_context *ctx,
-	int inst)
+static struct mpc *dcn10_mpc_create(struct dc_context *ctx)
 {
-	struct dcn10_mpcc *mpcc10 = dm_alloc(sizeof(struct dcn10_mpcc));
+	struct dcn10_mpc *mpc10 = dm_alloc(sizeof(struct dcn10_mpc));
 
-	if (!mpcc10)
+	if (!mpc10)
 		return NULL;
 
-	dcn10_mpcc_construct(mpcc10, ctx,
-			&mpcc_regs[inst],
-			&mpcc_shift,
-			&mpcc_mask,
-			inst);
+	dcn10_mpc_construct(mpc10, ctx,
+			&mpc_regs,
+			&mpc_shift,
+			&mpc_mask,
+			4);
 
-	return &mpcc10->base;
+	return &mpc10->base;
 }
 
 static struct timing_generator *dcn10_timing_generator_create(
@@ -610,12 +599,8 @@ static void read_dce_straps(
 	struct dc_context *ctx,
 	struct resource_straps *straps)
 {
-	/* TODO: Registers are missing */
-	/*REG_GET_2(CC_DC_HDMI_STRAPS,
-			HDMI_DISABLE, &straps->hdmi_disable,
-			AUDIO_STREAM_NUMBER, &straps->audio_stream_number);
-
-	REG_GET(DC_PINSTRAPS, DC_PINSTRAPS_AUDIO, &straps->dc_pinstraps_audio);*/
+	generic_reg_get(ctx, mmDC_PINSTRAPS + BASE(mmDC_PINSTRAPS_BASE_IDX),
+		FN(DC_PINSTRAPS, DC_PINSTRAPS_AUDIO), &straps->dc_pinstraps_audio);
 }
 
 static struct audio *create_audio(
@@ -705,6 +690,10 @@ static void destruct(struct dcn10_resource_pool *pool)
 		}
 	}
 
+	if (pool->base.mpc != NULL) {
+		dm_free(TO_DCN10_MPC(pool->base.mpc));
+		pool->base.mpc = NULL;
+	}
 	for (i = 0; i < pool->base.pipe_count; i++) {
 		if (pool->base.opps[i] != NULL)
 			pool->base.opps[i]->funcs->opp_destroy(&pool->base.opps[i]);
@@ -727,11 +716,6 @@ static void destruct(struct dcn10_resource_pool *pool)
 		if (pool->base.timing_generators[i] != NULL)	{
 			dm_free(DCN10TG_FROM_TG(pool->base.timing_generators[i]));
 			pool->base.timing_generators[i] = NULL;
-		}
-
-		if (pool->base.mpcc[i] != NULL)	{
-			dm_free(TO_DCN10_MPCC(pool->base.mpcc[i]));
-			pool->base.mpcc[i] = NULL;
 		}
 	}
 
@@ -790,8 +774,8 @@ static void get_pixel_clock_parameters(
 	const struct pipe_ctx *pipe_ctx,
 	struct pixel_clk_params *pixel_clk_params)
 {
-	const struct core_stream *stream = pipe_ctx->stream;
-	pixel_clk_params->requested_pix_clk = stream->public.timing.pix_clk_khz;
+	const struct dc_stream_state *stream = pipe_ctx->stream;
+	pixel_clk_params->requested_pix_clk = stream->timing.pix_clk_khz;
 	pixel_clk_params->encoder_object_id = stream->sink->link->link_enc->id;
 	pixel_clk_params->signal_type = pipe_ctx->stream->signal;
 	pixel_clk_params->controller_id = pipe_ctx->pipe_idx + 1;
@@ -800,36 +784,36 @@ static void get_pixel_clock_parameters(
 		LINK_RATE_REF_FREQ_IN_KHZ;
 	pixel_clk_params->flags.ENABLE_SS = 0;
 	pixel_clk_params->color_depth =
-		stream->public.timing.display_color_depth;
+		stream->timing.display_color_depth;
 	pixel_clk_params->flags.DISPLAY_BLANKED = 1;
-	pixel_clk_params->pixel_encoding = stream->public.timing.pixel_encoding;
+	pixel_clk_params->pixel_encoding = stream->timing.pixel_encoding;
 
-	if (stream->public.timing.pixel_encoding == PIXEL_ENCODING_YCBCR422)
+	if (stream->timing.pixel_encoding == PIXEL_ENCODING_YCBCR422)
 		pixel_clk_params->color_depth = COLOR_DEPTH_888;
 
-	if (stream->public.timing.pixel_encoding == PIXEL_ENCODING_YCBCR420)
+	if (stream->timing.pixel_encoding == PIXEL_ENCODING_YCBCR420)
 		pixel_clk_params->requested_pix_clk  /= 2;
 
 }
 
-static void build_clamping_params(struct core_stream *stream)
+static void build_clamping_params(struct dc_stream_state *stream)
 {
 	stream->clamping.clamping_level = CLAMPING_FULL_RANGE;
-	stream->clamping.c_depth = stream->public.timing.display_color_depth;
-	stream->clamping.pixel_encoding = stream->public.timing.pixel_encoding;
+	stream->clamping.c_depth = stream->timing.display_color_depth;
+	stream->clamping.pixel_encoding = stream->timing.pixel_encoding;
 }
 
 static enum dc_status build_pipe_hw_param(struct pipe_ctx *pipe_ctx)
 {
 
-	get_pixel_clock_parameters(pipe_ctx, &pipe_ctx->pix_clk_params);
+	get_pixel_clock_parameters(pipe_ctx, &pipe_ctx->stream_res.pix_clk_params);
 
 	pipe_ctx->clock_source->funcs->get_pix_clk_dividers(
 		pipe_ctx->clock_source,
-		&pipe_ctx->pix_clk_params,
+		&pipe_ctx->stream_res.pix_clk_params,
 		&pipe_ctx->pll_settings);
 
-	pipe_ctx->stream->clamping.pixel_encoding = pipe_ctx->stream->public.timing.pixel_encoding;
+	pipe_ctx->stream->clamping.pixel_encoding = pipe_ctx->stream->timing.pixel_encoding;
 
 	resource_build_bit_depth_reduction_params(pipe_ctx->stream,
 					&pipe_ctx->stream->bit_depth_params);
@@ -838,7 +822,7 @@ static enum dc_status build_pipe_hw_param(struct pipe_ctx *pipe_ctx)
 	return DC_OK;
 }
 
-static enum dc_status validate_mapped_resource(
+static enum dc_status build_mapped_resource(
 		const struct core_dc *dc,
 		struct validate_context *context,
 		struct validate_context *old_context)
@@ -847,8 +831,7 @@ static enum dc_status validate_mapped_resource(
 	uint8_t i, j;
 
 	for (i = 0; i < context->stream_count; i++) {
-		struct core_stream *stream = context->streams[i];
-		struct core_link *link = stream->sink->link;
+		struct dc_stream_state *stream = context->streams[i];
 
 		if (old_context && resource_is_stream_unchanged(old_context, stream)) {
 			if (stream != NULL && old_context->streams[i] != NULL) {
@@ -856,7 +839,7 @@ static enum dc_status validate_mapped_resource(
 				resource_build_bit_depth_reduction_params(stream,
 						&stream->bit_depth_params);
 				stream->clamping.pixel_encoding =
-						stream->public.timing.pixel_encoding;
+						stream->timing.pixel_encoding;
 
 				resource_build_bit_depth_reduction_params(stream,
 								&stream->bit_depth_params);
@@ -873,28 +856,10 @@ static enum dc_status validate_mapped_resource(
 			if (context->res_ctx.pipe_ctx[j].stream != stream)
 				continue;
 
-
-			if (!pipe_ctx->tg->funcs->validate_timing(
-					pipe_ctx->tg, &stream->public.timing))
-				return DC_FAIL_CONTROLLER_VALIDATE;
-
 			status = build_pipe_hw_param(pipe_ctx);
 
 			if (status != DC_OK)
 				return status;
-
-			if (!link->link_enc->funcs->validate_output_with_stream(
-				link->link_enc, pipe_ctx))
-				return DC_FAIL_ENC_VALIDATE;
-
-			/* TODO: validate audio ASIC caps, encoder */
-
-			status = dc_link_validate_mode_timing(
-				stream, link, &stream->public.timing);
-
-			if (status != DC_OK)
-				return status;
-
 
 			/* do not need to validate non root pipes */
 			break;
@@ -918,8 +883,8 @@ enum dc_status dcn10_validate_with_context(
 		return result;
 
 	for (i = 0; i < set_count; i++) {
-		context->streams[i] = DC_STREAM_TO_CORE(set[i].stream);
-		dc_stream_retain(&context->streams[i]->public);
+		context->streams[i] = set[i].stream;
+		dc_stream_retain(context->streams[i]);
 		context->stream_count++;
 	}
 
@@ -931,7 +896,7 @@ enum dc_status dcn10_validate_with_context(
 	if (result != DC_OK)
 		return result;
 
-	result = validate_mapped_resource(dc, context, old_context);
+	result = build_mapped_resource(dc, context, old_context);
 	if (result != DC_OK)
 		return result;
 
@@ -951,13 +916,13 @@ enum dc_status dcn10_validate_with_context(
 
 enum dc_status dcn10_validate_guaranteed(
 		const struct core_dc *dc,
-		const struct dc_stream *dc_stream,
+		struct dc_stream_state *dc_stream,
 		struct validate_context *context)
 {
 	enum dc_status result = DC_ERROR_UNEXPECTED;
 
-	context->streams[0] = DC_STREAM_TO_CORE(dc_stream);
-	dc_stream_retain(&context->streams[0]->public);
+	context->streams[0] = dc_stream;
+	dc_stream_retain(context->streams[0]);
 	context->stream_count++;
 
 	result = resource_map_pool_resources(dc, context, NULL);
@@ -966,7 +931,7 @@ enum dc_status dcn10_validate_guaranteed(
 		result = resource_map_phy_clock_resources(dc, context, NULL);
 
 	if (result == DC_OK)
-		result = validate_mapped_resource(dc, context, NULL);
+		result = build_mapped_resource(dc, context, NULL);
 
 	if (result == DC_OK) {
 		validate_guaranteed_copy_streams(
@@ -982,7 +947,7 @@ enum dc_status dcn10_validate_guaranteed(
 static struct pipe_ctx *dcn10_acquire_idle_pipe_for_layer(
 		struct validate_context *context,
 		const struct resource_pool *pool,
-		struct core_stream *stream)
+		struct dc_stream_state *stream)
 {
 	struct resource_context *res_ctx = &context->res_ctx;
 	struct pipe_ctx *head_pipe = resource_get_head_pipe_for_stream(res_ctx, stream);
@@ -995,13 +960,12 @@ static struct pipe_ctx *dcn10_acquire_idle_pipe_for_layer(
 		return false;
 
 	idle_pipe->stream = head_pipe->stream;
-	idle_pipe->tg = head_pipe->tg;
+	idle_pipe->stream_res.tg = head_pipe->stream_res.tg;
+	idle_pipe->stream_res.opp = head_pipe->stream_res.opp;
 
-	idle_pipe->mpcc = pool->mpcc[idle_pipe->pipe_idx];
-	idle_pipe->mi = pool->mis[idle_pipe->pipe_idx];
-	idle_pipe->ipp = pool->ipps[idle_pipe->pipe_idx];
-	idle_pipe->xfm = pool->transforms[idle_pipe->pipe_idx];
-	idle_pipe->opp = pool->opps[idle_pipe->pipe_idx];
+	idle_pipe->plane_res.mi = pool->mis[idle_pipe->pipe_idx];
+	idle_pipe->plane_res.ipp = pool->ipps[idle_pipe->pipe_idx];
+	idle_pipe->plane_res.xfm = pool->transforms[idle_pipe->pipe_idx];
 
 	return idle_pipe;
 }
@@ -1359,6 +1323,13 @@ static bool construct(
 	dc->dcn_ip = dcn10_ip_defaults;
 	dc->dcn_soc = dcn10_soc_defaults;
 
+	if (ASICREV_IS_RV1_F0(dc->ctx->asic_id.hw_internal_rev)) {
+		dc->dcn_soc.urgent_latency = 3;
+		dc->public.debug.disable_dmcu = true;
+		dc->dcn_soc.fabric_and_dram_bandwidth_vmax0p9 = 41.60f;
+	}
+
+
 	dc->dcn_soc.number_of_channels = dc->ctx->asic_id.vram_width / ddr4_dram_width;
 	ASSERT(dc->dcn_soc.number_of_channels < 3);
 	if (dc->dcn_soc.number_of_channels == 0)/*old sbios bug*/
@@ -1369,6 +1340,9 @@ static bool construct(
 		dc->dcn_soc.fabric_and_dram_bandwidth_vnom0p8 = 17.066f;
 		dc->dcn_soc.fabric_and_dram_bandwidth_vmid0p72 = 14.933f;
 		dc->dcn_soc.fabric_and_dram_bandwidth_vmin0p65 = 12.8f;
+		if (ASICREV_IS_RV1_F0(dc->ctx->asic_id.hw_internal_rev)) {
+			dc->dcn_soc.fabric_and_dram_bandwidth_vmax0p9 = 20.80f;
+		}
 	}
 
 	if (!dc->public.debug.disable_pplib_clock_request)
@@ -1428,12 +1402,12 @@ static bool construct(
 			dm_error("DC: failed to create tg!\n");
 			goto otg_create_fail;
 		}
-		pool->base.mpcc[i] = dcn10_mpcc_create(ctx, i);
-		if (pool->base.mpcc[i] == NULL) {
-			BREAK_TO_DEBUGGER();
-			dm_error("DC: failed to create mpcc!\n");
-			goto mpcc_create_fail;
-		}
+	}
+	pool->base.mpc = dcn10_mpc_create(ctx);
+	if (pool->base.mpc == NULL) {
+		BREAK_TO_DEBUGGER();
+		dm_error("DC: failed to create mpc!\n");
+		goto mpc_create_fail;
 	}
 
 	if (!resource_construct(num_virtual_links, dc, &pool->base,
@@ -1442,14 +1416,14 @@ static bool construct(
 			goto res_create_fail;
 
 	dcn10_hw_sequencer_construct(dc);
-	dc->public.caps.max_surfaces =  pool->base.pipe_count;
+	dc->public.caps.max_planes =  pool->base.pipe_count;
 
 	dc->public.cap_funcs = cap_funcs;
 
 	return true;
 
 disp_clk_create_fail:
-mpcc_create_fail:
+mpc_create_fail:
 otg_create_fail:
 opp_create_fail:
 dpp_create_fail:

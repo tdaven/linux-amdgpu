@@ -59,7 +59,8 @@ struct hw_sequencer_funcs {
 
 	void (*apply_ctx_for_surface)(
 			struct core_dc *dc,
-			struct core_surface *surface,
+			const struct dc_stream_state *stream,
+			int num_planes,
 			struct validate_context *context);
 
 	void (*set_plane_config)(
@@ -79,16 +80,20 @@ struct hw_sequencer_funcs {
 		const struct core_dc *dc,
 		struct pipe_ctx *pipe_ctx);
 
+	void (*update_dchub)(
+		struct dce_hwseq *hws,
+		struct dchub_init_data *dh_data);
+
 	void (*update_pending_status)(
 			struct pipe_ctx *pipe_ctx);
 
 	bool (*set_input_transfer_func)(
 				struct pipe_ctx *pipe_ctx,
-				const struct core_surface *surface);
+				const struct dc_plane_state *plane_state);
 
 	bool (*set_output_transfer_func)(
 				struct pipe_ctx *pipe_ctx,
-				const struct core_stream *stream);
+				const struct dc_stream_state *stream);
 
 	void (*power_down)(struct core_dc *dc);
 
@@ -154,6 +159,12 @@ struct hw_sequencer_funcs {
 			struct core_dc *dc);
 
 	void (*set_avmute)(struct pipe_ctx *pipe_ctx, bool enable);
+
+	void (*log_hw_state)(struct core_dc *dc);
+
+	void (*wait_for_mpcc_disconnect)(struct core_dc *dc,
+			struct resource_pool *res_pool,
+			struct pipe_ctx *pipe_ctx);
 };
 
 void color_space_to_black_color(

@@ -126,36 +126,43 @@ static int kfd_import_dmabuf_create_kfd_bo(struct kfd_dev *dev,
 	if (!dev || !dev->kfd2kgd->import_dmabuf)
 		return -EINVAL;
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
+
 	pdd = kfd_bind_process_to_device(dev, p);
-	up_write(&p->lock);
-	if (IS_ERR(pdd))
-		return PTR_ERR(pdd);
+	if (IS_ERR(pdd)) {
+		r = PTR_ERR(pdd);
+		goto err_unlock;
+	}
 
 	r = dev->kfd2kgd->import_dmabuf(dev->kgd, dmabuf,
 					va_addr, pdd->vm,
 					(struct kgd_mem **)&mem, &size,
 					mmap_offset);
 	if (r)
-		return r;
+		goto err_unlock;
 
-	down_write(&p->lock);
 	idr_handle = kfd_process_device_create_obj_handle(pdd, mem,
 							  va_addr, size,
 							  ipc_obj);
-	up_write(&p->lock);
 	if (idr_handle < 0) {
-		dev->kfd2kgd->free_memory_of_gpu(dev->kgd,
-						 (struct kgd_mem *)mem,
-						 pdd->vm);
-		return -EFAULT;
+		r = -EFAULT;
+		goto err_free;
 	}
 
-	*handle = MAKE_HANDLE(gpu_id, idr_handle);
+	mutex_unlock(&p->mutex);
 
+	*handle = MAKE_HANDLE(gpu_id, idr_handle);
 	if (mmap_offset)
 		*mmap_offset = (kfd_mmap_flags << PAGE_SHIFT) | *mmap_offset;
 
+	return 0;
+
+err_free:
+	dev->kfd2kgd->free_memory_of_gpu(dev->kgd,
+					 (struct kgd_mem *)mem,
+					 pdd->vm);
+err_unlock:
+	mutex_unlock(&p->mutex);
 	return r;
 }
 
@@ -239,18 +246,16 @@ int kfd_ipc_export_as_handle(struct kfd_dev *dev, struct kfd_process *p,
 	if (!dev || !ipc_handle)
 		return -EINVAL;
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 	pdd = kfd_bind_process_to_device(dev, p);
-	up_write(&p->lock);
-
 	if (IS_ERR(pdd)) {
+		mutex_unlock(&p->mutex);
 		pr_err("Failed to get pdd\n");
 		return PTR_ERR(pdd);
 	}
 
-	down_write(&p->lock);
 	kfd_bo = kfd_process_device_find_bo(pdd, GET_IDR_HANDLE(handle));
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	if (!kfd_bo) {
 		pr_err("Failed to get bo");

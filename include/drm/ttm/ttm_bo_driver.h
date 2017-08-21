@@ -41,6 +41,7 @@
 #include <linux/fs.h>
 #include <linux/spinlock.h>
 #include <linux/reservation.h>
+#include <linux/version.h>
 
 #define TTM_MAX_BO_PRIORITY	4U
 
@@ -228,13 +229,19 @@ struct ttm_mem_type_manager_func {
 	 * struct ttm_mem_type_manager member debug
 	 *
 	 * @man: Pointer to a memory type manager.
+	 * @printer: Prefix to be used in printout to identify the caller.
 	 * @prefix: Prefix to be used in printout to identify the caller.
 	 *
 	 * This function is called to print out the state of the memory
 	 * type manager to aid debugging of out-of-memory conditions.
 	 * It may not be called from within atomic context.
 	 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+	void (*debug)(struct ttm_mem_type_manager *man,
+		      struct drm_printer *printer);
+#else
 	void (*debug)(struct ttm_mem_type_manager *man, const char *prefix);
+#endif
 };
 
 /**

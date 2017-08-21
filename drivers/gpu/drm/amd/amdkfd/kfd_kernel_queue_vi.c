@@ -193,8 +193,8 @@ int pm_map_queues_vi(struct packet_manager *pm, uint32_t *buffer,
 		use_static = false; /* no static queues under SDMA */
 		break;
 	default:
-		WARN(1, "queue type %d\n", q->properties.type);
-		break;
+		WARN(1, "queue type %d", q->properties.type);
+		return -EINVAL;
 	}
 	packet->bitfields3.doorbell_offset =
 			q->properties.doorbell_off;
@@ -266,8 +266,8 @@ int pm_unmap_queues_vi(struct packet_manager *pm, uint32_t *buffer,
 			engine_sel__mes_unmap_queues__sdma0 + sdma_engine;
 		break;
 	default:
-		WARN(1, "queue type %d\n", type);
-		break;
+		WARN(1, "queue type %d", type);
+		return -EINVAL;
 	}
 
 	if (reset)
@@ -299,8 +299,8 @@ int pm_unmap_queues_vi(struct packet_manager *pm, uint32_t *buffer,
 			queue_sel__mes_unmap_queues__unmap_all_non_static_queues;
 		break;
 	default:
-		WARN(1, "filter %d\n", filter);
-		break;
+		WARN(1, "filter %d", filter);
+		return -EINVAL;
 	}
 
 	return 0;
@@ -337,8 +337,6 @@ int pm_query_status_vi(struct packet_manager *pm, uint32_t *buffer,
 uint32_t pm_release_mem_vi(uint64_t gpu_addr, uint32_t *buffer)
 {
 	struct pm4_mec_release_mem *packet;
-
-	WARN_ON(!buffer);
 
 	packet = (struct pm4_mec_release_mem *)buffer;
 	memset(buffer, 0, sizeof(struct pm4_mec_release_mem));

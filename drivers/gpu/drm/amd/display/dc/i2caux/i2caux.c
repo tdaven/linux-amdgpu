@@ -88,10 +88,11 @@ struct i2caux *dal_i2caux_create(
 		return dal_i2caux_dce100_create(ctx);
 	case DCE_VERSION_12_0:
 		return dal_i2caux_dce120_create(ctx);
-	#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
+#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
 	case DCN_VERSION_1_0:
 		return dal_i2caux_dcn10_create(ctx);
-	#endif
+#endif
+
 	default:
 		BREAK_TO_DEBUGGER();
 		return NULL;
@@ -264,6 +265,8 @@ static bool get_hw_supported_ddc_line(
 {
 	enum gpio_ddc_line line_found;
 
+	*line = GPIO_DDC_LINE_UNKNOWN;
+
 	if (!ddc) {
 		BREAK_TO_DEBUGGER();
 		return false;
@@ -319,7 +322,7 @@ void dal_i2caux_destroy(
 uint32_t dal_i2caux_get_reference_clock(
 		struct dc_bios *bios)
 {
-	struct firmware_info info = { { 0 } };
+	struct dc_firmware_info info = { { 0 } };
 
 	if (bios->funcs->get_firmware_info(bios, &info) != BP_RESULT_OK)
 		return 0;
@@ -336,6 +339,9 @@ enum {
 	/* following are expressed in KHz */
 	DEFAULT_I2C_SW_SPEED = 50,
 	DEFAULT_I2C_HW_SPEED = 50,
+
+	DEFAULT_I2C_SW_SPEED_100KHZ = 100,
+	DEFAULT_I2C_HW_SPEED_100KHZ = 100,
 
 	/* This is the timeout as defined in DP 1.2a,
 	 * 2.3.4 "Detailed uPacket TX AUX CH State Description". */
@@ -436,8 +442,13 @@ bool dal_i2caux_construct(
 	i2caux->aux_timeout_period =
 		SW_AUX_TIMEOUT_PERIOD_MULTIPLIER * AUX_TIMEOUT_PERIOD;
 
-	i2caux->default_i2c_sw_speed = DEFAULT_I2C_SW_SPEED;
-	i2caux->default_i2c_hw_speed = DEFAULT_I2C_HW_SPEED;
+	if (ctx->dce_version >= DCE_VERSION_11_2) {
+		i2caux->default_i2c_hw_speed = DEFAULT_I2C_HW_SPEED_100KHZ;
+		i2caux->default_i2c_sw_speed = DEFAULT_I2C_SW_SPEED_100KHZ;
+	} else {
+		i2caux->default_i2c_hw_speed = DEFAULT_I2C_HW_SPEED;
+		i2caux->default_i2c_sw_speed = DEFAULT_I2C_SW_SPEED;
+	}
 
 	return true;
 }

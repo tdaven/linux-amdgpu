@@ -424,7 +424,7 @@ static void dce_clock_read_integrated_info(struct dce_disp_clk *clk_dce)
 	struct dc_debug *debug = &clk_dce->base.ctx->dc->debug;
 	struct dc_bios *bp = clk_dce->base.ctx->dc_bios;
 	struct integrated_info info = { { { 0 } } };
-	struct firmware_info fw_info = { { 0 } };
+	struct dc_firmware_info fw_info = { { 0 } };
 	int i;
 
 	if (bp->integrated_info)
@@ -614,7 +614,7 @@ static bool dce_apply_clock_voltage_request(
 	}
 	if (send_request) {
 #if defined(CONFIG_DRM_AMD_DC_DCN1_0)
-		if (clk->ctx->dce_version == DCN_VERSION_1_0) {
+		if (clk->ctx->dce_version >= DCN_VERSION_1_0) {
 			struct core_dc *core_dc = DC_TO_CORE(clk->ctx->dc);
 			/*use dcfclk request voltage*/
 			clock_voltage_req.clk_type = DM_PP_CLOCK_TYPE_DCFCLK;

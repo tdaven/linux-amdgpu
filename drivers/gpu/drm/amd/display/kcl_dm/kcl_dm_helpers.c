@@ -40,7 +40,6 @@
 #include "dc.h"
 #include "kcl_dm.h"
 #include "kcl_dm_irq.h"
-#include "kcl_dm_types.h"
 
 #include "dm_helpers.h"
 
@@ -177,7 +176,7 @@ static void get_payload_table(
  */
 bool dm_helpers_dp_mst_write_payload_allocation_table(
 		struct dc_context *ctx,
-		const struct dc_stream *stream,
+		const struct dc_stream_state *stream,
 		struct dp_mst_stream_allocation_table *proposed_table,
 		bool enable)
 {
@@ -266,7 +265,7 @@ bool dm_helpers_dp_mst_write_payload_allocation_table(
  */
 bool dm_helpers_dp_mst_poll_for_allocation_change_trigger(
 		struct dc_context *ctx,
-		const struct dc_stream *stream)
+		const struct dc_stream_state *stream)
 {
 	struct amdgpu_connector *aconnector;
 	struct drm_dp_mst_topology_mgr *mst_mgr;
@@ -292,7 +291,7 @@ bool dm_helpers_dp_mst_poll_for_allocation_change_trigger(
 
 bool dm_helpers_dp_mst_send_payload_allocation(
 		struct dc_context *ctx,
-		const struct dc_stream *stream,
+		const struct dc_stream_state *stream,
 		bool enable)
 {
 	struct amdgpu_connector *aconnector;
@@ -328,6 +327,15 @@ bool dm_helpers_dc_conn_log(struct dc_context *ctx, struct log_entry *entry, enu
 	return true;
 }
 
+void dm_dtn_log_begin(struct dc_context *ctx)
+{}
+
+void dm_dtn_log_append_v(struct dc_context *ctx,
+		const char *pMsg, ...)
+{}
+
+void dm_dtn_log_end(struct dc_context *ctx)
+{}
 
 bool dm_helpers_dp_mst_start_top_mgr(
 		struct dc_context *ctx,

@@ -125,7 +125,7 @@ static void amdgpufb_destroy_pinned_object(struct drm_gem_object *gobj)
 		amdgpu_bo_unpin(abo);
 		amdgpu_bo_unreserve(abo);
 	}
-	drm_gem_object_unreference_unlocked(gobj);
+	kcl_drm_gem_object_put_unlocked(gobj);
 }
 
 static int amdgpufb_create_pinned_object(struct amdgpu_fbdev *rfbdev,
@@ -264,7 +264,7 @@ static int amdgpufb_create(struct drm_fb_helper *helper,
 	tmp = amdgpu_bo_gpu_offset(abo) - adev->mc.vram_start;
 	info->fix.smem_start = adev->mc.aper_base + tmp;
 	info->fix.smem_len = amdgpu_bo_size(abo);
-	info->screen_base = abo->kptr;
+	info->screen_base = amdgpu_bo_kptr(abo);
 	info->screen_size = amdgpu_bo_size(abo);
 
 	drm_fb_helper_fill_var(info, &rfbdev->helper, sizes->fb_width, sizes->fb_height);
@@ -303,7 +303,7 @@ out:
 
 	}
 	if (fb && ret) {
-		drm_gem_object_unreference_unlocked(gobj);
+		kcl_drm_gem_object_put_unlocked(gobj);
 		drm_framebuffer_unregister_private(fb);
 		drm_framebuffer_cleanup(fb);
 		kfree(fb);

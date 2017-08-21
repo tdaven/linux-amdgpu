@@ -28,8 +28,8 @@
 #include "kfd_priv.h"
 #include "kfd_mqd_manager.h"
 #include "vi_structs.h"
-#include "asic_reg/gca/gfx_8_0_sh_mask.h"
-#include "asic_reg/gca/gfx_8_0_enum.h"
+#include "gca/gfx_8_0_sh_mask.h"
+#include "gca/gfx_8_0_enum.h"
 #include "oss/oss_3_0_sh_mask.h"
 
 #define CP_MQD_CONTROL__PRIV_STATE__SHIFT 0x8
@@ -486,6 +486,9 @@ struct mqd_manager *mqd_manager_init_vi(enum KFD_MQD_TYPE type,
 		struct kfd_dev *dev)
 {
 	struct mqd_manager *mqd;
+
+	if (WARN_ON(type >= KFD_MQD_TYPE_MAX))
+		return NULL;
 
 	mqd = kzalloc(sizeof(*mqd), GFP_NOIO);
 	if (!mqd)

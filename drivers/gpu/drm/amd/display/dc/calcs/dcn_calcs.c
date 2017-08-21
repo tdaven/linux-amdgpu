@@ -37,8 +37,8 @@
 /* Defaults from spreadsheet rev#247 */
 const struct dcn_soc_bounding_box dcn10_soc_defaults = {
 		/* latencies */
-		.sr_exit_time = 13, /*us*/
-		.sr_enter_plus_exit_time = 15, /*us*/
+		.sr_exit_time = 17, /*us*/
+		.sr_enter_plus_exit_time = 19, /*us*/
 		.urgent_latency = 4, /*us*/
 		.dram_clock_change_latency = 17, /*us*/
 		.write_back_latency = 12, /*us*/
@@ -233,25 +233,25 @@ static void pipe_ctx_to_e2e_pipe_params (
 		struct _vcs_dpi_display_pipe_params_st *input)
 {
 	input->src.is_hsplit = false;
-	if (pipe->top_pipe != NULL && pipe->top_pipe->surface == pipe->surface)
+	if (pipe->top_pipe != NULL && pipe->top_pipe->plane_state == pipe->plane_state)
 		input->src.is_hsplit = true;
-	else if (pipe->bottom_pipe != NULL && pipe->bottom_pipe->surface == pipe->surface)
+	else if (pipe->bottom_pipe != NULL && pipe->bottom_pipe->plane_state == pipe->plane_state)
 		input->src.is_hsplit = true;
 
-	input->src.dcc                 = pipe->surface->public.dcc.enable;
+	input->src.dcc                 = pipe->plane_state->dcc.enable;
 	input->src.dcc_rate            = 1;
-	input->src.meta_pitch          = pipe->surface->public.dcc.grph.meta_pitch;
+	input->src.meta_pitch          = pipe->plane_state->dcc.grph.meta_pitch;
 	input->src.source_scan         = dm_horz;
-	input->src.sw_mode             = pipe->surface->public.tiling_info.gfx9.swizzle;
+	input->src.sw_mode             = pipe->plane_state->tiling_info.gfx9.swizzle;
 
-	input->src.viewport_width      = pipe->scl_data.viewport.width;
-	input->src.viewport_height     = pipe->scl_data.viewport.height;
-	input->src.data_pitch          = pipe->scl_data.viewport.width;
-	input->src.data_pitch_c        = pipe->scl_data.viewport.width;
+	input->src.viewport_width      = pipe->plane_res.scl_data.viewport.width;
+	input->src.viewport_height     = pipe->plane_res.scl_data.viewport.height;
+	input->src.data_pitch          = pipe->plane_res.scl_data.viewport.width;
+	input->src.data_pitch_c        = pipe->plane_res.scl_data.viewport.width;
 	input->src.cur0_src_width      = 128; /* TODO: Cursor calcs, not curently stored */
 	input->src.cur0_bpp            = 32;
 
-	switch (pipe->surface->public.tiling_info.gfx9.swizzle) {
+	switch (pipe->plane_state->tiling_info.gfx9.swizzle) {
 	/* for 4/8/16 high tiles */
 	case DC_SW_LINEAR:
 		input->src.is_display_sw = 1;
@@ -299,7 +299,7 @@ static void pipe_ctx_to_e2e_pipe_params (
 		break;
 	}
 
-	switch (pipe->surface->public.rotation) {
+	switch (pipe->plane_state->rotation) {
 	case ROTATION_ANGLE_0:
 	case ROTATION_ANGLE_180:
 		input->src.source_scan = dm_horz;
@@ -314,7 +314,7 @@ static void pipe_ctx_to_e2e_pipe_params (
 	}
 
 	/* TODO: Fix pixel format mappings */
-	switch (pipe->surface->public.format) {
+	switch (pipe->plane_state->format) {
 	case SURFACE_PIXEL_FORMAT_VIDEO_420_YCbCr:
 	case SURFACE_PIXEL_FORMAT_VIDEO_420_YCrCb:
 		input->src.source_format = dm_420_8;
@@ -341,21 +341,21 @@ static void pipe_ctx_to_e2e_pipe_params (
 		break;
 	}
 
-	input->scale_taps.htaps                = pipe->scl_data.taps.h_taps;
-	input->scale_ratio_depth.hscl_ratio    = pipe->scl_data.ratios.horz.value/4294967296.0;
-	input->scale_ratio_depth.vscl_ratio    = pipe->scl_data.ratios.vert.value/4294967296.0;
-	input->scale_ratio_depth.vinit =  pipe->scl_data.inits.v.value/4294967296.0;
+	input->scale_taps.htaps                = pipe->plane_res.scl_data.taps.h_taps;
+	input->scale_ratio_depth.hscl_ratio    = pipe->plane_res.scl_data.ratios.horz.value/4294967296.0;
+	input->scale_ratio_depth.vscl_ratio    = pipe->plane_res.scl_data.ratios.vert.value/4294967296.0;
+	input->scale_ratio_depth.vinit =  pipe->plane_res.scl_data.inits.v.value/4294967296.0;
 	if (input->scale_ratio_depth.vinit < 1.0)
 			input->scale_ratio_depth.vinit = 1;
-	input->scale_taps.vtaps = pipe->scl_data.taps.v_taps;
-	input->scale_taps.vtaps_c = pipe->scl_data.taps.v_taps_c;
-	input->scale_taps.htaps_c              = pipe->scl_data.taps.h_taps_c;
-	input->scale_ratio_depth.hscl_ratio_c  = pipe->scl_data.ratios.horz_c.value/4294967296.0;
-	input->scale_ratio_depth.vscl_ratio_c  = pipe->scl_data.ratios.vert_c.value/4294967296.0;
-	input->scale_ratio_depth.vinit_c       = pipe->scl_data.inits.v_c.value/4294967296.0;
+	input->scale_taps.vtaps = pipe->plane_res.scl_data.taps.v_taps;
+	input->scale_taps.vtaps_c = pipe->plane_res.scl_data.taps.v_taps_c;
+	input->scale_taps.htaps_c              = pipe->plane_res.scl_data.taps.h_taps_c;
+	input->scale_ratio_depth.hscl_ratio_c  = pipe->plane_res.scl_data.ratios.horz_c.value/4294967296.0;
+	input->scale_ratio_depth.vscl_ratio_c  = pipe->plane_res.scl_data.ratios.vert_c.value/4294967296.0;
+	input->scale_ratio_depth.vinit_c       = pipe->plane_res.scl_data.inits.v_c.value/4294967296.0;
 	if (input->scale_ratio_depth.vinit_c < 1.0)
 			input->scale_ratio_depth.vinit_c = 1;
-	switch (pipe->scl_data.lb_params.depth) {
+	switch (pipe->plane_res.scl_data.lb_params.depth) {
 	case LB_PIXEL_DEPTH_30BPP:
 		input->scale_ratio_depth.lb_depth = 30; break;
 	case LB_PIXEL_DEPTH_36BPP:
@@ -365,32 +365,32 @@ static void pipe_ctx_to_e2e_pipe_params (
 	}
 
 
-	input->dest.vactive        = pipe->stream->public.timing.v_addressable;
+	input->dest.vactive        = pipe->stream->timing.v_addressable;
 
-	input->dest.recout_width   = pipe->scl_data.recout.width;
-	input->dest.recout_height  = pipe->scl_data.recout.height;
+	input->dest.recout_width   = pipe->plane_res.scl_data.recout.width;
+	input->dest.recout_height  = pipe->plane_res.scl_data.recout.height;
 
-	input->dest.full_recout_width   = pipe->scl_data.recout.width;
-	input->dest.full_recout_height  = pipe->scl_data.recout.height;
+	input->dest.full_recout_width   = pipe->plane_res.scl_data.recout.width;
+	input->dest.full_recout_height  = pipe->plane_res.scl_data.recout.height;
 
-	input->dest.htotal         = pipe->stream->public.timing.h_total;
-	input->dest.hblank_start   = input->dest.htotal - pipe->stream->public.timing.h_front_porch;
+	input->dest.htotal         = pipe->stream->timing.h_total;
+	input->dest.hblank_start   = input->dest.htotal - pipe->stream->timing.h_front_porch;
 	input->dest.hblank_end     = input->dest.hblank_start
-			- pipe->stream->public.timing.h_addressable
-			- pipe->stream->public.timing.h_border_left
-			- pipe->stream->public.timing.h_border_right;
+			- pipe->stream->timing.h_addressable
+			- pipe->stream->timing.h_border_left
+			- pipe->stream->timing.h_border_right;
 
-	input->dest.vtotal         = pipe->stream->public.timing.v_total;
-	input->dest.vblank_start   = input->dest.vtotal - pipe->stream->public.timing.v_front_porch;
+	input->dest.vtotal         = pipe->stream->timing.v_total;
+	input->dest.vblank_start   = input->dest.vtotal - pipe->stream->timing.v_front_porch;
 	input->dest.vblank_end     = input->dest.vblank_start
-			- pipe->stream->public.timing.v_addressable
-			- pipe->stream->public.timing.v_border_bottom
-			- pipe->stream->public.timing.v_border_top;
+			- pipe->stream->timing.v_addressable
+			- pipe->stream->timing.v_border_bottom
+			- pipe->stream->timing.v_border_top;
 
-	input->dest.vsync_plus_back_porch = pipe->stream->public.timing.v_total
-			- pipe->stream->public.timing.v_addressable
-			- pipe->stream->public.timing.v_front_porch;
-	input->dest.pixel_rate_mhz = pipe->stream->public.timing.pix_clk_khz/1000.0;
+	input->dest.vsync_plus_back_porch = pipe->stream->timing.v_total
+			- pipe->stream->timing.v_addressable
+			- pipe->stream->timing.v_front_porch;
+	input->dest.pixel_rate_mhz = pipe->stream->timing.pix_clk_khz/1000.0;
 	input->dest.vstartup_start = pipe->pipe_dlg_param.vstartup_start;
 	input->dest.vupdate_offset = pipe->pipe_dlg_param.vupdate_offset;
 	input->dest.vupdate_offset = pipe->pipe_dlg_param.vupdate_offset;
@@ -401,7 +401,8 @@ static void pipe_ctx_to_e2e_pipe_params (
 static void dcn_bw_calc_rq_dlg_ttu(
 		const struct core_dc *dc,
 		const struct dcn_bw_internal_vars *v,
-		struct pipe_ctx *pipe)
+		struct pipe_ctx *pipe,
+		int in_idx)
 {
 	struct display_mode_lib *dml = (struct display_mode_lib *)(&dc->dml);
 	struct _vcs_dpi_display_dlg_regs_st *dlg_regs = &pipe->dlg_regs;
@@ -439,6 +440,21 @@ static void dcn_bw_calc_rq_dlg_ttu(
 	input.clks_cfg.socclk_mhz = v->socclk;
 	input.clks_cfg.voltage = v->voltage_level;
 //	dc->dml.logger = pool->base.logger;
+	input.dout.output_format = (v->output_format[in_idx] == dcn_bw_420) ? dm_420 : dm_444;
+	input.dout.output_type  = (v->output[in_idx] == dcn_bw_hdmi) ? dm_hdmi : dm_dp;
+	//input[in_idx].dout.output_standard;
+	switch (v->output_deep_color[in_idx]) {
+	case dcn_bw_encoder_12bpc:
+		input.dout.output_bpc = dm_out_12;
+	break;
+	case dcn_bw_encoder_10bpc:
+		input.dout.output_bpc = dm_out_10;
+	break;
+	case dcn_bw_encoder_8bpc:
+	default:
+		input.dout.output_bpc = dm_out_8;
+	break;
+	}
 
 	/*todo: soc->sr_enter_plus_exit_time??*/
 	dlg_sys_param.t_srx_delay_us = dc->dcn_ip.dcfclk_cstate_latency / v->dcf_clk_deep_sleep;
@@ -455,7 +471,7 @@ static void dcn_bw_calc_rq_dlg_ttu(
 			true,
 			true,
 			v->pte_enable == dcn_bw_yes,
-			pipe->surface->public.flip_immediate);
+			pipe->plane_state->flip_immediate);
 }
 
 static void dcn_dml_wm_override(
@@ -478,7 +494,7 @@ static void dcn_dml_wm_override(
 	for (i = 0, in_idx = 0; i < pool->pipe_count; i++) {
 		struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
 
-		if (!pipe->stream || !pipe->surface)
+		if (!pipe->stream || !pipe->plane_state)
 			continue;
 
 		input[in_idx].clks_cfg.dcfclk_mhz = v->dcfclk;
@@ -487,6 +503,21 @@ static void dcn_dml_wm_override(
 		input[in_idx].clks_cfg.refclk_mhz = pool->ref_clock_inKhz / 1000;
 		input[in_idx].clks_cfg.socclk_mhz = v->socclk;
 		input[in_idx].clks_cfg.voltage = v->voltage_level;
+		input[in_idx].dout.output_format = (v->output_format[in_idx] == dcn_bw_420) ? dm_420 : dm_444;
+		input[in_idx].dout.output_type  = (v->output[in_idx] == dcn_bw_hdmi) ? dm_hdmi : dm_dp;
+		//input[in_idx].dout.output_standard;
+		switch (v->output_deep_color[in_idx]) {
+		case dcn_bw_encoder_12bpc:
+			input[in_idx].dout.output_bpc = dm_out_12;
+		break;
+		case dcn_bw_encoder_10bpc:
+			input[in_idx].dout.output_bpc = dm_out_10;
+		break;
+		case dcn_bw_encoder_8bpc:
+		default:
+			input[in_idx].dout.output_bpc = dm_out_8;
+		break;
+		}
 		pipe_ctx_to_e2e_pipe_params(pipe, &input[in_idx].pipe);
 		dml_rq_dlg_get_rq_reg(
 			dml,
@@ -516,7 +547,7 @@ static void dcn_dml_wm_override(
 	for (i = 0, in_idx = 0; i < pool->pipe_count; i++) {
 		struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
 
-		if (!pipe->stream || !pipe->surface)
+		if (!pipe->stream || !pipe->plane_state)
 			continue;
 
 		dml_rq_dlg_get_dlg_reg(dml,
@@ -527,7 +558,7 @@ static void dcn_dml_wm_override(
 			true,
 			true,
 			v->pte_enable == dcn_bw_yes,
-			pipe->surface->public.flip_immediate);
+			pipe->plane_state->flip_immediate);
 		in_idx++;
 	}
 	dm_free(input);
@@ -541,17 +572,15 @@ static void split_stream_across_pipes(
 {
 	int pipe_idx = secondary_pipe->pipe_idx;
 
-	if (!primary_pipe->surface)
+	if (!primary_pipe->plane_state)
 		return;
 
 	*secondary_pipe = *primary_pipe;
 
 	secondary_pipe->pipe_idx = pipe_idx;
-	secondary_pipe->mpcc = pool->mpcc[secondary_pipe->pipe_idx];
-	secondary_pipe->mi = pool->mis[secondary_pipe->pipe_idx];
-	secondary_pipe->ipp = pool->ipps[secondary_pipe->pipe_idx];
-	secondary_pipe->xfm = pool->transforms[secondary_pipe->pipe_idx];
-	secondary_pipe->opp = pool->opps[secondary_pipe->pipe_idx];
+	secondary_pipe->plane_res.mi = pool->mis[secondary_pipe->pipe_idx];
+	secondary_pipe->plane_res.ipp = pool->ipps[secondary_pipe->pipe_idx];
+	secondary_pipe->plane_res.xfm = pool->transforms[secondary_pipe->pipe_idx];
 	if (primary_pipe->bottom_pipe) {
 		secondary_pipe->bottom_pipe = primary_pipe->bottom_pipe;
 		secondary_pipe->bottom_pipe->top_pipe = secondary_pipe;
@@ -845,30 +874,29 @@ bool dcn_validate_bandwidth(
 		if (!pipe->stream)
 			continue;
 		/* skip all but first of split pipes */
-		if (pipe->top_pipe && pipe->top_pipe->surface == pipe->surface)
+		if (pipe->top_pipe && pipe->top_pipe->plane_state == pipe->plane_state)
 			continue;
 
 		v->underscan_output[input_idx] = false; /* taken care of in recout already*/
 		v->interlace_output[input_idx] = false;
 
-		v->htotal[input_idx] = pipe->stream->public.timing.h_total;
-		v->vtotal[input_idx] = pipe->stream->public.timing.v_total;
-		v->v_sync_plus_back_porch[input_idx] = pipe->stream->public.timing.v_total
-				- pipe->stream->public.timing.v_addressable
-				- pipe->stream->public.timing.v_front_porch;
-		v->vactive[input_idx] = pipe->stream->public.timing.v_addressable;
-		v->pixel_clock[input_idx] = pipe->stream->public.timing.pix_clk_khz / 1000.0f;
+		v->htotal[input_idx] = pipe->stream->timing.h_total;
+		v->vtotal[input_idx] = pipe->stream->timing.v_total;
+		v->v_sync_plus_back_porch[input_idx] = pipe->stream->timing.v_total
+				- pipe->stream->timing.v_addressable
+				- pipe->stream->timing.v_front_porch;
+		v->vactive[input_idx] = pipe->stream->timing.v_addressable;
+		v->pixel_clock[input_idx] = pipe->stream->timing.pix_clk_khz / 1000.0f;
 
-
-		if (!pipe->surface){
+		if (!pipe->plane_state) {
 			v->dcc_enable[input_idx] = dcn_bw_yes;
 			v->source_pixel_format[input_idx] = dcn_bw_rgb_sub_32;
 			v->source_surface_mode[input_idx] = dcn_bw_sw_4_kb_s;
 			v->lb_bit_per_pixel[input_idx] = 30;
-			v->viewport_width[input_idx] = pipe->stream->public.timing.h_addressable;
-			v->viewport_height[input_idx] = pipe->stream->public.timing.v_addressable;
-			v->scaler_rec_out_width[input_idx] = pipe->stream->public.timing.h_addressable;
-			v->scaler_recout_height[input_idx] = pipe->stream->public.timing.v_addressable;
+			v->viewport_width[input_idx] = pipe->stream->timing.h_addressable;
+			v->viewport_height[input_idx] = pipe->stream->timing.v_addressable;
+			v->scaler_rec_out_width[input_idx] = pipe->stream->timing.h_addressable;
+			v->scaler_recout_height[input_idx] = pipe->stream->timing.v_addressable;
 			v->override_hta_ps[input_idx] = 1;
 			v->override_vta_ps[input_idx] = 1;
 			v->override_hta_pschroma[input_idx] = 1;
@@ -876,57 +904,75 @@ bool dcn_validate_bandwidth(
 			v->source_scan[input_idx] = dcn_bw_hor;
 
 		} else {
-			v->viewport_height[input_idx] =  pipe->scl_data.viewport.height;
-			v->viewport_width[input_idx] = pipe->scl_data.viewport.width;
-			v->scaler_rec_out_width[input_idx] = pipe->scl_data.recout.width;
-			v->scaler_recout_height[input_idx] = pipe->scl_data.recout.height;
-			if (pipe->bottom_pipe && pipe->bottom_pipe->surface == pipe->surface) {
-				if (pipe->surface->public.rotation % 2 == 0) {
-					int viewport_end = pipe->scl_data.viewport.width
-							+ pipe->scl_data.viewport.x;
-					int viewport_b_end = pipe->bottom_pipe->scl_data.viewport.width
-							+ pipe->bottom_pipe->scl_data.viewport.x;
+			v->viewport_height[input_idx] =  pipe->plane_res.scl_data.viewport.height;
+			v->viewport_width[input_idx] = pipe->plane_res.scl_data.viewport.width;
+			v->scaler_rec_out_width[input_idx] = pipe->plane_res.scl_data.recout.width;
+			v->scaler_recout_height[input_idx] = pipe->plane_res.scl_data.recout.height;
+			if (pipe->bottom_pipe && pipe->bottom_pipe->plane_state == pipe->plane_state) {
+				if (pipe->plane_state->rotation % 2 == 0) {
+					int viewport_end = pipe->plane_res.scl_data.viewport.width
+							+ pipe->plane_res.scl_data.viewport.x;
+					int viewport_b_end = pipe->bottom_pipe->plane_res.scl_data.viewport.width
+							+ pipe->bottom_pipe->plane_res.scl_data.viewport.x;
 
 					if (viewport_end > viewport_b_end)
 						v->viewport_width[input_idx] = viewport_end
-							- pipe->bottom_pipe->scl_data.viewport.x;
+							- pipe->bottom_pipe->plane_res.scl_data.viewport.x;
 					else
 						v->viewport_width[input_idx] = viewport_b_end
-									- pipe->scl_data.viewport.x;
+									- pipe->plane_res.scl_data.viewport.x;
 				} else  {
-					int viewport_end = pipe->scl_data.viewport.height
-						+ pipe->scl_data.viewport.y;
-					int viewport_b_end = pipe->bottom_pipe->scl_data.viewport.height
-						+ pipe->bottom_pipe->scl_data.viewport.y;
+					int viewport_end = pipe->plane_res.scl_data.viewport.height
+						+ pipe->plane_res.scl_data.viewport.y;
+					int viewport_b_end = pipe->bottom_pipe->plane_res.scl_data.viewport.height
+						+ pipe->bottom_pipe->plane_res.scl_data.viewport.y;
 
 					if (viewport_end > viewport_b_end)
 						v->viewport_height[input_idx] = viewport_end
-							- pipe->bottom_pipe->scl_data.viewport.y;
+							- pipe->bottom_pipe->plane_res.scl_data.viewport.y;
 					else
 						v->viewport_height[input_idx] = viewport_b_end
-									- pipe->scl_data.viewport.y;
+									- pipe->plane_res.scl_data.viewport.y;
 				}
-				v->scaler_rec_out_width[input_idx] = pipe->scl_data.recout.width
-						+ pipe->bottom_pipe->scl_data.recout.width;
+				v->scaler_rec_out_width[input_idx] = pipe->plane_res.scl_data.recout.width
+						+ pipe->bottom_pipe->plane_res.scl_data.recout.width;
 			}
 
-			v->dcc_enable[input_idx] = pipe->surface->public.dcc.enable ? dcn_bw_yes : dcn_bw_no;
+			v->dcc_enable[input_idx] = pipe->plane_state->dcc.enable ? dcn_bw_yes : dcn_bw_no;
 			v->source_pixel_format[input_idx] = tl_pixel_format_to_bw_defs(
-					pipe->surface->public.format);
+					pipe->plane_state->format);
 			v->source_surface_mode[input_idx] = tl_sw_mode_to_bw_defs(
-					pipe->surface->public.tiling_info.gfx9.swizzle);
-			v->lb_bit_per_pixel[input_idx] = tl_lb_bpp_to_int(pipe->scl_data.lb_params.depth);
-			v->override_hta_ps[input_idx] = pipe->scl_data.taps.h_taps;
-			v->override_vta_ps[input_idx] = pipe->scl_data.taps.v_taps;
-			v->override_hta_pschroma[input_idx] = pipe->scl_data.taps.h_taps_c;
-			v->override_vta_pschroma[input_idx] = pipe->scl_data.taps.v_taps_c;
-			v->source_scan[input_idx] = (pipe->surface->public.rotation % 2) ? dcn_bw_vert : dcn_bw_hor;
+					pipe->plane_state->tiling_info.gfx9.swizzle);
+			v->lb_bit_per_pixel[input_idx] = tl_lb_bpp_to_int(pipe->plane_res.scl_data.lb_params.depth);
+			v->override_hta_ps[input_idx] = pipe->plane_res.scl_data.taps.h_taps;
+			v->override_vta_ps[input_idx] = pipe->plane_res.scl_data.taps.v_taps;
+			v->override_hta_pschroma[input_idx] = pipe->plane_res.scl_data.taps.h_taps_c;
+			v->override_vta_pschroma[input_idx] = pipe->plane_res.scl_data.taps.v_taps_c;
+			v->source_scan[input_idx] = (pipe->plane_state->rotation % 2) ? dcn_bw_vert : dcn_bw_hor;
 		}
 		if (v->is_line_buffer_bpp_fixed == dcn_bw_yes)
 			v->lb_bit_per_pixel[input_idx] = v->line_buffer_fixed_bpp;
 		v->dcc_rate[input_idx] = 1; /*TODO: Worst case? does this change?*/
-		v->output_format[input_idx] = dcn_bw_444;
-		v->output[input_idx] = dcn_bw_dp;
+		v->output_format[input_idx] = pipe->stream->timing.pixel_encoding ==
+				PIXEL_ENCODING_YCBCR420 ? dcn_bw_420 : dcn_bw_444;
+		v->output[input_idx] = pipe->stream->sink->sink_signal ==
+				SIGNAL_TYPE_HDMI_TYPE_A ? dcn_bw_hdmi : dcn_bw_dp;
+		v->output_deep_color[input_idx] = dcn_bw_encoder_8bpc;
+		if (v->output[input_idx] == dcn_bw_hdmi) {
+			switch (pipe->stream->timing.display_color_depth) {
+			case COLOR_DEPTH_101010:
+				v->output_deep_color[input_idx] = dcn_bw_encoder_10bpc;
+				break;
+			case COLOR_DEPTH_121212:
+				v->output_deep_color[input_idx]  = dcn_bw_encoder_12bpc;
+				break;
+			case COLOR_DEPTH_161616:
+				v->output_deep_color[input_idx]  = dcn_bw_encoder_16bpc;
+				break;
+			default:
+				break;
+			}
+		}
 
 		input_idx++;
 	}
@@ -985,7 +1031,7 @@ bool dcn_validate_bandwidth(
 			if (!pipe->stream)
 				continue;
 			/* skip all but first of split pipes */
-			if (pipe->top_pipe && pipe->top_pipe->surface == pipe->surface)
+			if (pipe->top_pipe && pipe->top_pipe->plane_state == pipe->plane_state)
 				continue;
 
 			pipe->pipe_dlg_param.vupdate_width = v->v_update_width[input_idx];
@@ -993,47 +1039,47 @@ bool dcn_validate_bandwidth(
 			pipe->pipe_dlg_param.vready_offset = v->v_ready_offset[input_idx];
 			pipe->pipe_dlg_param.vstartup_start = v->v_startup[input_idx];
 
-			pipe->pipe_dlg_param.htotal = pipe->stream->public.timing.h_total;
-			pipe->pipe_dlg_param.vtotal = pipe->stream->public.timing.v_total;
-			vesa_sync_start = pipe->stream->public.timing.v_addressable +
-						pipe->stream->public.timing.v_border_bottom +
-						pipe->stream->public.timing.v_front_porch;
+			pipe->pipe_dlg_param.htotal = pipe->stream->timing.h_total;
+			pipe->pipe_dlg_param.vtotal = pipe->stream->timing.v_total;
+			vesa_sync_start = pipe->stream->timing.v_addressable +
+						pipe->stream->timing.v_border_bottom +
+						pipe->stream->timing.v_front_porch;
 
-			asic_blank_end = (pipe->stream->public.timing.v_total -
+			asic_blank_end = (pipe->stream->timing.v_total -
 						vesa_sync_start -
-						pipe->stream->public.timing.v_border_top)
-			* (pipe->stream->public.timing.flags.INTERLACE ? 1 : 0);
+						pipe->stream->timing.v_border_top)
+			* (pipe->stream->timing.flags.INTERLACE ? 1 : 0);
 
 			asic_blank_start = asic_blank_end +
-						(pipe->stream->public.timing.v_border_top +
-						pipe->stream->public.timing.v_addressable +
-						pipe->stream->public.timing.v_border_bottom)
-			* (pipe->stream->public.timing.flags.INTERLACE ? 1 : 0);
+						(pipe->stream->timing.v_border_top +
+						pipe->stream->timing.v_addressable +
+						pipe->stream->timing.v_border_bottom)
+			* (pipe->stream->timing.flags.INTERLACE ? 1 : 0);
 
 			pipe->pipe_dlg_param.vblank_start = asic_blank_start;
 			pipe->pipe_dlg_param.vblank_end = asic_blank_end;
 
-			if (pipe->surface) {
+			if (pipe->plane_state) {
 				struct pipe_ctx *hsplit_pipe = pipe->bottom_pipe;
 
 				if (v->dpp_per_plane[input_idx] == 2 ||
-					((pipe->stream->public.view_format ==
+					((pipe->stream->view_format ==
 					  VIEW_3D_FORMAT_SIDE_BY_SIDE ||
-					  pipe->stream->public.view_format ==
+					  pipe->stream->view_format ==
 					  VIEW_3D_FORMAT_TOP_AND_BOTTOM) &&
-					(pipe->stream->public.timing.timing_3d_format ==
+					(pipe->stream->timing.timing_3d_format ==
 					 TIMING_3D_FORMAT_TOP_AND_BOTTOM ||
-					 pipe->stream->public.timing.timing_3d_format ==
+					 pipe->stream->timing.timing_3d_format ==
 					 TIMING_3D_FORMAT_SIDE_BY_SIDE))) {
-					if (hsplit_pipe && hsplit_pipe->surface == pipe->surface) {
+					if (hsplit_pipe && hsplit_pipe->plane_state == pipe->plane_state) {
 						/* update previously split pipe */
 						hsplit_pipe->pipe_dlg_param.vupdate_width = v->v_update_width[input_idx];
 						hsplit_pipe->pipe_dlg_param.vupdate_offset = v->v_update_offset[input_idx];
 						hsplit_pipe->pipe_dlg_param.vready_offset = v->v_ready_offset[input_idx];
 						hsplit_pipe->pipe_dlg_param.vstartup_start = v->v_startup[input_idx];
 
-						hsplit_pipe->pipe_dlg_param.htotal = pipe->stream->public.timing.h_total;
-						hsplit_pipe->pipe_dlg_param.vtotal = pipe->stream->public.timing.v_total;
+						hsplit_pipe->pipe_dlg_param.htotal = pipe->stream->timing.h_total;
+						hsplit_pipe->pipe_dlg_param.vtotal = pipe->stream->timing.v_total;
 						hsplit_pipe->pipe_dlg_param.vblank_start = pipe->pipe_dlg_param.vblank_start;
 						hsplit_pipe->pipe_dlg_param.vblank_end = pipe->pipe_dlg_param.vblank_end;
 					} else {
@@ -1045,20 +1091,20 @@ bool dcn_validate_bandwidth(
 							pipe, hsplit_pipe);
 					}
 
-					dcn_bw_calc_rq_dlg_ttu(dc, v, hsplit_pipe);
-				} else if (hsplit_pipe && hsplit_pipe->surface == pipe->surface) {
+					dcn_bw_calc_rq_dlg_ttu(dc, v, hsplit_pipe, input_idx);
+				} else if (hsplit_pipe && hsplit_pipe->plane_state == pipe->plane_state) {
 					/* merge previously split pipe */
 					pipe->bottom_pipe = hsplit_pipe->bottom_pipe;
 					if (hsplit_pipe->bottom_pipe)
 						hsplit_pipe->bottom_pipe->top_pipe = pipe;
-					hsplit_pipe->surface = NULL;
+					hsplit_pipe->plane_state = NULL;
 					hsplit_pipe->stream = NULL;
 					hsplit_pipe->top_pipe = NULL;
 					hsplit_pipe->bottom_pipe = NULL;
 					resource_build_scaling_params(pipe);
 				}
 				/* for now important to do this after pipe split for building e2e params */
-				dcn_bw_calc_rq_dlg_ttu(dc, v, pipe);
+				dcn_bw_calc_rq_dlg_ttu(dc, v, pipe, input_idx);
 			}
 
 			input_idx++;
@@ -1267,13 +1313,14 @@ void dcn_bw_notify_pplib_of_wm_ranges(struct core_dc *dc)
 {
 	struct dm_pp_wm_sets_with_clock_ranges_soc15 clk_ranges = {0};
 	int max_fclk_khz, nom_fclk_khz, min_fclk_khz, max_dcfclk_khz,
-		nom_dcfclk_khz, min_dcfclk_khz, socclk_khz;
+		nom_dcfclk_khz, mid_fclk_khz, min_dcfclk_khz, socclk_khz;
 	const int overdrive = 5000000; /* 5 GHz to cover Overdrive */
 	unsigned factor = (ddr4_dram_factor_single_Channel * dc->dcn_soc.number_of_channels);
 
 	kernel_fpu_begin();
 	max_fclk_khz = dc->dcn_soc.fabric_and_dram_bandwidth_vmax0p9 * 1000000 / factor;
 	nom_fclk_khz = dc->dcn_soc.fabric_and_dram_bandwidth_vnom0p8 * 1000000 / factor;
+	mid_fclk_khz = dc->dcn_soc.fabric_and_dram_bandwidth_vmid0p72 * 1000000 / factor;
 	min_fclk_khz = dc->dcn_soc.fabric_and_dram_bandwidth_vmin0p65 * 1000000 / 32;
 	max_dcfclk_khz = dc->dcn_soc.dcfclkv_max0p9 * 1000;
 	nom_dcfclk_khz = dc->dcn_soc.dcfclkv_nom0p8 * 1000;
@@ -1293,48 +1340,48 @@ void dcn_bw_notify_pplib_of_wm_ranges(struct core_dc *dc)
 	clk_ranges.num_wm_mcif_sets = 4;
 	clk_ranges.wm_dmif_clocks_ranges[0].wm_set_id = WM_SET_A;
 	clk_ranges.wm_dmif_clocks_ranges[0].wm_min_dcfclk_clk_in_khz = min_dcfclk_khz;
-	clk_ranges.wm_dmif_clocks_ranges[0].wm_max_dcfclk_clk_in_khz = nom_dcfclk_khz - 1;
+	clk_ranges.wm_dmif_clocks_ranges[0].wm_max_dcfclk_clk_in_khz = max_dcfclk_khz;
 	clk_ranges.wm_dmif_clocks_ranges[0].wm_min_memg_clk_in_khz = min_fclk_khz;
-	clk_ranges.wm_dmif_clocks_ranges[0].wm_max_mem_clk_in_khz = nom_fclk_khz - 1;
+	clk_ranges.wm_dmif_clocks_ranges[0].wm_max_mem_clk_in_khz = min_fclk_khz;
 	clk_ranges.wm_mcif_clocks_ranges[0].wm_set_id = WM_SET_A;
 	clk_ranges.wm_mcif_clocks_ranges[0].wm_min_socclk_clk_in_khz = socclk_khz;
 	clk_ranges.wm_mcif_clocks_ranges[0].wm_max_socclk_clk_in_khz = overdrive;
 	clk_ranges.wm_mcif_clocks_ranges[0].wm_min_memg_clk_in_khz = min_fclk_khz;
-	clk_ranges.wm_mcif_clocks_ranges[0].wm_max_mem_clk_in_khz = nom_fclk_khz - 1;
+	clk_ranges.wm_mcif_clocks_ranges[0].wm_max_mem_clk_in_khz = min_fclk_khz;
 
 	clk_ranges.wm_dmif_clocks_ranges[1].wm_set_id = WM_SET_B;
-	clk_ranges.wm_dmif_clocks_ranges[1].wm_min_dcfclk_clk_in_khz = min_dcfclk_khz;
-	clk_ranges.wm_dmif_clocks_ranges[1].wm_max_dcfclk_clk_in_khz = nom_dcfclk_khz - 1;
-	clk_ranges.wm_dmif_clocks_ranges[1].wm_min_memg_clk_in_khz = nom_fclk_khz;
-	clk_ranges.wm_dmif_clocks_ranges[1].wm_max_mem_clk_in_khz = max_fclk_khz;
+	clk_ranges.wm_dmif_clocks_ranges[1].wm_min_dcfclk_clk_in_khz = min_fclk_khz;
+	clk_ranges.wm_dmif_clocks_ranges[1].wm_max_dcfclk_clk_in_khz = max_dcfclk_khz;
+	clk_ranges.wm_dmif_clocks_ranges[1].wm_min_memg_clk_in_khz = mid_fclk_khz;
+	clk_ranges.wm_dmif_clocks_ranges[1].wm_max_mem_clk_in_khz = mid_fclk_khz;
 	clk_ranges.wm_mcif_clocks_ranges[1].wm_set_id = WM_SET_B;
 	clk_ranges.wm_mcif_clocks_ranges[1].wm_min_socclk_clk_in_khz = socclk_khz;
 	clk_ranges.wm_mcif_clocks_ranges[1].wm_max_socclk_clk_in_khz = overdrive;
-	clk_ranges.wm_mcif_clocks_ranges[1].wm_min_memg_clk_in_khz = nom_fclk_khz;
-	clk_ranges.wm_mcif_clocks_ranges[1].wm_max_mem_clk_in_khz = max_fclk_khz;
+	clk_ranges.wm_mcif_clocks_ranges[1].wm_min_memg_clk_in_khz = mid_fclk_khz;
+	clk_ranges.wm_mcif_clocks_ranges[1].wm_max_mem_clk_in_khz = mid_fclk_khz;
 
 
 	clk_ranges.wm_dmif_clocks_ranges[2].wm_set_id = WM_SET_C;
-	clk_ranges.wm_dmif_clocks_ranges[2].wm_min_dcfclk_clk_in_khz = nom_dcfclk_khz;
+	clk_ranges.wm_dmif_clocks_ranges[2].wm_min_dcfclk_clk_in_khz = min_fclk_khz;
 	clk_ranges.wm_dmif_clocks_ranges[2].wm_max_dcfclk_clk_in_khz = max_dcfclk_khz;
 	clk_ranges.wm_dmif_clocks_ranges[2].wm_min_memg_clk_in_khz = nom_fclk_khz;
-	clk_ranges.wm_dmif_clocks_ranges[2].wm_max_mem_clk_in_khz = max_fclk_khz;
+	clk_ranges.wm_dmif_clocks_ranges[2].wm_max_mem_clk_in_khz = nom_fclk_khz;
 	clk_ranges.wm_mcif_clocks_ranges[2].wm_set_id = WM_SET_C;
 	clk_ranges.wm_mcif_clocks_ranges[2].wm_min_socclk_clk_in_khz = socclk_khz;
 	clk_ranges.wm_mcif_clocks_ranges[2].wm_max_socclk_clk_in_khz = overdrive;
 	clk_ranges.wm_mcif_clocks_ranges[2].wm_min_memg_clk_in_khz = nom_fclk_khz;
-	clk_ranges.wm_mcif_clocks_ranges[2].wm_max_mem_clk_in_khz = max_fclk_khz;
+	clk_ranges.wm_mcif_clocks_ranges[2].wm_max_mem_clk_in_khz = nom_fclk_khz;
 
 	clk_ranges.wm_dmif_clocks_ranges[3].wm_set_id = WM_SET_D;
-	clk_ranges.wm_dmif_clocks_ranges[3].wm_min_dcfclk_clk_in_khz = max_dcfclk_khz + 1;
-	clk_ranges.wm_dmif_clocks_ranges[3].wm_max_dcfclk_clk_in_khz = overdrive;
-	clk_ranges.wm_dmif_clocks_ranges[3].wm_min_memg_clk_in_khz = max_fclk_khz + 1;
-	clk_ranges.wm_dmif_clocks_ranges[3].wm_max_mem_clk_in_khz = overdrive;
+	clk_ranges.wm_dmif_clocks_ranges[3].wm_min_dcfclk_clk_in_khz = min_fclk_khz;
+	clk_ranges.wm_dmif_clocks_ranges[3].wm_max_dcfclk_clk_in_khz = max_dcfclk_khz;
+	clk_ranges.wm_dmif_clocks_ranges[3].wm_min_memg_clk_in_khz = max_fclk_khz;
+	clk_ranges.wm_dmif_clocks_ranges[3].wm_max_mem_clk_in_khz = max_fclk_khz;
 	clk_ranges.wm_mcif_clocks_ranges[3].wm_set_id = WM_SET_D;
 	clk_ranges.wm_mcif_clocks_ranges[3].wm_min_socclk_clk_in_khz = socclk_khz;
 	clk_ranges.wm_mcif_clocks_ranges[3].wm_max_socclk_clk_in_khz = overdrive;
-	clk_ranges.wm_mcif_clocks_ranges[3].wm_min_memg_clk_in_khz = max_fclk_khz + 1;
-	clk_ranges.wm_mcif_clocks_ranges[3].wm_max_mem_clk_in_khz = overdrive;
+	clk_ranges.wm_mcif_clocks_ranges[3].wm_min_memg_clk_in_khz = max_fclk_khz;
+	clk_ranges.wm_mcif_clocks_ranges[3].wm_max_mem_clk_in_khz = max_fclk_khz;
 
 	/* Notify PP Lib/SMU which Watermarks to use for which clock ranges */
 	dm_pp_notify_wm_clock_changes_soc15(dc->ctx, &clk_ranges);

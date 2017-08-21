@@ -109,18 +109,17 @@
 #define ASIC_REV_IS_STONEY(rev) \
 	((rev >= STONEY_A0) && (rev < CZ_UNKNOWN))
 
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
 /* DCN1_0 */
 #define INTERNAL_REV_RAVEN_A0             0x00    /* First spin of Raven */
 #define RAVEN_A0 0x01
 #define RAVEN_UNKNOWN 0xFF
 
 #define ASIC_REV_IS_RAVEN(eChipRev) ((eChipRev >= RAVEN_A0) && eChipRev < RAVEN_UNKNOWN)
-#endif
+#define RAVEN1_F0 0xF0
+#define ASICREV_IS_RV1_F0(eChipRev) ((eChipRev >= RAVEN1_F0) && (eChipRev < RAVEN_UNKNOWN))
 
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
+
 #define FAMILY_RV 142 /* DCN 1*/
-#endif
 
 /*
  * ASIC chip ID

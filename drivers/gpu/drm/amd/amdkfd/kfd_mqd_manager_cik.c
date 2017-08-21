@@ -30,9 +30,7 @@
 #include "cik_regs.h"
 #include "cik_structs.h"
 #include "oss/oss_2_4_sh_mask.h"
-#include "asic_reg/gca/gfx_7_2_sh_mask.h"
-
-#define AQL_ENABLE 1
+#include "gca/gfx_7_2_sh_mask.h"
 
 static inline struct cik_mqd *get_mqd(void *mqd)
 {
@@ -486,6 +484,9 @@ struct mqd_manager *mqd_manager_init_cik(enum KFD_MQD_TYPE type,
 		struct kfd_dev *dev)
 {
 	struct mqd_manager *mqd;
+
+	if (WARN_ON(type >= KFD_MQD_TYPE_MAX))
+		return NULL;
 
 	mqd = kzalloc(sizeof(*mqd), GFP_NOIO);
 	if (!mqd)

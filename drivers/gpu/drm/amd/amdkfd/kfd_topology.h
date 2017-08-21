@@ -97,7 +97,9 @@ struct kfd_mem_properties {
 	uint32_t		width;
 	uint32_t		mem_clk_max;
 	struct kobject		*kobj;
-	struct attribute	attr;
+	struct kfd_dev		*gpu;
+	struct attribute	attr_props;
+	struct attribute	attr_used;
 };
 
 #define HSA_CACHE_TYPE_DATA		0x00000001
@@ -191,7 +193,7 @@ struct kfd_system_properties {
 
 struct kfd_topology_device *kfd_create_topology_device(
 		struct list_head *device_list);
-void kfd_release_live_view(void);
+void kfd_release_topology_device_list(struct list_head *device_list);
 
 #if defined(CONFIG_AMD_IOMMU_V2_MODULE) || defined(CONFIG_AMD_IOMMU_V2)
 extern bool amd_iommu_pc_supported(void);

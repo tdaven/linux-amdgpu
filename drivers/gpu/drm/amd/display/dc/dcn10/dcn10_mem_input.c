@@ -47,10 +47,14 @@ static void min10_set_blank(struct mem_input *mem_input, bool blank)
 			HUBP_BLANK_EN, blank_en,
 			HUBP_TTU_DISABLE, blank_en);
 
-	if (blank)
+	if (blank) {
 		REG_WAIT(DCHUBP_CNTL,
 				HUBP_NO_OUTSTANDING_REQ, 1,
 				1, 200);
+		/*todo: unhack this
+		mem_input->mpcc_id = 0xf;
+		mem_input->opp_id = 0xf;*/
+	}
 }
 
 static void min10_vready_workaround(struct mem_input *mem_input,
@@ -262,6 +266,9 @@ static bool min10_program_surface_flip_and_addr(
 		if (address->grph.addr.quad_part == 0)
 			break;
 
+		REG_UPDATE(DCSURF_SURFACE_CONTROL,
+				PRIMARY_SURFACE_TMZ, address->tmz_surface);
+
 		if (address->grph.meta_addr.quad_part != 0) {
 			REG_SET(DCSURF_PRIMARY_META_SURFACE_ADDRESS_HIGH, 0,
 					PRIMARY_META_SURFACE_ADDRESS_HIGH,
@@ -284,6 +291,9 @@ static bool min10_program_surface_flip_and_addr(
 		if (address->video_progressive.luma_addr.quad_part == 0
 			|| address->video_progressive.chroma_addr.quad_part == 0)
 			break;
+
+		REG_UPDATE(DCSURF_SURFACE_CONTROL,
+				PRIMARY_SURFACE_TMZ, address->tmz_surface);
 
 		if (address->video_progressive.luma_meta_addr.quad_part != 0) {
 			REG_SET(DCSURF_PRIMARY_META_SURFACE_ADDRESS_HIGH_C, 0,
@@ -324,6 +334,10 @@ static bool min10_program_surface_flip_and_addr(
 			break;
 		if (address->grph_stereo.right_addr.quad_part == 0)
 			break;
+
+		REG_UPDATE(DCSURF_SURFACE_CONTROL,
+				PRIMARY_SURFACE_TMZ, address->tmz_surface);
+
 		if (address->grph_stereo.right_meta_addr.quad_part != 0) {
 
 			REG_SET(DCSURF_SECONDARY_META_SURFACE_ADDRESS_HIGH, 0,
@@ -460,9 +474,14 @@ static void min10_program_deadline(
 		REFCYC_X_AFTER_SCALER, dlg_attr->refcyc_x_after_scaler,
 		DST_Y_AFTER_SCALER, dlg_attr->dst_y_after_scaler);
 
-	REG_SET_2(PREFETCH_SETTINS, 0,
-		DST_Y_PREFETCH, dlg_attr->dst_y_prefetch,
-		VRATIO_PREFETCH, dlg_attr->vratio_prefetch);
+	if (REG(PREFETCH_SETTINS))
+		REG_SET_2(PREFETCH_SETTINS, 0,
+			DST_Y_PREFETCH, dlg_attr->dst_y_prefetch,
+			VRATIO_PREFETCH, dlg_attr->vratio_prefetch);
+	else
+		REG_SET_2(PREFETCH_SETTINGS, 0,
+			DST_Y_PREFETCH, dlg_attr->dst_y_prefetch,
+			VRATIO_PREFETCH, dlg_attr->vratio_prefetch);
 
 	REG_SET_2(VBLANK_PARAMETERS_0, 0,
 		DST_Y_PER_VM_VBLANK, dlg_attr->dst_y_per_vm_vblank,
@@ -498,8 +517,12 @@ static void min10_program_deadline(
 		REFCYC_PER_LINE_DELIVERY_L, dlg_attr->refcyc_per_line_delivery_l,
 		REFCYC_PER_LINE_DELIVERY_C, dlg_attr->refcyc_per_line_delivery_c);
 
-	REG_SET(PREFETCH_SETTINS_C, 0,
-		VRATIO_PREFETCH_C, dlg_attr->vratio_prefetch_c);
+	if (REG(PREFETCH_SETTINS_C))
+		REG_SET(PREFETCH_SETTINS_C, 0,
+			VRATIO_PREFETCH_C, dlg_attr->vratio_prefetch_c);
+	else
+		REG_SET(PREFETCH_SETTINGS_C, 0,
+			VRATIO_PREFETCH_C, dlg_attr->vratio_prefetch_c);
 
 	REG_SET(VBLANK_PARAMETERS_2, 0,
 		REFCYC_PER_PTE_GROUP_VBLANK_C, dlg_attr->refcyc_per_pte_group_vblank_c);
@@ -565,250 +588,6 @@ static void min10_setup(
 	min10_vready_workaround(mem_input, pipe_dest);
 }
 
-static uint32_t convert_and_clamp(
-	uint32_t wm_ns,
-	uint32_t refclk_mhz,
-	uint32_t clamp_value)
-{
-	uint32_t ret_val = 0;
-	ret_val = wm_ns * refclk_mhz;
-	ret_val /= 1000;
-
-	if (ret_val > clamp_value)
-		ret_val = clamp_value;
-
-	return ret_val;
-}
-
-static void min10_program_watermarks(
-		struct mem_input *mem_input,
-		struct dcn_watermark_set *watermarks,
-		unsigned int refclk_mhz)
-{
-	struct dcn10_mem_input *mi = TO_DCN10_MEM_INPUT(mem_input);
-	uint32_t force_en = mem_input->ctx->dc->debug.disable_stutter ? 1 : 0;
-	/*
-	 * Need to clamp to max of the register values (i.e. no wrap)
-	 * for dcn1, all wm registers are 21-bit wide
-	 */
-	uint32_t prog_wm_value;
-
-	/* Repeat for water mark set A, B, C and D. */
-	/* clock state A */
-	prog_wm_value = convert_and_clamp(watermarks->a.urgent_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A, prog_wm_value);
-
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"URGENCY_WATERMARK_A calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->a.urgent_ns, prog_wm_value);
-
-	prog_wm_value = convert_and_clamp(watermarks->a.pte_meta_urgent_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_A, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"PTE_META_URGENCY_WATERMARK_A calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->a.pte_meta_urgent_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->a.cstate_pstate.cstate_enter_plus_exit_ns,
-			refclk_mhz, 0x1fffff);
-
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_SR_ENTER_WATERMARK_A, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"SR_ENTER_EXIT_WATERMARK_A calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->a.cstate_pstate.cstate_enter_plus_exit_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->a.cstate_pstate.cstate_exit_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_SR_EXIT_WATERMARK_A, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"SR_EXIT_WATERMARK_A calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->a.cstate_pstate.cstate_exit_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->a.cstate_pstate.pstate_change_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_A, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"DRAM_CLK_CHANGE_WATERMARK_A calculated =%d\n"
-		"HW register value = 0x%x\n\n",
-		watermarks->a.cstate_pstate.pstate_change_ns, prog_wm_value);
-
-
-	/* clock state B */
-	prog_wm_value = convert_and_clamp(
-			watermarks->b.urgent_ns, refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_B, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"URGENCY_WATERMARK_B calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->b.urgent_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->b.pte_meta_urgent_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_B, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"PTE_META_URGENCY_WATERMARK_B calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->b.pte_meta_urgent_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->b.cstate_pstate.cstate_enter_plus_exit_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_SR_ENTER_WATERMARK_B, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"SR_ENTER_WATERMARK_B calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->b.cstate_pstate.cstate_enter_plus_exit_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->b.cstate_pstate.cstate_exit_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_SR_EXIT_WATERMARK_B, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"SR_EXIT_WATERMARK_B calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->b.cstate_pstate.cstate_exit_ns, prog_wm_value);
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->b.cstate_pstate.pstate_change_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_B, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"DRAM_CLK_CHANGE_WATERMARK_B calculated =%d\n\n"
-		"HW register value = 0x%x\n",
-		watermarks->b.cstate_pstate.pstate_change_ns, prog_wm_value);
-
-	/* clock state C */
-	prog_wm_value = convert_and_clamp(
-			watermarks->c.urgent_ns, refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_C, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"URGENCY_WATERMARK_C calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->c.urgent_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->c.pte_meta_urgent_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_C, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"PTE_META_URGENCY_WATERMARK_C calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->c.pte_meta_urgent_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->c.cstate_pstate.cstate_enter_plus_exit_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_SR_ENTER_WATERMARK_C, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"SR_ENTER_WATERMARK_C calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->c.cstate_pstate.cstate_enter_plus_exit_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->c.cstate_pstate.cstate_exit_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_SR_EXIT_WATERMARK_C, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"SR_EXIT_WATERMARK_C calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->c.cstate_pstate.cstate_exit_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->c.cstate_pstate.pstate_change_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_C, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"DRAM_CLK_CHANGE_WATERMARK_C calculated =%d\n\n"
-		"HW register value = 0x%x\n",
-		watermarks->c.cstate_pstate.pstate_change_ns, prog_wm_value);
-
-	/* clock state D */
-	prog_wm_value = convert_and_clamp(
-			watermarks->d.urgent_ns, refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_D, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"URGENCY_WATERMARK_D calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->d.urgent_ns, prog_wm_value);
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->d.pte_meta_urgent_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_D, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"PTE_META_URGENCY_WATERMARK_D calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->d.pte_meta_urgent_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->d.cstate_pstate.cstate_enter_plus_exit_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_SR_ENTER_WATERMARK_D, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"SR_ENTER_WATERMARK_D calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->d.cstate_pstate.cstate_enter_plus_exit_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->d.cstate_pstate.cstate_exit_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_SR_EXIT_WATERMARK_D, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"SR_EXIT_WATERMARK_D calculated =%d\n"
-		"HW register value = 0x%x\n",
-		watermarks->d.cstate_pstate.cstate_exit_ns, prog_wm_value);
-
-
-	prog_wm_value = convert_and_clamp(
-			watermarks->d.cstate_pstate.pstate_change_ns,
-			refclk_mhz, 0x1fffff);
-	REG_WRITE(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_D, prog_wm_value);
-	dm_logger_write(mem_input->ctx->logger, LOG_HW_MARKS,
-		"DRAM_CLK_CHANGE_WATERMARK_D calculated =%d\n"
-		"HW register value = 0x%x\n\n",
-		watermarks->d.cstate_pstate.pstate_change_ns, prog_wm_value);
-
-	REG_UPDATE(DCHUBBUB_ARB_WATERMARK_CHANGE_CNTL,
-			DCHUBBUB_ARB_WATERMARK_CHANGE_REQUEST, 1);
-	REG_UPDATE(DCHUBBUB_ARB_WATERMARK_CHANGE_CNTL,
-			DCHUBBUB_ARB_WATERMARK_CHANGE_REQUEST, 0);
-	REG_UPDATE(DCHUBBUB_ARB_SAT_LEVEL,
-			DCHUBBUB_ARB_SAT_LEVEL, 60 * refclk_mhz);
-	REG_UPDATE(DCHUBBUB_ARB_DF_REQ_OUTSTAND,
-			DCHUBBUB_ARB_MIN_REQ_OUTSTAND, 68);
-
-	REG_UPDATE_2(DCHUBBUB_ARB_DRAM_STATE_CNTL,
-			DCHUBBUB_ARB_ALLOW_SELF_REFRESH_FORCE_VALUE, 0,
-			DCHUBBUB_ARB_ALLOW_SELF_REFRESH_FORCE_ENABLE, force_en);
-
-#if 0
-	REG_UPDATE_2(DCHUBBUB_ARB_WATERMARK_CHANGE_CNTL,
-			DCHUBBUB_ARB_WATERMARK_CHANGE_DONE_INTERRUPT_DISABLE, 1,
-			DCHUBBUB_ARB_WATERMARK_CHANGE_REQUEST, 1);
-#endif
-}
-
 static void min10_program_display_marks(
 	struct mem_input *mem_input,
 	struct dce_watermarks nbp,
@@ -844,63 +623,6 @@ static bool min10_is_flip_pending(struct mem_input *mem_input)
 
 	mem_input->current_address = mem_input->request_address;
 	return false;
-}
-
-static void min10_update_dchub(
-	struct mem_input *mem_input,
-	struct dchub_init_data *dh_data)
-{
-	struct dcn10_mem_input *mi = TO_DCN10_MEM_INPUT(mem_input);
-	/* TODO: port code from dal2 */
-	switch (dh_data->fb_mode) {
-	case FRAME_BUFFER_MODE_ZFB_ONLY:
-		/*For ZFB case need to put DCHUB FB BASE and TOP upside down to indicate ZFB mode*/
-		REG_UPDATE(DCHUBBUB_SDPIF_FB_TOP,
-				SDPIF_FB_TOP, 0);
-
-		REG_UPDATE(DCHUBBUB_SDPIF_FB_BASE,
-				SDPIF_FB_BASE, 0x0FFFF);
-
-		REG_UPDATE(DCHUBBUB_SDPIF_AGP_BASE,
-				SDPIF_AGP_BASE, dh_data->zfb_phys_addr_base >> 22);
-
-		REG_UPDATE(DCHUBBUB_SDPIF_AGP_BOT,
-				SDPIF_AGP_BOT, dh_data->zfb_mc_base_addr >> 22);
-
-		REG_UPDATE(DCHUBBUB_SDPIF_AGP_TOP,
-				SDPIF_AGP_TOP, (dh_data->zfb_mc_base_addr +
-						dh_data->zfb_size_in_byte - 1) >> 22);
-		break;
-	case FRAME_BUFFER_MODE_MIXED_ZFB_AND_LOCAL:
-		/*Should not touch FB LOCATION (done by VBIOS on AsicInit table)*/
-
-		REG_UPDATE(DCHUBBUB_SDPIF_AGP_BASE,
-				SDPIF_AGP_BASE, dh_data->zfb_phys_addr_base >> 22);
-
-		REG_UPDATE(DCHUBBUB_SDPIF_AGP_BOT,
-				SDPIF_AGP_BOT, dh_data->zfb_mc_base_addr >> 22);
-
-		REG_UPDATE(DCHUBBUB_SDPIF_AGP_TOP,
-				SDPIF_AGP_TOP, (dh_data->zfb_mc_base_addr +
-						dh_data->zfb_size_in_byte - 1) >> 22);
-		break;
-	case FRAME_BUFFER_MODE_LOCAL_ONLY:
-		/*Should not touch FB LOCATION (done by VBIOS on AsicInit table)*/
-		REG_UPDATE(DCHUBBUB_SDPIF_AGP_BASE,
-				SDPIF_AGP_BASE, 0);
-
-		REG_UPDATE(DCHUBBUB_SDPIF_AGP_BOT,
-				SDPIF_AGP_BOT, 0X03FFFF);
-
-		REG_UPDATE(DCHUBBUB_SDPIF_AGP_TOP,
-				SDPIF_AGP_TOP, 0);
-		break;
-	default:
-		break;
-	}
-
-	dh_data->dchub_initialzied = true;
-	dh_data->dchub_info_valid = false;
 }
 
 struct vm_system_aperture_param {
@@ -1096,6 +818,41 @@ static void min_set_viewport(
                        PRI_VIEWPORT_Y_START_C, viewport_c->y);
 }
 
+void dcn10_mem_input_read_state(struct dcn10_mem_input *mi,
+		struct dcn_hubp_state *s)
+{
+	REG_GET(DCSURF_SURFACE_CONFIG,
+			SURFACE_PIXEL_FORMAT, &s->pixel_format);
+
+	REG_GET(DCSURF_SURFACE_EARLIEST_INUSE_HIGH,
+			SURFACE_EARLIEST_INUSE_ADDRESS_HIGH, &s->inuse_addr_hi);
+
+	REG_GET_2(DCSURF_PRI_VIEWPORT_DIMENSION,
+			PRI_VIEWPORT_WIDTH, &s->viewport_width,
+			PRI_VIEWPORT_HEIGHT, &s->viewport_height);
+
+	REG_GET_2(DCSURF_SURFACE_CONFIG,
+			ROTATION_ANGLE, &s->rotation_angle,
+			H_MIRROR_EN, &s->h_mirror_en);
+
+	REG_GET(DCSURF_TILING_CONFIG,
+			SW_MODE, &s->sw_mode);
+
+	REG_GET(DCSURF_SURFACE_CONTROL,
+			PRIMARY_SURFACE_DCC_EN, &s->dcc_en);
+
+	REG_GET_3(DCHUBP_CNTL,
+			HUBP_BLANK_EN, &s->blank_en,
+			HUBP_TTU_DISABLE, &s->ttu_disable,
+			HUBP_UNDERFLOW_STATUS, &s->underflow_status);
+
+	REG_GET(DCN_GLOBAL_TTU_CNTL,
+			MIN_TTU_VBLANK, &s->min_ttu_vblank);
+
+	REG_GET_2(DCN_TTU_QOS_WM,
+			QoS_LEVEL_LOW_WM, &s->qos_level_low_wm,
+			QoS_LEVEL_HIGH_WM, &s->qos_level_high_wm);
+}
 
 static struct mem_input_funcs dcn10_mem_input_funcs = {
 	.mem_input_program_display_marks = min10_program_display_marks,
@@ -1105,8 +862,6 @@ static struct mem_input_funcs dcn10_mem_input_funcs = {
 			min10_program_surface_config,
 	.mem_input_is_flip_pending = min10_is_flip_pending,
 	.mem_input_setup = min10_setup,
-	.program_watermarks = min10_program_watermarks,
-	.mem_input_update_dchub = min10_update_dchub,
 	.mem_input_program_pte_vm = min10_program_pte_vm,
 	.set_blank = min10_set_blank,
 	.dcc_control = min10_dcc_control,
@@ -1131,6 +886,8 @@ bool dcn10_mem_input_construct(
 	mi->mi_shift = mi_shift;
 	mi->mi_mask = mi_mask;
 	mi->base.inst = inst;
+	mi->base.opp_id = 0xf;
+	mi->base.mpcc_id = 0xf;
 
 	return true;
 }

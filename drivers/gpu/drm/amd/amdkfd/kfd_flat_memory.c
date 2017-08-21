@@ -33,11 +33,7 @@
 #include <linux/time.h>
 #include "kfd_priv.h"
 #include <linux/mm.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-#include <asm-generic/mman-common.h>
-#else
-#include <uapi/asm-generic/mman-common.h>
-#endif
+#include <linux/mman.h>
 #include <asm/processor.h>
 
 /*
@@ -392,6 +388,7 @@ int kfd_init_apertures(struct kfd_process *process)
 				kfd_init_apertures_vi(pdd, id);
 				break;
 			case CHIP_VEGA10:
+			case CHIP_RAVEN:
 				kfd_init_apertures_v9(pdd, id);
 				break;
 			default:

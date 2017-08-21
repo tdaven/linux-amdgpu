@@ -225,25 +225,40 @@ static void amdgpu_vram_mgr_del(struct ttm_mem_type_manager *man,
  * amdgpu_vram_mgr_debug - dump VRAM table
  *
  * @man: TTM memory type manager
+ * @printer: DRM printer to use
  * @prefix: text prefix
  *
  * Dump the table content using printk.
  */
 static void amdgpu_vram_mgr_debug(struct ttm_mem_type_manager *man,
-				  const char *prefix)
-{
-	struct amdgpu_vram_mgr *mgr = man->priv;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
-	struct drm_printer p = drm_debug_printer(prefix);
+				  struct drm_printer *printer)
+#else
+				  const char *prefix)
 #endif
+{
+	struct amdgpu_device *adev = amdgpu_ttm_adev(man->bdev);
+	struct amdgpu_vram_mgr *mgr = man->priv;
 
 	spin_lock(&mgr->lock);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
-	drm_mm_print(&mgr->mm, &p);
+	drm_mm_print(&mgr->mm, printer);
 #else
 	drm_mm_debug_table(&mgr->mm, prefix);
 #endif
 	spin_unlock(&mgr->lock);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+	drm_printf(printer, "man size:%llu pages, ram usage:%lluMB, vis usage:%lluMB\n",
+		   adev->mman.bdev.man[TTM_PL_VRAM].size,
+		   (u64)atomic64_read(&adev->vram_usage) >> 20,
+		   (u64)atomic64_read(&adev->vram_vis_usage) >> 20);
+#else
+	DRM_DEBUG("man size:%llu pages, ram usage:%lluMB, vis usage:%lluMB\n",
+		 adev->mman.bdev.man[TTM_PL_VRAM].size,
+		 (u64)atomic64_read(&adev->vram_usage) >> 20,
+		 (u64)atomic64_read(&adev->vram_vis_usage) >> 20);
+#endif
 }
 
 const struct ttm_mem_type_manager_func amdgpu_vram_mgr_func = {

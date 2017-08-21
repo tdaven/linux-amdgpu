@@ -184,7 +184,7 @@ void amdgpu_amdkfd_unreserve_system_memory_limit(struct amdgpu_bo *bo)
 	if (bo->flags & AMDGPU_AMDKFD_USERPTR_BO) {
 		kfd_mem_limit.system_mem_used -= bo->tbo.acc_size;
 		kfd_mem_limit.userptr_mem_used -= amdgpu_bo_size(bo);
-	} else if (bo->prefered_domains == AMDGPU_GEM_DOMAIN_GTT) {
+	} else if (bo->preferred_domains == AMDGPU_GEM_DOMAIN_GTT) {
 		kfd_mem_limit.system_mem_used -=
 			(bo->tbo.acc_size + amdgpu_bo_size(bo));
 	}
@@ -724,7 +724,7 @@ static int __alloc_memory_of_gpu(struct kgd_dev *kgd, uint64_t va,
 	 */
 	ret = amdgpu_bo_create(adev, size, byte_align, false,
 				alloc_domain,
-			       flags, sg, NULL, &bo);
+			       flags, sg, NULL, 0, &bo);
 	if (ret != 0) {
 		pr_err("Failed to create BO on domain %s. ret %d\n",
 				domain_string(alloc_domain), ret);
@@ -1723,7 +1723,7 @@ static int get_sg_table(struct amdgpu_device *adev,
 		goto out;
 	}
 
-	if (bo->prefered_domains == AMDGPU_GEM_DOMAIN_VRAM)
+	if (bo->preferred_domains == AMDGPU_GEM_DOMAIN_VRAM)
 		page_size = AMD_GPU_PAGE_SIZE;
 	else
 		page_size = PAGE_SIZE;
@@ -1737,7 +1737,7 @@ static int get_sg_table(struct amdgpu_device *adev,
 	if (unlikely(ret))
 		goto out;
 
-	if (bo->prefered_domains == AMDGPU_GEM_DOMAIN_VRAM) {
+	if (bo->preferred_domains == AMDGPU_GEM_DOMAIN_VRAM) {
 		bus_addr = bo->tbo.offset + adev->mc.aper_base + offset;
 
 		for_each_sg(sg->sgl, s, sg->orig_nents, i) {
@@ -1835,7 +1835,7 @@ int amdgpu_amdkfd_gpuvm_import_dmabuf(struct kgd_dev *kgd,
 		return -EINVAL;
 
 	bo = gem_to_amdgpu_bo(obj);
-	if (!(bo->prefered_domains & (AMDGPU_GEM_DOMAIN_VRAM |
+	if (!(bo->preferred_domains & (AMDGPU_GEM_DOMAIN_VRAM |
 				    AMDGPU_GEM_DOMAIN_GTT |
 				    AMDGPU_GEM_DOMAIN_DGMA)))
 		/* Only VRAM and GTT BOs are supported */
@@ -1859,9 +1859,9 @@ int amdgpu_amdkfd_gpuvm_import_dmabuf(struct kgd_dev *kgd,
 
 	(*mem)->bo = amdgpu_bo_ref(bo);
 	(*mem)->va = va;
-	if (bo->prefered_domains & AMDGPU_GEM_DOMAIN_VRAM)
+	if (bo->preferred_domains & AMDGPU_GEM_DOMAIN_VRAM)
 		(*mem)->domain = AMDGPU_GEM_DOMAIN_VRAM;
-	else if (bo->prefered_domains & AMDGPU_GEM_DOMAIN_GTT)
+	else if (bo->preferred_domains & AMDGPU_GEM_DOMAIN_GTT)
 		(*mem)->domain = AMDGPU_GEM_DOMAIN_GTT;
 	else
 		(*mem)->domain = AMDGPU_GEM_DOMAIN_DGMA;
@@ -2320,9 +2320,6 @@ int amdgpu_amdkfd_gpuvm_restore_process_bos(void *info)
 		goto ttm_reserve_fail;
 	}
 
-	if (!list_empty(&duplicate_save))
-		pr_err("BUG: list of BOs to reserve has duplicates!\n");
-
 	amdgpu_sync_create(&sync_obj);
 	ctx.sync = &sync_obj;
 
@@ -2371,12 +2368,12 @@ int amdgpu_amdkfd_gpuvm_restore_process_bos(void *info)
 
 	/* Wait for validate to finish and attach new eviction fence */
 	list_for_each_entry(mem, &process_info->kfd_bo_list,
-		validate_list.head) {
-		struct amdgpu_bo *bo = mem->bo;
-
-		ttm_bo_wait(&bo->tbo, false, false);
-		amdgpu_bo_fence(bo, &process_info->eviction_fence->base, true);
-	}
+		validate_list.head)
+		ttm_bo_wait(&mem->bo->tbo, false, false);
+	list_for_each_entry(mem, &process_info->kfd_bo_list,
+		validate_list.head)
+		amdgpu_bo_fence(mem->bo,
+			&process_info->eviction_fence->base, true);
 
 	/* Attach eviction fence to PD / PT BOs */
 	list_for_each_entry(peer_vm, &process_info->vm_list_head,

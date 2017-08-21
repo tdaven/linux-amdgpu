@@ -210,25 +210,25 @@ static const struct kfd_device_info vega10_vf_device_info = {
 	.needs_pci_atomics = false,
 };
 
+static const struct kfd_device_info raven_device_info = {
+	.asic_family = CHIP_RAVEN,
+	.max_pasid_bits = 16,
+	.max_no_of_hqd  = 24,
+	.doorbell_size  = 8,
+	.ih_ring_entry_size = 8 * sizeof(uint32_t),
+	.event_interrupt_class = &event_interrupt_class_v9,
+	.num_of_watch_points = 4,
+	.mqd_size_aligned = MQD_SIZE_ALIGNED,
+	.is_need_iommu_device = true,
+	.supports_cwsr = true,
+	.needs_pci_atomics = true,
+};
 
 struct kfd_deviceid {
 	unsigned short did;
 	const struct kfd_device_info *device_info;
 };
 
-/*
- * //
-// TONGA/AMETHYST device IDs (performance segment)
-//
-#define DEVICE_ID_VI_TONGA_P_6920               0x6920  // unfused
-#define DEVICE_ID_VI_TONGA_P_6921               0x6921  // Amethyst XT
-#define DEVICE_ID_VI_TONGA_P_6928               0x6928  // Tonga GL XT
-#define DEVICE_ID_VI_TONGA_P_692B               0x692B  // Tonga GL PRO
-#define DEVICE_ID_VI_TONGA_P_692F               0x692F  // Tonga GL PRO VF
-#define DEVICE_ID_VI_TONGA_P_6938               0x6938  // Tonga XT
-#define DEVICE_ID_VI_TONGA_P_6939               0x6939  // Tonga PRO
- *
- */
 /* Please keep this sorted by increasing device id. */
 static const struct kfd_deviceid supported_devices[] = {
 #if defined(CONFIG_AMD_IOMMU_V2_MODULE) || defined(CONFIG_AMD_IOMMU_V2)
@@ -312,7 +312,10 @@ static const struct kfd_deviceid supported_devices[] = {
 	{ 0x6867, &vega10_device_info },	/* Vega10 */
 	{ 0x6868, &vega10_device_info },	/* Vega10 */
 	{ 0x686C, &vega10_vf_device_info },	/* Vega10  vf*/
-	{ 0x687F, &vega10_device_info }		/* Vega10 */
+	{ 0x687F, &vega10_device_info },	/* Vega10 */
+#if defined(CONFIG_AMD_IOMMU_V2_MODULE) || defined(CONFIG_AMD_IOMMU_V2)
+	{ 0x15DD, &raven_device_info }		/* Raven */
+#endif
 };
 
 static int kfd_gtt_sa_init(struct kfd_dev *kfd, unsigned int buf_size,
@@ -332,11 +335,12 @@ static const struct kfd_device_info *lookup_device_info(unsigned short did)
 
 	for (i = 0; i < ARRAY_SIZE(supported_devices); i++) {
 		if (supported_devices[i].did == did) {
-			WARN(!supported_devices[i].device_info,
-				"Cannot look up device info, Device Info is NULL");
+			WARN_ON(!supported_devices[i].device_info);
 			return supported_devices[i].device_info;
 		}
 	}
+
+	WARN(1, "device is not added to supported_devices\n");
 
 	return NULL;
 }
@@ -349,8 +353,10 @@ struct kfd_dev *kgd2kfd_probe(struct kgd_dev *kgd,
 	const struct kfd_device_info *device_info =
 					lookup_device_info(pdev->device);
 
-	if (!device_info)
+	if (!device_info) {
+		dev_err(kfd_device, "kgd2kfd_probe failed\n");
 		return NULL;
+	}
 
 	if (device_info->needs_pci_atomics) {
 		/* Allow BIF to recode atomics to PCIe 3.0 AtomicOps.
@@ -452,10 +458,8 @@ static int iommu_invalid_ppr_cb(struct pci_dev *pdev, int pasid,
 			flags);
 
 	dev = kfd_device_by_pci_dev(pdev);
-	if (WARN_ON(!dev))
-		return -ENODEV;
-
-	kfd_signal_iommu_event(dev, pasid, address,
+	if (!WARN_ON(!dev))
+		kfd_signal_iommu_event(dev, pasid, address,
 			flags & PPR_FAULT_WRITE, flags & PPR_FAULT_EXEC);
 
 	return AMD_IOMMU_INV_PRI_RSP_INVALID;
@@ -577,60 +581,53 @@ bool kgd2kfd_device_init(struct kfd_dev *kfd,
 	if (kfd->kfd2kgd->init_gtt_mem_allocation(
 			kfd->kgd, size, &kfd->gtt_mem,
 			&kfd->gtt_start_gpu_addr, &kfd->gtt_start_cpu_ptr)){
-		dev_err(kfd_device,
-			"Could not allocate %d bytes for device %x:%x\n",
-			size, kfd->pdev->vendor, kfd->pdev->device);
+		dev_err(kfd_device, "Could not allocate %d bytes\n", size);
 		goto out;
 	}
 
-	dev_info(kfd_device,
-		"Allocated %d bytes on gart for device %x:%x\n",
-		size, kfd->pdev->vendor, kfd->pdev->device);
+	dev_info(kfd_device, "Allocated %d bytes on gart\n", size);
 
 	/* Initialize GTT sa with 512 byte chunk size */
 	if (kfd_gtt_sa_init(kfd, size, 512) != 0) {
-		dev_err(kfd_device,
-			"Error initializing gtt sub-allocator\n");
+		dev_err(kfd_device, "Error initializing gtt sub-allocator\n");
 		goto kfd_gtt_sa_init_error;
 	}
 
-	kfd_doorbell_init(kfd);
-
-	if (kfd_topology_add_device(kfd) != 0) {
+	if (kfd_doorbell_init(kfd)) {
 		dev_err(kfd_device,
-			"Error adding device %x:%x to topology\n",
-			kfd->pdev->vendor, kfd->pdev->device);
+			"Error initializing doorbell aperture\n");
+		goto kfd_doorbell_error;
+	}
+
+	if (kfd_topology_add_device(kfd)) {
+		dev_err(kfd_device, "Error adding device to topology\n");
 		goto kfd_topology_add_device_error;
 	}
 
 	if (kfd_interrupt_init(kfd)) {
-		dev_err(kfd_device,
-			"Error initializing interrupts for device %x:%x\n",
-			kfd->pdev->vendor, kfd->pdev->device);
+		dev_err(kfd_device, "Error initializing interrupts\n");
 		goto kfd_interrupt_error;
 	}
 
 	kfd->dqm = device_queue_manager_init(kfd);
 	if (!kfd->dqm) {
-		dev_err(kfd_device,
-			"Error initializing queue manager for device %x:%x\n",
-			kfd->pdev->vendor, kfd->pdev->device);
+		dev_err(kfd_device, "Error initializing queue manager\n");
 		goto device_queue_manager_error;
 	}
 
 #if defined(CONFIG_AMD_IOMMU_V2_MODULE) || defined(CONFIG_AMD_IOMMU_V2)
 	if (kfd->device_info->is_need_iommu_device) {
 		if (!device_iommu_pasid_init(kfd)) {
-			dev_err(kfd_device,
-				"Error initializing iommuv2 for device %x:%x\n",
-				kfd->pdev->vendor, kfd->pdev->device);
+			dev_err(kfd_device, "Error initializing iommuv2\n");
 			goto device_iommu_pasid_error;
 		}
 	}
 #endif
 
-	if (kfd_cwsr_init(kfd))
+	if (kfd_cwsr_init(kfd)) {
+		dev_err(kfd_device, "Error initializing cwsr\n");
 		goto device_iommu_pasid_error;
+	}
 
 	kfd_ib_mem_init(kfd);
 
@@ -638,8 +635,10 @@ bool kgd2kfd_device_init(struct kfd_dev *kfd,
 	kfd_init_processes_srcu();
 #endif
 
-	if (kfd_resume(kfd))
+	if (kfd_resume(kfd)) {
+		dev_err(kfd_device, "Error resuming kfd\n");
 		goto kfd_resume_error;
+	}
 
 	kfd->dbgmgr = NULL;
 
@@ -661,6 +660,8 @@ device_queue_manager_error:
 kfd_interrupt_error:
 	kfd_topology_remove_device(kfd);
 kfd_topology_add_device_error:
+	kfd_doorbell_fini(kfd);
+kfd_doorbell_error:
 	kfd_gtt_sa_fini(kfd);
 kfd_gtt_sa_init_error:
 	kfd->kfd2kgd->free_gtt_mem(kfd->kgd, kfd->gtt_mem);
@@ -682,6 +683,7 @@ void kgd2kfd_device_exit(struct kfd_dev *kfd)
 		device_queue_manager_uninit(kfd->dqm);
 		kfd_interrupt_exit(kfd);
 		kfd_topology_remove_device(kfd);
+		kfd_doorbell_fini(kfd);
 		kfd_gtt_sa_fini(kfd);
 		kfd->kfd2kgd->free_gtt_mem(kfd->kgd, kfd->gtt_mem);
 	}
@@ -714,7 +716,6 @@ int kgd2kfd_resume(struct kfd_dev *kfd)
 		return 0;
 
 	return kfd_resume(kfd);
-
 }
 
 static int kfd_resume(struct kfd_dev *kfd)
@@ -726,16 +727,22 @@ static int kfd_resume(struct kfd_dev *kfd)
 		unsigned int pasid_limit = kfd_get_pasid_limit();
 
 		err = amd_iommu_init_device(kfd->pdev, pasid_limit);
-		if (err)
+		if (err) {
+			dev_err(kfd_device, "failed to initialize iommu\n");
 			return -ENXIO;
+		}
+
 		amd_iommu_set_invalidate_ctx_cb(kfd->pdev,
 				iommu_pasid_shutdown_callback);
 		amd_iommu_set_invalid_ppr_cb(kfd->pdev,
 				iommu_invalid_ppr_cb);
 
 		err = kfd_bind_processes_to_device(kfd);
-		if (err)
+		if (err) {
+			dev_err(kfd_device,
+				"failed to bind process to device\n");
 			return -ENXIO;
+		}
 	}
 #endif
 
@@ -1055,18 +1062,22 @@ void kfd_evict_bo_worker(struct work_struct *work)
 static int kfd_gtt_sa_init(struct kfd_dev *kfd, unsigned int buf_size,
 				unsigned int chunk_size)
 {
-	unsigned int num_of_bits;
+	unsigned int num_of_longs;
+
+	if (WARN_ON(buf_size < chunk_size))
+		return -EINVAL;
+	if (WARN_ON(buf_size == 0))
+		return -EINVAL;
+	if (WARN_ON(chunk_size == 0))
+		return -EINVAL;
 
 	kfd->gtt_sa_chunk_size = chunk_size;
 	kfd->gtt_sa_num_of_chunks = buf_size / chunk_size;
 
-	num_of_bits = kfd->gtt_sa_num_of_chunks / BITS_PER_BYTE;
-	if (num_of_bits == 0) {
-		pr_err("Number of bits is 0 in %s", __func__);
-		return -EINVAL;
-	}
+	num_of_longs = (kfd->gtt_sa_num_of_chunks + BITS_PER_LONG - 1) /
+		BITS_PER_LONG;
 
-	kfd->gtt_sa_bitmap = kzalloc(num_of_bits, GFP_KERNEL);
+	kfd->gtt_sa_bitmap = kcalloc(num_of_longs, sizeof(long), GFP_KERNEL);
 
 	if (!kfd->gtt_sa_bitmap)
 		return -ENOMEM;

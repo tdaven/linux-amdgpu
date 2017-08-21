@@ -220,8 +220,9 @@ static int acquire_packet_buffer(struct kernel_queue *kq,
 	queue_address = (unsigned int *)kq->pq_kernel_addr;
 	queue_size_dwords = kq->queue->properties.queue_size / sizeof(uint32_t);
 
-	pr_debug("rptr: %d\n wptr: %d\n queue_address 0x%p\n", rptr, wptr,
-			queue_address);
+	pr_debug("rptr: %d\n", rptr);
+	pr_debug("wptr: %d\n", wptr);
+	pr_debug("queue_address 0x%p\n", queue_address);
 
 	available_size = (rptr + queue_size_dwords - 1 - wptr) %
 							queue_size_dwords;
@@ -345,6 +346,7 @@ struct kernel_queue *kernel_queue_init(struct kfd_dev *dev,
 		break;
 
 	case CHIP_VEGA10:
+	case CHIP_RAVEN:
 		kernel_queue_init_v9(&kq->ops_asic_specific);
 		break;
 	default:
@@ -365,6 +367,7 @@ void kernel_queue_uninit(struct kernel_queue *kq)
 	kfree(kq);
 }
 
+/* FIXME: Can this test be removed? */
 static __attribute__((unused)) void test_kq(struct kfd_dev *dev)
 {
 	struct kernel_queue *kq;
@@ -374,8 +377,18 @@ static __attribute__((unused)) void test_kq(struct kfd_dev *dev)
 	pr_err("Starting kernel queue test\n");
 
 	kq = kernel_queue_init(dev, KFD_QUEUE_TYPE_HIQ);
+	if (unlikely(!kq)) {
+		pr_err("  Failed to initialize HIQ\n");
+		pr_err("Kernel queue test failed\n");
+		return;
+	}
 
 	retval = kq->ops.acquire_packet_buffer(kq, 5, &buffer);
+	if (unlikely(retval != 0)) {
+		pr_err("  Failed to acquire packet buffer\n");
+		pr_err("Kernel queue test failed\n");
+		return;
+	}
 	for (i = 0; i < 5; i++)
 		buffer[i] = kq->nop_packet;
 	kq->ops.submit_packet(kq);

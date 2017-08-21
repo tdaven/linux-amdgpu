@@ -55,6 +55,8 @@
 #include "dce/dce_11_2_d.h"
 #include "dce/dce_11_2_sh_mask.h"
 
+#include "dce100/dce100_resource.h"
+
 #ifndef mmDP_DPHY_INTERNAL_CTRL
 	#define mmDP_DPHY_INTERNAL_CTRL 0x4aa7
 	#define mmDP0_DP_DPHY_INTERNAL_CTRL 0x4aa7
@@ -698,7 +700,7 @@ static void destruct(struct dce110_resource_pool *pool)
 static struct clock_source *find_matching_pll(
 		struct resource_context *res_ctx,
 		const struct resource_pool *pool,
-		const struct core_stream *const stream)
+		const struct dc_stream_state *const stream)
 {
 	switch (stream->sink->link->link_enc->transmitter) {
 	case TRANSMITTER_UNIPHY_A:
@@ -720,7 +722,7 @@ static struct clock_source *find_matching_pll(
 	return 0;
 }
 
-static enum dc_status validate_mapped_resource(
+static enum dc_status build_mapped_resource(
 		const struct core_dc *dc,
 		struct validate_context *context,
 		struct validate_context *old_context)
@@ -729,8 +731,7 @@ static enum dc_status validate_mapped_resource(
 	uint8_t i, j;
 
 	for (i = 0; i < context->stream_count; i++) {
-		struct core_stream *stream = context->streams[i];
-		struct core_link *link = stream->sink->link;
+		struct dc_stream_state *stream = context->streams[i];
 
 		if (old_context && resource_is_stream_unchanged(old_context, stream))
 			continue;
@@ -742,25 +743,7 @@ static enum dc_status validate_mapped_resource(
 			if (context->res_ctx.pipe_ctx[j].stream != stream)
 				continue;
 
-			if (!pipe_ctx->tg->funcs->validate_timing(
-				pipe_ctx->tg, &stream->public.timing))
-				return DC_FAIL_CONTROLLER_VALIDATE;
-
 			status = dce110_resource_build_pipe_hw_param(pipe_ctx);
-
-			if (status != DC_OK)
-				return status;
-
-			if (!link->link_enc->funcs->validate_output_with_stream(
-				link->link_enc,
-				pipe_ctx))
-				return DC_FAIL_ENC_VALIDATE;
-
-			/* TODO: validate audio ASIC caps, encoder */
-
-			status = dc_link_validate_mode_timing(stream,
-							      link,
-							      &stream->public.timing);
 
 			if (status != DC_OK)
 				return status;
@@ -862,7 +845,7 @@ enum dc_status resource_map_phy_clock_resources(
 
 	/* acquire new resources */
 	for (i = 0; i < context->stream_count; i++) {
-		struct core_stream *stream = context->streams[i];
+		struct dc_stream_state *stream = context->streams[i];
 
 		if (old_context && resource_is_stream_unchanged(old_context, stream))
 			continue;
@@ -906,13 +889,13 @@ static bool dce112_validate_surface_sets(
 	int i;
 
 	for (i = 0; i < set_count; i++) {
-		if (set[i].surface_count == 0)
+		if (set[i].plane_count == 0)
 			continue;
 
-		if (set[i].surface_count > 1)
+		if (set[i].plane_count > 1)
 			return false;
 
-		if (set[i].surfaces[0]->format
+		if (set[i].plane_states[0]->format
 				>= SURFACE_PIXEL_FORMAT_VIDEO_BEGIN)
 			return false;
 	}
@@ -935,8 +918,8 @@ enum dc_status dce112_validate_with_context(
 		return DC_FAIL_SURFACE_VALIDATE;
 
 	for (i = 0; i < set_count; i++) {
-		context->streams[i] = DC_STREAM_TO_CORE(set[i].stream);
-		dc_stream_retain(&context->streams[i]->public);
+		context->streams[i] = set[i].stream;
+		dc_stream_retain(context->streams[i]);
 		context->stream_count++;
 	}
 
@@ -952,7 +935,7 @@ enum dc_status dce112_validate_with_context(
 	}
 
 	if (result == DC_OK)
-		result = validate_mapped_resource(dc, context, old_context);
+		result = build_mapped_resource(dc, context, old_context);
 
 	if (result == DC_OK)
 		result = resource_build_scaling_params_for_context(dc, context);
@@ -966,13 +949,13 @@ enum dc_status dce112_validate_with_context(
 
 enum dc_status dce112_validate_guaranteed(
 		const struct core_dc *dc,
-		const struct dc_stream *dc_stream,
+		struct dc_stream_state *stream,
 		struct validate_context *context)
 {
 	enum dc_status result = DC_ERROR_UNEXPECTED;
 
-	context->streams[0] = DC_STREAM_TO_CORE(dc_stream);
-	dc_stream_retain(&context->streams[0]->public);
+	context->streams[0] = stream;
+	dc_stream_retain(context->streams[0]);
 	context->stream_count++;
 
 	result = resource_map_pool_resources(dc, context, NULL);
@@ -981,7 +964,7 @@ enum dc_status dce112_validate_guaranteed(
 		result = resource_map_phy_clock_resources(dc, context, NULL);
 
 	if (result == DC_OK)
-		result = validate_mapped_resource(dc, context, NULL);
+		result = build_mapped_resource(dc, context, NULL);
 
 	if (result == DC_OK) {
 		validate_guaranteed_copy_streams(
@@ -1011,6 +994,7 @@ static const struct resource_funcs dce112_res_pool_funcs = {
 	.validate_with_context = dce112_validate_with_context,
 	.validate_guaranteed = dce112_validate_guaranteed,
 	.validate_bandwidth = dce112_validate_bandwidth,
+	.validate_plane = dce100_validate_plane
 };
 
 static void bw_calcs_data_update_from_pplib(struct core_dc *dc)
@@ -1335,7 +1319,7 @@ static bool construct(
 			  &res_create_funcs))
 		goto res_create_fail;
 
-	dc->public.caps.max_surfaces =  pool->base.pipe_count;
+	dc->public.caps.max_planes =  pool->base.pipe_count;
 
 	/* Create hardware sequencer */
 	if (!dce112_hw_sequencer_construct(dc))

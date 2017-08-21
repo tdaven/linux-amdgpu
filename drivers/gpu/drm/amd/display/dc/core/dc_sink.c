@@ -28,45 +28,31 @@
 #include "core_types.h"
 
 /*******************************************************************************
- * Private definitions
- ******************************************************************************/
-
-struct sink {
-	struct core_sink protected;
-	int ref_count;
-};
-
-#define DC_SINK_TO_SINK(dc_sink) \
-			container_of(dc_sink, struct sink, protected.public)
-
-/*******************************************************************************
  * Private functions
  ******************************************************************************/
 
-static void destruct(struct sink *sink)
+static void destruct(struct dc_sink *sink)
 {
-	if (sink->protected.public.dc_container_id) {
-		dm_free(sink->protected.public.dc_container_id);
-		sink->protected.public.dc_container_id = NULL;
+	if (sink->dc_container_id) {
+		dm_free(sink->dc_container_id);
+		sink->dc_container_id = NULL;
 	}
 }
 
-static bool construct(struct sink *sink, const struct dc_sink_init_data *init_params)
+static bool construct(struct dc_sink *sink, const struct dc_sink_init_data *init_params)
 {
 
-	struct core_link *core_link = DC_LINK_TO_LINK(init_params->link);
+	struct dc_link *link = init_params->link;
 
-	if (!core_link) {
+	if (!link)
 		return false;
-	}
 
-	sink->protected.public.sink_signal = init_params->sink_signal;
-	sink->protected.link = core_link;
-	sink->protected.ctx = core_link->ctx;
-	sink->protected.public.dongle_max_pix_clk = init_params->dongle_max_pix_clk;
-	sink->protected.public.converter_disable_audio =
-			init_params->converter_disable_audio;
-	sink->protected.public.dc_container_id = NULL;
+	sink->sink_signal = init_params->sink_signal;
+	sink->link = link;
+	sink->ctx = link->ctx;
+	sink->dongle_max_pix_clk = init_params->dongle_max_pix_clk;
+	sink->converter_disable_audio = init_params->converter_disable_audio;
+	sink->dc_container_id = NULL;
 
 	return true;
 }
@@ -75,18 +61,14 @@ static bool construct(struct sink *sink, const struct dc_sink_init_data *init_pa
  * Public functions
  ******************************************************************************/
 
-void dc_sink_retain(const struct dc_sink *dc_sink)
+void dc_sink_retain(struct dc_sink *sink)
 {
-	struct sink *sink = DC_SINK_TO_SINK(dc_sink);
-
 	ASSERT(sink->ref_count > 0);
 	++sink->ref_count;
 }
 
-void dc_sink_release(const struct dc_sink *dc_sink)
+void dc_sink_release(struct dc_sink *sink)
 {
-	struct sink *sink = DC_SINK_TO_SINK(dc_sink);
-
 	ASSERT(sink->ref_count > 0);
 	--sink->ref_count;
 
@@ -98,7 +80,7 @@ void dc_sink_release(const struct dc_sink *dc_sink)
 
 struct dc_sink *dc_sink_create(const struct dc_sink_init_data *init_params)
 {
-	struct sink *sink = dm_alloc(sizeof(*sink));
+	struct dc_sink *sink = dm_alloc(sizeof(*sink));
 
 	if (NULL == sink)
 		goto alloc_fail;
@@ -108,7 +90,7 @@ struct dc_sink *dc_sink_create(const struct dc_sink_init_data *init_params)
 
 	++sink->ref_count;
 
-	return &sink->protected.public;
+	return sink;
 
 construct_fail:
 	dm_free(sink);

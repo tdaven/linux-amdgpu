@@ -28,7 +28,6 @@
 #include "dc.h"
 #include "include/grph_object_id.h"
 
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
 #include "dml/display_mode_structs.h"
 
 struct cstate_pstate_watermarks_st {
@@ -49,7 +48,6 @@ struct dcn_watermark_set {
 	struct dcn_watermarks c;
 	struct dcn_watermarks d;
 };
-#endif
 
 struct dce_watermarks {
 	int a_mark;
@@ -69,17 +67,13 @@ struct mem_input {
 	struct dc_context *ctx;
 	struct dc_plane_address request_address;
 	struct dc_plane_address current_address;
-	uint32_t inst;
+	int inst;
+	int opp_id;
+	int mpcc_id;
 	struct stutter_modes stutter_mode;
 };
 
 struct mem_input_funcs {
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
-	void (*program_watermarks)(
-			struct mem_input *mem_input,
-			struct dcn_watermark_set *watermarks,
-			unsigned int refclk_period_ns);
-
 	void (*mem_input_setup)(
 			struct mem_input *mem_input,
 			struct _vcs_dpi_display_dlg_regs_st *dlg_regs,
@@ -93,7 +87,6 @@ struct mem_input_funcs {
 			struct mem_input *mem_input,
 			const struct rect *viewport,
 			const struct rect *viewport_c);
-#endif
 
 	void (*mem_input_program_display_marks)(
 		struct mem_input *mem_input,
@@ -143,7 +136,7 @@ struct mem_input_funcs {
 	bool (*mem_input_is_flip_pending)(struct mem_input *mem_input);
 
 	void (*mem_input_update_dchub)(struct mem_input *mem_input,
-			struct dchub_init_data *dh_data);
+				struct dchub_init_data *dh_data);
 
 	void (*set_blank)(struct mem_input *mi, bool blank);
 };

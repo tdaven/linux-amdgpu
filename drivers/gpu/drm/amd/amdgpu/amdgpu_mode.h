@@ -445,7 +445,7 @@ struct amdgpu_crtc {
 	int otg_inst;
 	uint32_t flip_flags;
 	/* After Set Mode stream will be non-NULL */
-	const struct dc_stream *stream;
+	const struct dc_stream_state *stream;
 	struct drm_pending_vblank_event *event;
 };
 
@@ -569,9 +569,9 @@ struct amdgpu_connector {
 	int num_modes;
 	/* The 'old' sink - before an HPD.
 	 * The 'current' sink is in dc_link->sink. */
-	const struct dc_sink *dc_sink;
-	const struct dc_link *dc_link;
-	const struct dc_sink *dc_em_sink;
+	struct dc_sink *dc_sink;
+	struct dc_link *dc_link;
+	struct dc_sink *dc_em_sink;
 	const struct dc_stream *stream;
 	void *con_priv;
 	bool dac_load_detect;

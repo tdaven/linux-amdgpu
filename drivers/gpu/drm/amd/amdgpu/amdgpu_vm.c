@@ -165,10 +165,19 @@ void amdgpu_vm_get_pd_bo(struct amdgpu_vm *vm,
  */
 static int amdgpu_vm_validate_level(struct amdgpu_vm_pt *parent,
 				    int (*validate)(void *, struct amdgpu_bo *),
-				    void *param, bool use_cpu_for_update)
+				    void *param, bool use_cpu_for_update,
+				    struct ttm_bo_global *glob)
 {
 	unsigned i;
 	int r;
+
+	if (parent->bo->shadow) {
+		struct amdgpu_bo *shadow = parent->bo->shadow;
+
+		r = amdgpu_ttm_bind(&shadow->tbo, &shadow->tbo.mem);
+		if (r)
+			return r;
+	}
 
 	if (use_cpu_for_update) {
 		r = amdgpu_bo_kmap(parent->bo, NULL);
@@ -189,12 +198,18 @@ static int amdgpu_vm_validate_level(struct amdgpu_vm_pt *parent,
 		if (r)
 			return r;
 
+		spin_lock(&glob->lru_lock);
+		ttm_bo_move_to_lru_tail(&entry->bo->tbo);
+		if (entry->bo->shadow)
+			ttm_bo_move_to_lru_tail(&entry->bo->shadow->tbo);
+		spin_unlock(&glob->lru_lock);
+
 		/*
 		 * Recurse into the sub directory. This is harmless because we
 		 * have only a maximum of 5 layers.
 		 */
 		r = amdgpu_vm_validate_level(entry, validate, param,
-					     use_cpu_for_update);
+					     use_cpu_for_update, glob);
 		if (r)
 			return r;
 	}
@@ -226,54 +241,11 @@ int amdgpu_vm_validate_pt_bos(struct amdgpu_device *adev, struct amdgpu_vm *vm,
 		return 0;
 
 	return amdgpu_vm_validate_level(&vm->root, validate, param,
-					vm->use_cpu_for_update);
+					vm->use_cpu_for_update,
+					adev->mman.bdev.glob);
 }
 
 /**
- * amdgpu_vm_move_level_in_lru - move one level of PT BOs to the LRU tail
- *
- * @adev: amdgpu device instance
- * @vm: vm providing the BOs
- *
- * Move the PT BOs to the tail of the LRU.
- */
-static void amdgpu_vm_move_level_in_lru(struct amdgpu_vm_pt *parent)
-{
-	unsigned i;
-
-	if (!parent->entries)
-		return;
-
-	for (i = 0; i <= parent->last_entry_used; ++i) {
-		struct amdgpu_vm_pt *entry = &parent->entries[i];
-
-		if (!entry->bo)
-			continue;
-
-		ttm_bo_move_to_lru_tail(&entry->bo->tbo);
-		amdgpu_vm_move_level_in_lru(entry);
-	}
-}
-
-/**
- * amdgpu_vm_move_pt_bos_in_lru - move the PT BOs to the LRU tail
- *
- * @adev: amdgpu device instance
- * @vm: vm providing the BOs
- *
- * Move the PT BOs to the tail of the LRU.
- */
-void amdgpu_vm_move_pt_bos_in_lru(struct amdgpu_device *adev,
-				  struct amdgpu_vm *vm)
-{
-	struct ttm_bo_global *glob = adev->mman.bdev.glob;
-
-	spin_lock(&glob->lru_lock);
-	amdgpu_vm_move_level_in_lru(&vm->root);
-	spin_unlock(&glob->lru_lock);
-}
-
- /**
  * amdgpu_vm_alloc_levels - allocate the PD/PT levels
  *
  * @adev: amdgpu_device pointer
@@ -294,6 +266,7 @@ static int amdgpu_vm_alloc_levels(struct amdgpu_device *adev,
 	unsigned pt_idx, from, to;
 	int r;
 	u64 flags;
+	uint64_t init_value = 0;
 
 	if (!parent->entries) {
 		unsigned num_entries = amdgpu_vm_num_entries(adev, level);
@@ -326,6 +299,12 @@ static int amdgpu_vm_alloc_levels(struct amdgpu_device *adev,
 		flags |= (AMDGPU_GEM_CREATE_NO_CPU_ACCESS |
 				AMDGPU_GEM_CREATE_SHADOW);
 
+	if (vm->pte_support_ats) {
+		init_value = AMDGPU_PTE_SYSTEM;
+		if (level != adev->vm_manager.num_level - 1)
+			init_value |= AMDGPU_PDE_PTE;
+	}
+
 	/* walk over the address space and allocate the page tables */
 	for (pt_idx = from; pt_idx <= to; ++pt_idx) {
 		struct reservation_object *resv = vm->root.bo->tbo.resv;
@@ -338,7 +317,7 @@ static int amdgpu_vm_alloc_levels(struct amdgpu_device *adev,
 					     AMDGPU_GPU_PAGE_SIZE, true,
 					     AMDGPU_GEM_DOMAIN_VRAM,
 					     flags,
-					     NULL, resv, &pt);
+					     NULL, resv, init_value, &pt);
 			if (r)
 				return r;
 
@@ -1065,18 +1044,13 @@ static int amdgpu_vm_update_level(struct amdgpu_device *adev,
 	shadow = parent->bo->shadow;
 
 	if (vm->use_cpu_for_update) {
-		pd_addr = (unsigned long)parent->bo->kptr;
+		pd_addr = (unsigned long)amdgpu_bo_kptr(parent->bo);
 		r = amdgpu_vm_wait_pd(adev, vm, AMDGPU_FENCE_OWNER_VM);
 		if (unlikely(r))
 			return r;
 
 		params.func = amdgpu_vm_cpu_set_ptes;
 	} else {
-		if (shadow) {
-			r = amdgpu_ttm_bind(&shadow->tbo, &shadow->tbo.mem);
-			if (r)
-				return r;
-		}
 		ring = container_of(vm->entity.sched, struct amdgpu_ring,
 				    sched);
 
@@ -1111,15 +1085,6 @@ static int amdgpu_vm_update_level(struct amdgpu_device *adev,
 
 		if (bo == NULL)
 			continue;
-
-		if (bo->shadow) {
-			struct amdgpu_bo *pt_shadow = bo->shadow;
-
-			r = amdgpu_ttm_bind(&pt_shadow->tbo,
-					    &pt_shadow->tbo.mem);
-			if (r)
-				return r;
-		}
 
 		pt = amdgpu_bo_gpu_offset(bo);
 		pt = amdgpu_gart_get_vm_pde(adev, pt);
@@ -1406,7 +1371,7 @@ static int amdgpu_vm_update_ptes(struct amdgpu_pte_update_params *params,
 
 		pt = entry->bo;
 		if (use_cpu_update) {
-			pe_start = (unsigned long)pt->kptr;
+			pe_start = (unsigned long)amdgpu_bo_kptr(pt);
 		} else {
 			if (pt->shadow) {
 				pe_start = amdgpu_bo_gpu_offset(pt->shadow);
@@ -1460,9 +1425,7 @@ static int amdgpu_vm_frag_ptes(struct amdgpu_pte_update_params	*params,
 	 * Userspace can support this by aligning virtual base address and
 	 * allocation size to the fragment size.
 	 */
-
-	/* SI and newer are optimized for 64KB */
-	unsigned pages_per_frag = AMDGPU_LOG2_PAGES_PER_FRAG(params->adev);
+	unsigned pages_per_frag = params->adev->vm_manager.fragment_size;
 	uint64_t frag_flags = AMDGPU_PTE_FRAG(pages_per_frag);
 	uint64_t frag_align = 1 << pages_per_frag;
 
@@ -2026,15 +1989,19 @@ int amdgpu_vm_clear_freed(struct amdgpu_device *adev,
 	struct amdgpu_bo_va_mapping *mapping;
 	struct dma_fence *f = NULL;
 	int r;
+	uint64_t init_pte_value = 0;
 
 	while (!list_empty(&vm->freed)) {
 		mapping = list_first_entry(&vm->freed,
 			struct amdgpu_bo_va_mapping, list);
 		list_del(&mapping->list);
 
+		if (vm->pte_support_ats)
+			init_pte_value = AMDGPU_PTE_SYSTEM;
+
 		r = amdgpu_vm_bo_update_mapping(adev, NULL, 0, NULL, vm,
 						mapping->start, mapping->last,
-						0, 0, &f);
+						init_pte_value, 0, &f);
 		amdgpu_vm_free_mapping(adev, vm, mapping, f);
 		if (r) {
 			dma_fence_put(f);
@@ -2482,12 +2449,26 @@ static uint32_t amdgpu_vm_get_block_size(uint64_t vm_size)
 }
 
 /**
- * amdgpu_vm_adjust_size - adjust vm size and block size
+ * amdgpu_vm_set_fragment_size - adjust fragment size in PTE
+ *
+ * @adev: amdgpu_device pointer
+ * @fragment_size_default: the default fragment size if it's set auto
+ */
+void amdgpu_vm_set_fragment_size(struct amdgpu_device *adev, uint32_t fragment_size_default)
+{
+	if (amdgpu_vm_fragment_size == -1)
+		adev->vm_manager.fragment_size = fragment_size_default;
+	else
+		adev->vm_manager.fragment_size = amdgpu_vm_fragment_size;
+}
+
+/**
+ * amdgpu_vm_adjust_size - adjust vm size, block size and fragment size
  *
  * @adev: amdgpu_device pointer
  * @vm_size: the default vm size if it's set auto
  */
-void amdgpu_vm_adjust_size(struct amdgpu_device *adev, uint64_t vm_size)
+void amdgpu_vm_adjust_size(struct amdgpu_device *adev, uint64_t vm_size, uint32_t fragment_size_default)
 {
 	/* adjust vm size firstly */
 	if (amdgpu_vm_size == -1)
@@ -2502,8 +2483,11 @@ void amdgpu_vm_adjust_size(struct amdgpu_device *adev, uint64_t vm_size)
 	else
 		adev->vm_manager.block_size = amdgpu_vm_block_size;
 
-	DRM_INFO("vm size is %llu GB, block size is %u-bit\n",
-		adev->vm_manager.vm_size, adev->vm_manager.block_size);
+	amdgpu_vm_set_fragment_size(adev, fragment_size_default);
+
+	DRM_INFO("vm size is %llu GB, block size is %u-bit, fragment size is %u-bit\n",
+		adev->vm_manager.vm_size, adev->vm_manager.block_size,
+		adev->vm_manager.fragment_size);
 }
 
 /**
@@ -2525,6 +2509,7 @@ int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm,
 	struct amd_sched_rq *rq;
 	int r, i;
 	u64 flags;
+	uint64_t init_pde_value = 0;
 
 	vm->va = RB_ROOT;
 	vm->client_id = atomic64_inc_return(&adev->vm_manager.client_counter);
@@ -2546,10 +2531,17 @@ int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm,
 	if (r)
 		return r;
 
-	if (vm_context == AMDGPU_VM_CONTEXT_COMPUTE)
+	vm->pte_support_ats = false;
+
+	if (vm_context == AMDGPU_VM_CONTEXT_COMPUTE) {
 		vm->use_cpu_for_update = !!(adev->vm_manager.vm_update_mode &
 						AMDGPU_VM_USE_CPU_FOR_COMPUTE);
-	else
+
+		if (adev->asic_type == CHIP_RAVEN) {
+			vm->pte_support_ats = true;
+			init_pde_value = AMDGPU_PTE_SYSTEM | AMDGPU_PDE_PTE;
+		}
+	} else
 		vm->use_cpu_for_update = !!(adev->vm_manager.vm_update_mode &
 						AMDGPU_VM_USE_CPU_FOR_GFX);
 	DRM_DEBUG_DRIVER("VM update mode is %s\n",
@@ -2569,7 +2561,7 @@ int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm,
 	r = amdgpu_bo_create(adev, amdgpu_vm_bo_size(adev, 0), align, true,
 			     AMDGPU_GEM_DOMAIN_VRAM,
 			     flags,
-			     NULL, NULL, &vm->root.bo);
+			     NULL, NULL, init_pde_value, &vm->root.bo);
 	if (r)
 		goto error_free_sched_entity;
 

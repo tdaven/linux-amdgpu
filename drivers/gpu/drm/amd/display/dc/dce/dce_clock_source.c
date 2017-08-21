@@ -589,6 +589,7 @@ static uint32_t dce110_get_pix_clk_dividers(
 #if defined(CONFIG_DRM_AMD_DC_DCN1_0)
 	case DCN_VERSION_1_0:
 #endif
+
 		dce112_get_pix_clk_dividers_helper(clk_src,
 				pll_settings, pix_clk_params);
 		break;
@@ -901,6 +902,7 @@ static bool dce110_program_pix_clk(
 #if defined(CONFIG_DRM_AMD_DC_DCN1_0)
 	case DCN_VERSION_1_0:
 #endif
+
 		if (clock_source->id != CLOCK_SOURCE_ID_DP_DTO) {
 			bp_pc_params.flags.SET_GENLOCK_REF_DIV_SRC =
 							pll_settings->use_external_clk;
@@ -1101,7 +1103,7 @@ static bool calc_pll_max_vco_construct(
 			struct calc_pll_clock_source_init_data *init_data)
 {
 	uint32_t i;
-	struct firmware_info fw_info = { { 0 } };
+	struct dc_firmware_info fw_info = { { 0 } };
 	if (calc_pll_cs == NULL ||
 			init_data == NULL ||
 			init_data->bp == NULL)
@@ -1183,7 +1185,7 @@ bool dce110_clk_src_construct(
 	const struct dce110_clk_src_shift *cs_shift,
 	const struct dce110_clk_src_mask *cs_mask)
 {
-	struct firmware_info fw_info = { { 0 } };
+	struct dc_firmware_info fw_info = { { 0 } };
 	struct calc_pll_clock_source_init_data calc_pll_cs_init_data_hdmi;
 	struct calc_pll_clock_source_init_data calc_pll_cs_init_data;
 

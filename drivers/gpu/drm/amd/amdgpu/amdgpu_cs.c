@@ -53,7 +53,7 @@ static int amdgpu_cs_user_fence_chunk(struct amdgpu_cs_parser *p,
 
 	*offset = data->offset;
 
-	drm_gem_object_unreference_unlocked(gobj);
+	kcl_drm_gem_object_put_unlocked(gobj);
 
 	if (amdgpu_ttm_tt_get_usermm(p->uf_entry.robj->tbo.ttm)) {
 		amdgpu_bo_unref(&p->uf_entry.robj);
@@ -89,7 +89,7 @@ static int amdgpu_cs_parser_init(struct amdgpu_cs_parser *p, void *data)
 	}
 
 	/* get chunks */
-	chunk_array_user = (uint64_t __user *)(uintptr_t)(cs->in.chunks);
+	chunk_array_user = kcl_u64_to_user_ptr(cs->in.chunks);
 	if (copy_from_user(chunk_array, chunk_array_user,
 			   sizeof(uint64_t)*cs->in.num_chunks)) {
 		ret = -EFAULT;
@@ -109,7 +109,7 @@ static int amdgpu_cs_parser_init(struct amdgpu_cs_parser *p, void *data)
 		struct drm_amdgpu_cs_chunk user_chunk;
 		uint32_t __user *cdata;
 
-		chunk_ptr = (void __user *)(uintptr_t)chunk_array[i];
+		chunk_ptr = kcl_u64_to_user_ptr(chunk_array[i]);
 		if (copy_from_user(&user_chunk, chunk_ptr,
 				       sizeof(struct drm_amdgpu_cs_chunk))) {
 			ret = -EFAULT;
@@ -120,7 +120,7 @@ static int amdgpu_cs_parser_init(struct amdgpu_cs_parser *p, void *data)
 		p->chunks[i].length_dw = user_chunk.length_dw;
 
 		size = p->chunks[i].length_dw;
-		cdata = (void __user *)(uintptr_t)user_chunk.chunk_data;
+		cdata = kcl_u64_to_user_ptr(user_chunk.chunk_data);
 
 		p->chunks[i].kdata = drm_malloc_ab(size, sizeof(uint32_t));
 		if (p->chunks[i].kdata == NULL) {
@@ -345,11 +345,11 @@ static int amdgpu_cs_bo_validate(struct amdgpu_cs_parser *p,
 			 * that.
 			 */
 			if (p->bytes_moved_vis < p->bytes_moved_vis_threshold)
-				domain = bo->prefered_domains;
+				domain = bo->preferred_domains;
 			else
 				domain = bo->allowed_domains;
 		} else {
-			domain = bo->prefered_domains;
+			domain = bo->preferred_domains;
 		}
 	} else {
 		domain = bo->allowed_domains;
@@ -669,10 +669,8 @@ static int amdgpu_cs_parser_bos(struct amdgpu_cs_parser *p,
 	}
 
 error_validate:
-	if (r) {
-		amdgpu_vm_move_pt_bos_in_lru(p->adev, &fpriv->vm);
+	if (r)
 		ttm_eu_backoff_reservation(&p->ticket, &p->validated);
-	}
 
 error_free_pages:
 
@@ -720,21 +718,18 @@ static int amdgpu_cs_sync_rings(struct amdgpu_cs_parser *p)
  * If error is set than unvalidate buffer, otherwise just free memory
  * used by parsing context.
  **/
-static void amdgpu_cs_parser_fini(struct amdgpu_cs_parser *parser, int error, bool backoff)
+static void amdgpu_cs_parser_fini(struct amdgpu_cs_parser *parser, int error,
+				  bool backoff)
 {
-	struct amdgpu_fpriv *fpriv = parser->filp->driver_priv;
 	unsigned i;
 
-	if (!error) {
-		amdgpu_vm_move_pt_bos_in_lru(parser->adev, &fpriv->vm);
-
+	if (!error)
 		ttm_eu_fence_buffer_objects(&parser->ticket,
 					    &parser->validated,
 					    parser->fence);
-	} else if (backoff) {
+	else if (backoff)
 		ttm_eu_backoff_reservation(&parser->ticket,
 					   &parser->validated);
-	}
 	dma_fence_put(parser->fence);
 
 	if (parser->ctx)
@@ -1352,7 +1347,7 @@ int amdgpu_cs_wait_fences_ioctl(struct drm_device *dev, void *data,
 	if (fences == NULL)
 		return -ENOMEM;
 
-	fences_user = (void __user *)(uintptr_t)(wait->in.fences);
+	fences_user = kcl_u64_to_user_ptr(wait->in.fences);
 	if (copy_from_user(fences, fences_user,
 		sizeof(struct drm_amdgpu_fence) * fence_count)) {
 		r = -EFAULT;

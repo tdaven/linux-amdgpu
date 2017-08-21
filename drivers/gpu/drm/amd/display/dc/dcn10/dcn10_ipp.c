@@ -418,7 +418,6 @@ static void ippn10_enable_cm_block(
 {
 	struct dcn10_ipp *ippn10 = TO_DCN10_IPP(ipp);
 
-	REG_UPDATE(DPP_CONTROL, DPP_CLOCK_ENABLE, 1);
 	REG_UPDATE(CM_CONTROL, CM_BYPASS_EN, 0);
 }
 
@@ -473,11 +472,18 @@ static bool ippn10_cursor_program_control(
 		bool pixel_data_invert,
 		enum dc_cursor_color_format color_format)
 {
-	REG_SET_2(CURSOR_SETTINS, 0,
-			/* no shift of the cursor HDL schedule */
-			CURSOR0_DST_Y_OFFSET, 0,
-			 /* used to shift the cursor chunk request deadline */
-			CURSOR0_CHUNK_HDL_ADJUST, 3);
+	if (REG(CURSOR_SETTINS))
+		REG_SET_2(CURSOR_SETTINS, 0,
+				/* no shift of the cursor HDL schedule */
+				CURSOR0_DST_Y_OFFSET, 0,
+				 /* used to shift the cursor chunk request deadline */
+				CURSOR0_CHUNK_HDL_ADJUST, 3);
+	else
+		REG_SET_2(CURSOR_SETTINGS, 0,
+				/* no shift of the cursor HDL schedule */
+				CURSOR0_DST_Y_OFFSET, 0,
+				 /* used to shift the cursor chunk request deadline */
+				CURSOR0_CHUNK_HDL_ADJUST, 3);
 
 	REG_UPDATE_2(CURSOR0_CONTROL,
 			CUR0_MODE, color_format,
@@ -904,13 +910,16 @@ static void ippn10_program_input_lut(
 		CM_IGAM_LUT_FORMAT_B, 3);
 	// Start at index 0 of IGAM LUT
 	REG_UPDATE(CM_IGAM_LUT_RW_INDEX, CM_IGAM_LUT_RW_INDEX, 0);
-	for (i = 0; i < INPUT_LUT_ENTRIES; i++) {
+	for (i = 0; i < gamma->num_entries; i++) {
 		REG_SET(CM_IGAM_LUT_SEQ_COLOR, 0, CM_IGAM_LUT_SEQ_COLOR,
-					gamma->red[i]);
+				dal_fixed31_32_round(
+					gamma->entries.red[i]));
 		REG_SET(CM_IGAM_LUT_SEQ_COLOR, 0, CM_IGAM_LUT_SEQ_COLOR,
-					gamma->green[i]);
+				dal_fixed31_32_round(
+					gamma->entries.green[i]));
 		REG_SET(CM_IGAM_LUT_SEQ_COLOR, 0, CM_IGAM_LUT_SEQ_COLOR,
-					gamma->blue[i]);
+				dal_fixed31_32_round(
+					gamma->entries.blue[i]));
 	}
 	// Power off LUT memory
 	REG_SET(CM_MEM_PWR_CTRL, 0, SHARED_MEM_PWR_DIS, 0);

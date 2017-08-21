@@ -142,7 +142,7 @@ static void dce_dmcu_set_psr_enable(struct dmcu *dmcu, bool enable)
 }
 
 static void dce_dmcu_setup_psr(struct dmcu *dmcu,
-		struct core_link *link,
+		struct dc_link *link,
 		struct psr_context *psr_context)
 {
 	struct dce_dmcu *dmcu_dce = TO_DCE_DMCU(dmcu);
@@ -262,7 +262,7 @@ static void dce_psr_wait_loop(
 	union dce_dmcu_psr_config_data_wait_loop_reg1 masterCmdData1;
 
 	/* waitDMCUReadyForCmd */
-	REG_WAIT(MASTER_COMM_CNTL_REG, MASTER_COMM_INTERRUPT, 0, 100, 100);
+	REG_WAIT(MASTER_COMM_CNTL_REG, MASTER_COMM_INTERRUPT, 0, 1, 10000);
 
 	masterCmdData1.u32 = 0;
 	masterCmdData1.bits.wait_loop = wait_loop_number;
@@ -382,7 +382,7 @@ static void dcn10_dmcu_set_psr_enable(struct dmcu *dmcu, bool enable)
 }
 
 static void dcn10_dmcu_setup_psr(struct dmcu *dmcu,
-		struct core_link *link,
+		struct dc_link *link,
 		struct psr_context *psr_context)
 {
 	struct dce_dmcu *dmcu_dce = TO_DCE_DMCU(dmcu);
@@ -502,7 +502,7 @@ static void dcn10_psr_wait_loop(
 	union dce_dmcu_psr_config_data_wait_loop_reg1 masterCmdData1;
 
 	/* waitDMCUReadyForCmd */
-	REG_WAIT(MASTER_COMM_CNTL_REG, MASTER_COMM_INTERRUPT, 0, 100, 100);
+	REG_WAIT(MASTER_COMM_CNTL_REG, MASTER_COMM_INTERRUPT, 0, 1, 10000);
 
 	masterCmdData1.u32 = 0;
 	masterCmdData1.bits.wait_loop = wait_loop_number;

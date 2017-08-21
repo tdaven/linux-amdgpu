@@ -37,13 +37,14 @@
 #include "kfd_device_queue_manager.h"
 
 /* topology_device_list - Master list of all topology devices */
-struct list_head topology_device_list;
+static struct list_head topology_device_list;
 static struct kfd_system_properties sys_props;
 
 static DECLARE_RWSEM(topology_lock);
 static atomic_t topology_crat_proximity_domain;
 
-struct kfd_topology_device *topology_device_by_nodeid(uint32_t node_id)
+struct kfd_topology_device *kfd_topology_device_by_proximity_domain(
+						uint32_t proximity_domain)
 {
 	struct kfd_topology_device *top_dev;
 	struct kfd_topology_device *device = NULL;
@@ -51,7 +52,7 @@ struct kfd_topology_device *topology_device_by_nodeid(uint32_t node_id)
 	down_read(&topology_lock);
 
 	list_for_each_entry(top_dev, &topology_device_list, list)
-		if (top_dev->proximity_domain == node_id) {
+		if (top_dev->proximity_domain == proximity_domain) {
 			device = top_dev;
 			break;
 		}
@@ -77,24 +78,6 @@ struct kfd_dev *kfd_device_by_id(uint32_t gpu_id)
 	up_read(&topology_lock);
 
 	return device;
-}
-
-uint32_t kfd_get_gpu_id(struct kfd_dev *dev)
-{
-	struct kfd_topology_device *top_dev;
-	uint32_t gpu_id = 0;
-
-	down_read(&topology_lock);
-
-	list_for_each_entry(top_dev, &topology_device_list, list)
-		if (top_dev->gpu == dev) {
-			gpu_id = top_dev->gpu_id;
-			break;
-		}
-
-	up_read(&topology_lock);
-
-	return gpu_id;
 }
 
 struct kfd_dev *kfd_device_by_pci_dev(const struct pci_dev *pdev)
@@ -176,21 +159,22 @@ static void kfd_release_topology_device(struct kfd_topology_device *dev)
 #endif
 
 	kfree(dev);
-
-	sys_props.num_devices--;
 }
 
-void kfd_release_live_view(void)
+void kfd_release_topology_device_list(struct list_head *device_list)
 {
 	struct kfd_topology_device *dev;
 
-	down_write(&topology_lock);
-	while (topology_device_list.next != &topology_device_list) {
-		dev = container_of(topology_device_list.next,
-				 struct kfd_topology_device, list);
+	while (!list_empty(device_list)) {
+		dev = list_first_entry(device_list,
+				       struct kfd_topology_device, list);
 		kfd_release_topology_device(dev);
 	}
-	up_write(&topology_lock);
+}
+
+static void kfd_release_live_view(void)
+{
+	kfd_release_topology_device_list(&topology_device_list);
 	memset(&sys_props, 0, sizeof(sys_props));
 }
 
@@ -213,7 +197,6 @@ struct kfd_topology_device *kfd_create_topology_device(
 #endif
 
 	list_add_tail(&dev->list, device_list);
-	sys_props.num_devices++;
 
 	return dev;
 }
@@ -226,6 +209,8 @@ struct kfd_topology_device *kfd_create_topology_device(
 		sysfs_show_gen_prop(buffer, "%s %llu\n", name, value)
 #define sysfs_show_32bit_val(buffer, value) \
 		sysfs_show_gen_prop(buffer, "%u\n", value)
+#define sysfs_show_64bit_val(buffer, value) \
+		sysfs_show_gen_prop(buffer, "%llu\n", value)
 #define sysfs_show_str_val(buffer, value) \
 		sysfs_show_gen_prop(buffer, "%s\n", value)
 
@@ -308,11 +293,23 @@ static ssize_t mem_show(struct kobject *kobj, struct attribute *attr,
 {
 	ssize_t ret;
 	struct kfd_mem_properties *mem;
+	uint64_t used_mem;
 
 	/* Making sure that the buffer is an empty string */
 	buffer[0] = 0;
 
-	mem = container_of(attr, struct kfd_mem_properties, attr);
+	if (strcmp(attr->name, "used_memory") == 0) {
+		mem = container_of(attr, struct kfd_mem_properties,
+				attr_used);
+		if (mem->gpu) {
+			used_mem = mem->gpu->kfd2kgd->get_vram_usage(mem->gpu->kgd);
+			return sysfs_show_64bit_val(buffer, used_mem);
+		}
+		/* TODO: Report APU/CPU-allocated memory; For now return 0 */
+		return 0;
+	}
+
+	mem = container_of(attr, struct kfd_mem_properties, attr_props);
 	sysfs_show_32bit_prop(buffer, "heap_type", mem->heap_type);
 	sysfs_show_64bit_prop(buffer, "size_in_bytes", mem->size_in_bytes);
 	sysfs_show_32bit_prop(buffer, "flags", mem->flags);
@@ -580,7 +577,12 @@ static void kfd_remove_sysfs_node_entry(struct kfd_topology_device *dev)
 	if (dev->kobj_mem) {
 		list_for_each_entry(mem, &dev->mem_props, list)
 			if (mem->kobj) {
-				kfd_remove_sysfs_file(mem->kobj, &mem->attr);
+				kfd_remove_sysfs_file(mem->kobj,
+						&mem->attr_props);
+				/* TODO: Remove when CPU/APU supported */
+				if (dev->node_props.cpu_cores_count == 0)
+					kfd_remove_sysfs_file(mem->kobj,
+							&mem->attr_used);
 				mem->kobj = NULL;
 			}
 		kobject_del(dev->kobj_mem);
@@ -624,10 +626,8 @@ static int kfd_build_sysfs_node_entry(struct kfd_topology_device *dev,
 	int ret;
 	uint32_t i;
 
-	if (dev->kobj_node) {
-		pr_err("Cannot build sysfs node entry, kobj_node is not NULL\n");
-		return -EINVAL;
-	}
+	if (WARN_ON(dev->kobj_node))
+		return -EEXIST;
 
 	/*
 	 * Creating the sysfs folders
@@ -691,12 +691,23 @@ static int kfd_build_sysfs_node_entry(struct kfd_topology_device *dev,
 		if (ret < 0)
 			return ret;
 
-		mem->attr.name = "properties";
-		mem->attr.mode = KFD_SYSFS_FILE_MODE;
-		sysfs_attr_init(&mem->attr);
-		ret = sysfs_create_file(mem->kobj, &mem->attr);
+		mem->attr_props.name = "properties";
+		mem->attr_props.mode = KFD_SYSFS_FILE_MODE;
+		sysfs_attr_init(&mem->attr_props);
+		ret = sysfs_create_file(mem->kobj, &mem->attr_props);
 		if (ret < 0)
 			return ret;
+
+		/* TODO: Support APU/CPU memory usage */
+		if (dev->node_props.cpu_cores_count == 0) {
+			mem->attr_used.name = "used_memory";
+			mem->attr_used.mode = KFD_SYSFS_FILE_MODE;
+			sysfs_attr_init(&mem->attr_used);
+			ret = sysfs_create_file(mem->kobj, &mem->attr_used);
+			if (ret < 0)
+				return ret;
+		}
+
 		i++;
 	}
 
@@ -859,16 +870,13 @@ static void kfd_topology_release_sysfs(void)
 }
 
 /* Called with write topology_lock acquired */
-static int kfd_topology_update_device_list(struct list_head *temp_list,
+static void kfd_topology_update_device_list(struct list_head *temp_list,
 					struct list_head *master_list)
 {
-	int num = 0;
-
 	while (!list_empty(temp_list)) {
 		list_move_tail(temp_list->next, master_list);
-		num++;
+		sys_props.num_devices++;
 	}
-	return num;
 }
 
 static void kfd_debug_print_topology(void)
@@ -993,14 +1001,6 @@ static bool kfd_is_acpi_crat_invalid(struct list_head *device_list)
 	pr_info("Ignoring ACPI CRAT on non-APU system\n");
 	return true;
 }
-
-static void kfd_delete_topology_device_list(struct list_head *device_list)
-{
-	struct kfd_topology_device *dev, *tmp;
-
-	list_for_each_entry_safe(dev, tmp, device_list, list)
-		kfd_release_topology_device(dev);
-}
 #endif
 
 int kfd_topology_init(void)
@@ -1012,7 +1012,6 @@ int kfd_topology_init(void)
 	int cpu_only_node = 0;
 	struct kfd_topology_device *kdev;
 	int proximity_domain;
-	int num_nodes;
 
 	/* topology_device_list - Master list of all topology devices
 	 * temp_topology_device_list - temporary list created while parsing CRAT
@@ -1049,9 +1048,8 @@ int kfd_topology_init(void)
 		if (ret ||
 			kfd_is_acpi_crat_invalid(&temp_topology_device_list)) {
 
-			kfd_delete_topology_device_list(
+			kfd_release_topology_device_list(
 				&temp_topology_device_list);
-			INIT_LIST_HEAD(&temp_topology_device_list);
 			kfd_destroy_crat_image(crat_image);
 			crat_image = NULL;
 		}
@@ -1062,13 +1060,16 @@ int kfd_topology_init(void)
 				COMPUTE_UNIT_CPU, NULL,
 				proximity_domain);
 		cpu_only_node = 1;
+		if (ret) {
+			pr_err("Error creating VCRAT table for CPU\n");
+			return ret;
+		}
 
-		if (ret == 0)
-			ret = kfd_parse_crat_table(crat_image,
+		ret = kfd_parse_crat_table(crat_image,
 				&temp_topology_device_list,
 				proximity_domain);
-		else {
-			pr_err("Error getting/creating CRAT table\n");
+		if (ret) {
+			pr_err("Error parsing VCRAT table for CPU\n");
 			goto err;
 		}
 	}
@@ -1080,9 +1081,9 @@ int kfd_topology_init(void)
 #endif
 
 	down_write(&topology_lock);
-	num_nodes = kfd_topology_update_device_list(&temp_topology_device_list,
-						    &topology_device_list);
-	atomic_set(&topology_crat_proximity_domain, num_nodes-1);
+	kfd_topology_update_device_list(&temp_topology_device_list,
+					    &topology_device_list);
+	atomic_set(&topology_crat_proximity_domain, sys_props.num_devices-1);
 	ret = kfd_topology_update_sysfs();
 	up_write(&topology_lock);
 
@@ -1115,8 +1116,8 @@ void kfd_topology_shutdown(void)
 {
 	down_write(&topology_lock);
 	kfd_topology_release_sysfs();
-	up_write(&topology_lock);
 	kfd_release_live_view();
+	up_write(&topology_lock);
 }
 
 static uint32_t kfd_generate_gpu_id(struct kfd_dev *gpu)
@@ -1159,15 +1160,22 @@ static struct kfd_topology_device *kfd_assign_gpu(struct kfd_dev *gpu)
 {
 	struct kfd_topology_device *dev;
 	struct kfd_topology_device *out_dev = NULL;
+	struct kfd_mem_properties *mem;
 
 	down_write(&topology_lock);
 	list_for_each_entry(dev, &topology_device_list, list)
 		if (!dev->gpu && (dev->node_props.simd_count > 0)) {
 			dev->gpu = gpu;
 			out_dev = dev;
+
+			/* Assign mem->gpu */
+			list_for_each_entry(mem, &dev->mem_props, list)
+				mem->gpu = dev->gpu;
+
 			break;
 		}
 	up_write(&topology_lock);
+
 	return out_dev;
 }
 
@@ -1249,11 +1257,16 @@ int kfd_topology_add_device(struct kfd_dev *gpu)
 		res = kfd_create_crat_image_virtual(&crat_image, &image_size,
 				COMPUTE_UNIT_GPU,
 				gpu, proximity_domain);
-		if (res == 0)
-			res = kfd_parse_crat_table(crat_image,
+		if (res) {
+			pr_err("Error creating VCRAT for GPU (ID: 0x%x)\n",
+			       gpu_id);
+			return res;
+		}
+		res = kfd_parse_crat_table(crat_image,
 				&temp_topology_device_list, proximity_domain);
-		else {
-			pr_err("Error in VCRAT for GPU (ID: 0x%x)\n", gpu_id);
+		if (res) {
+			pr_err("Error parsing VCRAT for GPU (ID: 0x%x)\n",
+			       gpu_id);
 			goto err;
 		}
 
@@ -1325,6 +1338,7 @@ int kfd_topology_add_device(struct kfd_dev *gpu)
 			HSA_CAP_DOORBELL_TYPE_TOTALBITS_MASK);
 		break;
 	case CHIP_VEGA10:
+	case CHIP_RAVEN:
 		dev->node_props.capability |= ((HSA_CAP_DOORBELL_TYPE_2_0 <<
 			HSA_CAP_DOORBELL_TYPE_TOTALBITS_SHIFT) &
 			HSA_CAP_DOORBELL_TYPE_TOTALBITS_MASK);
@@ -1347,27 +1361,28 @@ int kfd_topology_add_device(struct kfd_dev *gpu)
 	}
 
 	kfd_debug_print_topology();
-err:
-	if (res == 0)
-		kfd_notify_gpu_change(gpu_id, 1);
 
+	if (!res)
+		kfd_notify_gpu_change(gpu_id, 1);
+err:
 	kfd_destroy_crat_image(crat_image);
 	return res;
 }
 
 int kfd_topology_remove_device(struct kfd_dev *gpu)
 {
-	struct kfd_topology_device *dev;
+	struct kfd_topology_device *dev, *tmp;
 	uint32_t gpu_id;
 	int res = -ENODEV;
 
 	down_write(&topology_lock);
 
-	list_for_each_entry(dev, &topology_device_list, list)
+	list_for_each_entry_safe(dev, tmp, &topology_device_list, list)
 		if (dev->gpu == gpu) {
 			gpu_id = dev->gpu_id;
 			kfd_remove_sysfs_node_entry(dev);
 			kfd_release_topology_device(dev);
+			sys_props.num_devices--;
 			res = 0;
 			if (kfd_topology_update_sysfs() < 0)
 				kfd_topology_release_sysfs();

@@ -70,11 +70,6 @@ void dc_conn_log(struct dc_context *ctx,
 		const char *msg,
 		...);
 
-void dc_raw_log(struct dc_context *ctx,
-		enum dc_log_type event,
-		const char *msg,
-		...);
-
 void logger_write(struct dal_logger *logger,
 		enum dc_log_type log_type,
 		const char *msg,
@@ -82,7 +77,7 @@ void logger_write(struct dal_logger *logger,
 
 void pre_surface_trace(
 		const struct dc *dc,
-		const struct dc_surface *const *surfaces,
+		const struct dc_plane_state *const *plane_states,
 		int surface_count);
 
 void update_surface_trace(
@@ -121,12 +116,11 @@ void context_clock_trace(
 
 #define DC_ERROR(...) \
 	dm_logger_write(dc_ctx->logger, LOG_ERROR, \
-		__VA_ARGS__);
+		__VA_ARGS__)
 
 #define DC_SYNC_INFO(...) \
 	dm_logger_write(dc_ctx->logger, LOG_SYNC, \
-		__VA_ARGS__);
-
+		__VA_ARGS__)
 
 /* Connectivity log format:
  * [time stamp]   [drm] [Major_minor] [connector name] message.....
@@ -136,19 +130,31 @@ void context_clock_trace(
  */
 
 #define CONN_DATA_DETECT(link, hex_data, hex_len, ...) \
-		dc_conn_log(link->ctx, &link->public, hex_data, hex_len, \
+		dc_conn_log(link->ctx, link, hex_data, hex_len, \
 				LOG_EVENT_DETECTION, ##__VA_ARGS__)
 
 #define CONN_DATA_LINK_LOSS(link, hex_data, hex_len, ...) \
-		dc_conn_log(link->ctx, &link->public, hex_data, hex_len, \
+		dc_conn_log(link->ctx, link, hex_data, hex_len, \
 				LOG_EVENT_LINK_LOSS, ##__VA_ARGS__)
 
 #define CONN_MSG_LT(link, ...) \
-		dc_conn_log(link->ctx, &link->public, NULL, 0, \
+		dc_conn_log(link->ctx, link, NULL, 0, \
 				LOG_EVENT_LINK_TRAINING, ##__VA_ARGS__)
 
 #define CONN_MSG_MODE(link, ...) \
-		dc_conn_log(link->ctx, &link->public, NULL, 0, \
+		dc_conn_log(link->ctx, link, NULL, 0, \
 				LOG_EVENT_MODE_SET, ##__VA_ARGS__)
+
+/*
+ * Display Test Next logging
+ */
+#define DTN_INFO_BEGIN() \
+	dm_dtn_log_begin(dc_ctx)
+
+#define DTN_INFO(msg, ...) \
+	dm_dtn_log_append_v(dc_ctx, msg, ##__VA_ARGS__)
+
+#define DTN_INFO_END() \
+	dm_dtn_log_end(dc_ctx)
 
 #endif /* __DAL_LOGGER_INTERFACE_H__ */

@@ -135,6 +135,9 @@ uint32_t generic_reg_wait(const struct dc_context *ctx,
 	uint32_t reg_val;
 	int i;
 
+	/* something is terribly wrong if time out is > 200ms. (5Hz) */
+	ASSERT(delay_between_poll_us * time_out_num_tries <= 200000);
+
 	if (IS_FPGA_MAXIMUS_DC(ctx->dce_environment)) {
 		/* 35 seconds */
 		delay_between_poll_us = 35000;
@@ -143,11 +146,10 @@ uint32_t generic_reg_wait(const struct dc_context *ctx,
 
 	for (i = 0; i <= time_out_num_tries; i++) {
 		if (i) {
-			if (0 < delay_between_poll_us && delay_between_poll_us < 1000)
-				udelay(delay_between_poll_us);
-
-			if (delay_between_poll_us > 1000)
+			if (delay_between_poll_us >= 1000)
 				msleep(delay_between_poll_us/1000);
+			else if (delay_between_poll_us > 0)
+				udelay(delay_between_poll_us);
 		}
 
 		reg_val = dm_read_reg(ctx, addr);
@@ -159,7 +161,8 @@ uint32_t generic_reg_wait(const struct dc_context *ctx,
 	}
 
 	dm_error("REG_WAIT timeout %dus * %d tries - %s line:%d\n",
-			delay_between_poll_us, time_out_num_tries, func_name, line);
+			delay_between_poll_us, time_out_num_tries,
+			func_name, line);
 
 	if (!IS_FPGA_MAXIMUS_DC(ctx->dce_environment))
 		BREAK_TO_DEBUGGER();

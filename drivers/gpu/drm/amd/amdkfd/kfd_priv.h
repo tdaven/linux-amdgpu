@@ -36,7 +36,11 @@
 #include <linux/interval_tree.h>
 #include <linux/seq_file.h>
 #include <linux/kref.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+#include <linux/kfifo-new.h>
+#else
 #include <linux/kfifo.h>
+#endif
 #include <kgd_kfd_interface.h>
 
 #include "amd_rdma.h"
@@ -540,6 +544,12 @@ struct qcm_process_device {
 	unsigned int vmid;
 	bool is_debug;
 	unsigned int evicted; /* eviction counter, 0=active */
+
+	/* This flag tells if we should reset all wavefronts on
+	 * process termination
+	 */
+	bool reset_wavefronts;
+
 	/*
 	 * All the memory management data should be here too
 	 */
@@ -641,11 +651,6 @@ struct kfd_process_device {
 	/* GPUVM allocations storage */
 	struct idr alloc_idr;
 
-	/* This flag tells if we should reset all
-	 * wavefronts on process termination
-	 */
-	bool reset_wavefronts;
-
 	/* Flag used to tell the pdd has dequeued from the dqm.
 	 * This is used to prevent dev->dqm->ops.process_termination() from
 	 * being called twice when it is already called in IOMMU callback
@@ -674,7 +679,7 @@ struct kfd_process {
 	struct kref ref;
 	struct work_struct release_work;
 
-	struct rw_semaphore lock;
+	struct mutex mutex;
 
 	/*
 	 * In any process, the thread that started main() is the lead
@@ -760,7 +765,7 @@ struct kfd_process *kfd_lookup_process_by_mm(const struct mm_struct *mm);
 void kfd_unref_process(struct kfd_process *p);
 
 struct kfd_process_device *kfd_bind_process_to_device(struct kfd_dev *dev,
-						struct kfd_process *p);
+							struct kfd_process *p);
 #if defined(CONFIG_AMD_IOMMU_V2_MODULE) || defined(CONFIG_AMD_IOMMU_V2)
 int kfd_bind_processes_to_device(struct kfd_dev *dev);
 void kfd_unbind_processes_from_device(struct kfd_dev *dev);
@@ -799,8 +804,8 @@ int kfd_unmap_memory_from_gpu(void *mem, struct kfd_process_device *pdd);
 struct kfd_process_device *kfd_get_first_process_device_data(
 							struct kfd_process *p);
 struct kfd_process_device *kfd_get_next_process_device_data(
-							struct kfd_process *p,
-					struct kfd_process_device *pdd);
+						struct kfd_process *p,
+						struct kfd_process_device *pdd);
 bool kfd_has_process_device_data(struct kfd_process *p);
 
 /* PASIDs */
@@ -813,7 +818,8 @@ void kfd_pasid_free(unsigned int pasid);
 
 /* Doorbells */
 size_t kfd_doorbell_process_slice(struct kfd_dev *kfd);
-void kfd_doorbell_init(struct kfd_dev *kfd);
+int kfd_doorbell_init(struct kfd_dev *kfd);
+void kfd_doorbell_fini(struct kfd_dev *kfd);
 int kfd_doorbell_mmap(struct kfd_dev *kfd, struct kfd_process *process,
 		      struct vm_area_struct *vma);
 void __iomem *kfd_get_kernel_doorbell(struct kfd_dev *kfd,
@@ -840,11 +846,11 @@ int kfd_topology_init(void);
 void kfd_topology_shutdown(void);
 int kfd_topology_add_device(struct kfd_dev *gpu);
 int kfd_topology_remove_device(struct kfd_dev *gpu);
-struct kfd_topology_device *topology_device_by_nodeid(uint32_t node_id);
+struct kfd_topology_device *kfd_topology_device_by_proximity_domain(
+						uint32_t proximity_domain);
 struct kfd_dev *kfd_device_by_id(uint32_t gpu_id);
 struct kfd_dev *kfd_device_by_pci_dev(const struct pci_dev *pdev);
 struct kfd_dev *kfd_device_by_kgd(const struct kgd_dev *kgd);
-uint32_t kfd_get_gpu_id(struct kfd_dev *dev);
 int kfd_topology_enum_kfd_devices(uint8_t idx, struct kfd_dev **kdev);
 int kfd_numa_node_to_apic_id(int numa_node_id);
 
@@ -867,9 +873,6 @@ int kfd_set_process_dgpu_aperture(struct kfd_process_device *pdd,
 				uint64_t base, uint64_t limit);
 
 /* Queue Context Management */
-inline uint32_t lower_32(uint64_t x);
-inline uint32_t upper_32(uint64_t x);
-
 int init_queue(struct queue **q, const struct queue_properties *properties);
 void uninit_queue(struct queue *q);
 void print_queue_properties(struct queue_properties *q);
@@ -989,7 +992,7 @@ int pm_send_unmap_queue(struct packet_manager *pm, enum kfd_queue_type type,
 
 void pm_release_ib(struct packet_manager *pm);
 
-/* Following  PM funcs can be shared among KV and VI  */
+/* Following  PM funcs can be shared among CIK and VI  */
 unsigned int pm_build_pm4_header(unsigned int opcode, size_t packet_size);
 int pm_runlist_vi(struct packet_manager *pm, uint32_t *buffer,
 			uint64_t ib, size_t ib_size_in_dwords, bool chain);
@@ -1048,7 +1051,7 @@ int kfd_wait_on_events(struct kfd_process *p,
 		       bool all, uint32_t user_timeout_ms,
 		       enum kfd_event_wait_result *wait_result);
 void kfd_signal_event_interrupt(unsigned int pasid, uint32_t partial_id,
-		uint32_t valid_id_bits);
+				uint32_t valid_id_bits);
 #if defined(CONFIG_AMD_IOMMU_V2_MODULE) || defined(CONFIG_AMD_IOMMU_V2)
 void kfd_signal_iommu_event(struct kfd_dev *dev,
 		unsigned int pasid, unsigned long address,
@@ -1058,10 +1061,10 @@ void kfd_signal_hw_exception_event(unsigned int pasid);
 int kfd_set_event(struct kfd_process *p, uint32_t event_id);
 int kfd_reset_event(struct kfd_process *p, uint32_t event_id);
 int kfd_event_create(struct file *devkfd, struct kfd_process *p,
-	     uint32_t event_type, bool auto_reset, uint32_t node_id,
-	     uint32_t *event_id, uint32_t *event_trigger_data,
-	     uint64_t *event_page_offset, uint32_t *event_slot_index,
-	     void *kern_addr);
+		     uint32_t event_type, bool auto_reset, uint32_t node_id,
+		     uint32_t *event_id, uint32_t *event_trigger_data,
+		     uint64_t *event_page_offset, uint32_t *event_slot_index,
+		     void *kern_addr);
 int kfd_event_destroy(struct kfd_process *p, uint32_t event_id);
 void kfd_free_signal_page_dgpu(struct kfd_process *p, uint64_t handle);
 
@@ -1072,9 +1075,7 @@ void kfd_flush_tlb(struct kfd_dev *dev, uint32_t pasid);
 
 int dbgdev_wave_reset_wavefronts(struct kfd_dev *dev, struct kfd_process *p);
 
-#define KFD_SCRATCH_CZ_FW_VER 600
 #define KFD_SCRATCH_KV_FW_VER 413
-#define KFD_CWSR_CZ_FW_VER 625
 
 /* PeerDirect support */
 void kfd_init_peer_direct(void);

@@ -34,8 +34,8 @@
 #include "grph_object_defs.h"
 
 /* forward declarations */
-struct dc_surface;
-struct dc_stream;
+struct dc_plane_state;
+struct dc_stream_state;
 struct dc_link;
 struct dc_sink;
 struct dal;
@@ -92,6 +92,9 @@ struct dc_context {
 	bool created_bios;
 	struct gpio_service *gpio_service;
 	struct i2caux *i2caux;
+#ifdef ENABLE_FBC
+	uint64_t fbc_gpu_addr;
+#endif
 };
 
 
@@ -177,6 +180,18 @@ struct dc_edid {
 
 #define AUDIO_INFO_DISPLAY_NAME_SIZE_IN_CHARS 20
 
+union display_content_support {
+	unsigned int raw;
+	struct {
+		unsigned int valid_content_type :1;
+		unsigned int game_content :1;
+		unsigned int cinema_content :1;
+		unsigned int photo_content :1;
+		unsigned int graphics_content :1;
+		unsigned int reserved :27;
+	} bits;
+};
+
 struct dc_edid_caps {
 	/* sink identification */
 	uint16_t manufacturer_id;
@@ -192,6 +207,11 @@ struct dc_edid_caps {
 	struct dc_cea_audio_mode audio_modes[DC_MAX_AUDIO_DESC_COUNT];
 	uint32_t audio_latency;
 	uint32_t video_latency;
+
+	union display_content_support content_support;
+
+	uint8_t qs_bit;
+	uint8_t qy_bit;
 
 	/*HDMI 2.0 caps*/
 	bool lte_340mcsc_scramble;
@@ -384,6 +404,14 @@ enum scaling_transformation {
 		SCALING_TRANSFORMATION_PRESERVE_ASPECT_RATIO_SCALE
 };
 
+enum display_content_type {
+	DISPLAY_CONTENT_TYPE_NO_DATA = 0,
+	DISPLAY_CONTENT_TYPE_GRAPHICS = 1,
+	DISPLAY_CONTENT_TYPE_PHOTO = 2,
+	DISPLAY_CONTENT_TYPE_CINEMA = 4,
+	DISPLAY_CONTENT_TYPE_GAME = 8
+};
+
 /* audio*/
 
 union audio_sample_rates {
@@ -514,7 +542,8 @@ union dmcu_psr_level {
 		unsigned int SKIP_SMU_NOTIFICATION:1;
 		unsigned int SKIP_AUTO_STATE_ADVANCE:1;
 		unsigned int DISABLE_PSR_ENTRY_ABORT:1;
-		unsigned int RESERVED:23;
+		unsigned int SKIP_SINGLE_OTG_DISABLE:1;
+		unsigned int RESERVED:22;
 	} bits;
 	unsigned int u32all;
 };

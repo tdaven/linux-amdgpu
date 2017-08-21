@@ -32,101 +32,77 @@
 #include "transform.h"
 
 /*******************************************************************************
- * Private structures
- ******************************************************************************/
-struct surface {
-	struct core_surface protected;
-	enum dc_irq_source irq_source;
-	int ref_count;
-};
-
-struct gamma {
-	struct core_gamma protected;
-	int ref_count;
-};
-
-#define DC_SURFACE_TO_SURFACE(dc_surface) container_of(dc_surface, struct surface, protected.public)
-#define CORE_SURFACE_TO_SURFACE(core_surface) container_of(core_surface, struct surface, protected)
-
-#define DC_GAMMA_TO_GAMMA(dc_gamma) \
-	container_of(dc_gamma, struct gamma, protected.public)
-#define CORE_GAMMA_TO_GAMMA(core_gamma) \
-	container_of(core_gamma, struct gamma, protected)
-
-/*******************************************************************************
  * Private functions
  ******************************************************************************/
-static bool construct(struct dc_context *ctx, struct surface *surface)
+static bool construct(struct dc_context *ctx, struct dc_plane_state *plane_state)
 {
-	surface->protected.ctx = ctx;
-	memset(&surface->protected.public.hdr_static_ctx,
+	plane_state->ctx = ctx;
+	memset(&plane_state->hdr_static_ctx,
 			0, sizeof(struct dc_hdr_static_metadata));
 	return true;
 }
 
-static void destruct(struct surface *surface)
+static void destruct(struct dc_plane_state *plane_state)
 {
-	if (surface->protected.public.gamma_correction != NULL) {
-		dc_gamma_release(&surface->protected.public.gamma_correction);
+	if (plane_state->gamma_correction != NULL) {
+		dc_gamma_release(&plane_state->gamma_correction);
 	}
-	if (surface->protected.public.in_transfer_func != NULL) {
+	if (plane_state->in_transfer_func != NULL) {
 		dc_transfer_func_release(
-				surface->protected.public.in_transfer_func);
-		surface->protected.public.in_transfer_func = NULL;
+				plane_state->in_transfer_func);
+		plane_state->in_transfer_func = NULL;
 	}
 }
 
 /*******************************************************************************
  * Public functions
  ******************************************************************************/
-void enable_surface_flip_reporting(struct dc_surface *dc_surface,
+void enable_surface_flip_reporting(struct dc_plane_state *plane_state,
 		uint32_t controller_id)
 {
-	struct surface *surface = DC_SURFACE_TO_SURFACE(dc_surface);
-	surface->irq_source = controller_id + DC_IRQ_SOURCE_PFLIP1 - 1;
+	plane_state->irq_source = controller_id + DC_IRQ_SOURCE_PFLIP1 - 1;
 	/*register_flip_interrupt(surface);*/
 }
 
-struct dc_surface *dc_create_surface(const struct dc *dc)
+struct dc_plane_state *dc_create_plane_state(const struct dc *dc)
 {
 	struct core_dc *core_dc = DC_TO_CORE(dc);
 
-	struct surface *surface = dm_alloc(sizeof(*surface));
+	struct dc_plane_state *plane_state = dm_alloc(sizeof(*plane_state));
 
-	if (NULL == surface)
+	if (NULL == plane_state)
 		goto alloc_fail;
 
-	if (false == construct(core_dc->ctx, surface))
+	if (false == construct(core_dc->ctx, plane_state))
 		goto construct_fail;
 
-	++surface->ref_count;
+	++plane_state->ref_count;
 
-	return &surface->protected.public;
+	return plane_state;
 
 construct_fail:
-	dm_free(surface);
+	dm_free(plane_state);
 
 alloc_fail:
 	return NULL;
 }
 
-const struct dc_surface_status *dc_surface_get_status(
-		const struct dc_surface *dc_surface)
+const struct dc_plane_status *dc_plane_get_status(
+		const struct dc_plane_state *plane_state)
 {
-	struct dc_surface_status *surface_status;
-	struct core_surface *core_surface = DC_SURFACE_TO_CORE(dc_surface);
+	const struct dc_plane_status *plane_status;
 	struct core_dc *core_dc;
 	int i;
 
-	if (!dc_surface ||
-		!core_surface->ctx ||
-		!core_surface->ctx->dc) {
+	if (!plane_state ||
+		!plane_state->ctx ||
+		!plane_state->ctx->dc) {
 		ASSERT(0);
 		return NULL; /* remove this if above assert never hit */
 	}
 
-	surface_status = &core_surface->status;
-	core_dc = DC_TO_CORE(core_surface->ctx->dc);
+	plane_status = &plane_state->status;
+	core_dc = DC_TO_CORE(plane_state->ctx->dc);
 
 	if (core_dc->current_context == NULL)
 		return NULL;
@@ -135,67 +111,59 @@ const struct dc_surface_status *dc_surface_get_status(
 		struct pipe_ctx *pipe_ctx =
 				&core_dc->current_context->res_ctx.pipe_ctx[i];
 
-		if (pipe_ctx->surface != core_surface)
+		if (pipe_ctx->plane_state != plane_state)
 			continue;
 
 		core_dc->hwss.update_pending_status(pipe_ctx);
 	}
 
-	return surface_status;
+	return plane_status;
 }
 
-void dc_surface_retain(const struct dc_surface *dc_surface)
+void dc_plane_state_retain(struct dc_plane_state *plane_state)
 {
-	struct surface *surface = DC_SURFACE_TO_SURFACE(dc_surface);
-
-	ASSERT(surface->ref_count > 0);
-	++surface->ref_count;
+	ASSERT(plane_state->ref_count > 0);
+	++plane_state->ref_count;
 }
 
-void dc_surface_release(const struct dc_surface *dc_surface)
+void dc_plane_state_release(struct dc_plane_state *plane_state)
 {
-	struct surface *surface = DC_SURFACE_TO_SURFACE(dc_surface);
+	ASSERT(plane_state->ref_count > 0);
+	--plane_state->ref_count;
 
-	ASSERT(surface->ref_count > 0);
-	--surface->ref_count;
-
-	if (surface->ref_count == 0) {
-		destruct(surface);
-		dm_free(surface);
+	if (plane_state->ref_count == 0) {
+		destruct(plane_state);
+		dm_free(plane_state);
 	}
 }
 
-void dc_gamma_retain(const struct dc_gamma *dc_gamma)
+void dc_gamma_retain(struct dc_gamma *gamma)
 {
-	struct gamma *gamma = DC_GAMMA_TO_GAMMA(dc_gamma);
-
 	ASSERT(gamma->ref_count > 0);
 	++gamma->ref_count;
 }
 
-void dc_gamma_release(const struct dc_gamma **dc_gamma)
+void dc_gamma_release(struct dc_gamma **gamma)
 {
-	struct gamma *gamma = DC_GAMMA_TO_GAMMA(*dc_gamma);
+	ASSERT((*gamma)->ref_count > 0);
+	--(*gamma)->ref_count;
 
-	ASSERT(gamma->ref_count > 0);
-	--gamma->ref_count;
+	if ((*gamma)->ref_count == 0)
+		dm_free((*gamma));
 
-	if (gamma->ref_count == 0)
-		dm_free(gamma);
-
-	*dc_gamma = NULL;
+	*gamma = NULL;
 }
 
 struct dc_gamma *dc_create_gamma()
 {
-	struct gamma *gamma = dm_alloc(sizeof(*gamma));
+	struct dc_gamma *gamma = dm_alloc(sizeof(*gamma));
 
 	if (gamma == NULL)
 		goto alloc_fail;
 
 	++gamma->ref_count;
 
-	return &gamma->protected.public;
+	return gamma;
 
 alloc_fail:
 	return NULL;

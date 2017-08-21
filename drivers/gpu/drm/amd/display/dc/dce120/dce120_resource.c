@@ -60,6 +60,8 @@
 #include "vega10/NBIO/nbio_6_1_offset.h"
 #include "reg_helper.h"
 
+#include "dce100/dce100_resource.h"
+
 #ifndef mmDP0_DP_DPHY_INTERNAL_CTRL
 	#define mmDP0_DP_DPHY_INTERNAL_CTRL		0x210f
 	#define mmDP0_DP_DPHY_INTERNAL_CTRL_BASE_IDX	2
@@ -598,7 +600,7 @@ static struct stream_encoder *dce120_stream_encoder_create(
 					mm ## block ## id ## _ ## reg_name
 
 static const struct dce_hwseq_registers hwseq_reg = {
-		HWSEQ_DCE112_REG_LIST()
+		HWSEQ_DCE120_REG_LIST()
 };
 
 static const struct dce_hwseq_shift hwseq_shift = {
@@ -698,7 +700,8 @@ static const struct resource_funcs dce120_res_pool_funcs = {
 	.link_enc_create = dce120_link_encoder_create,
 	.validate_with_context = dce112_validate_with_context,
 	.validate_guaranteed = dce112_validate_guaranteed,
-	.validate_bandwidth = dce112_validate_bandwidth
+	.validate_bandwidth = dce112_validate_bandwidth,
+	.validate_plane = dce100_validate_plane
 };
 
 static void bw_calcs_data_update_from_pplib(struct core_dc *dc)
@@ -979,7 +982,7 @@ static bool construct(
 	if (!dce120_hw_sequencer_create(dc))
 		goto controller_create_fail;
 
-	dc->public.caps.max_surfaces =  pool->base.pipe_count;
+	dc->public.caps.max_planes =  pool->base.pipe_count;
 
 	bw_calcs_init(&dc->bw_dceip, &dc->bw_vbios, dc->ctx->asic_id);
 

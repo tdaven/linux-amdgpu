@@ -32,7 +32,6 @@
 
 #define AMDKFD_SKIP_UNCOMPILED_CODE 1
 
-const struct kfd2kgd_calls *kfd2kgd;
 const struct kgd2kfd_calls *kgd2kfd;
 bool (*kgd2kfd_init_p)(unsigned int, const struct kgd2kfd_calls**);
 
@@ -68,8 +67,21 @@ int amdgpu_amdkfd_init(void)
 	return ret;
 }
 
-bool amdgpu_amdkfd_load_interface(struct amdgpu_device *adev)
+void amdgpu_amdkfd_fini(void)
 {
+	if (kgd2kfd) {
+		kgd2kfd->exit();
+		symbol_put(kgd2kfd_init);
+	}
+}
+
+void amdgpu_amdkfd_device_probe(struct amdgpu_device *adev)
+{
+	const struct kfd2kgd_calls *kfd2kgd;
+
+	if (!kgd2kfd)
+		return;
+
 	switch (adev->asic_type) {
 #ifdef CONFIG_DRM_AMDGPU_CIK
 	case CHIP_KAVERI:
@@ -90,25 +102,11 @@ bool amdgpu_amdkfd_load_interface(struct amdgpu_device *adev)
 		break;
 	default:
 		dev_info(adev->dev, "kfd not supported on this ASIC\n");
-		return false;
+		return;
 	}
 
-	return true;
-}
-
-void amdgpu_amdkfd_fini(void)
-{
-	if (kgd2kfd) {
-		kgd2kfd->exit();
-		symbol_put(kgd2kfd_init);
-	}
-}
-
-void amdgpu_amdkfd_device_probe(struct amdgpu_device *adev)
-{
-	if (kgd2kfd)
-		adev->kfd = kgd2kfd->probe((struct kgd_dev *)adev,
-					adev->pdev, kfd2kgd);
+	adev->kfd = kgd2kfd->probe((struct kgd_dev *)adev,
+				   adev->pdev, kfd2kgd);
 }
 
 void amdgpu_amdkfd_device_init(struct amdgpu_device *adev)
@@ -284,7 +282,7 @@ int alloc_gtt_mem(struct kgd_dev *kgd, size_t size,
 	void *cpu_ptr_tmp = NULL;
 
 	r = amdgpu_bo_create(adev, size, PAGE_SIZE, true, AMDGPU_GEM_DOMAIN_GTT,
-			AMDGPU_GEM_CREATE_CPU_GTT_USWC, NULL, NULL, &bo);
+			AMDGPU_GEM_CREATE_CPU_GTT_USWC, NULL, NULL, 0, &bo);
 	if (r) {
 		dev_err(adev->dev,
 			"failed to allocate BO for amdkfd (%d)\n", r);
@@ -446,7 +444,7 @@ int amdgpu_amdkfd_get_dmabuf_info(struct kgd_dev *kgd, int dma_buf_fd,
 
 	adev = obj->dev->dev_private;
 	bo = gem_to_amdgpu_bo(obj);
-	if (!(bo->prefered_domains & (AMDGPU_GEM_DOMAIN_VRAM |
+	if (!(bo->preferred_domains & (AMDGPU_GEM_DOMAIN_VRAM |
 				    AMDGPU_GEM_DOMAIN_GTT |
 				    AMDGPU_GEM_DOMAIN_DGMA)))
 		/* Only VRAM, GTT and DGMA BOs are supported */
@@ -466,7 +464,7 @@ int amdgpu_amdkfd_get_dmabuf_info(struct kgd_dev *kgd, int dma_buf_fd,
 		/* If the preferred domain is DGMA, set flags to VRAM because
 		 * KFD doesn't support allocating DGMA memory
 		 */
-		*flags = (bo->prefered_domains & (AMDGPU_GEM_DOMAIN_VRAM |
+		*flags = (bo->preferred_domains & (AMDGPU_GEM_DOMAIN_VRAM |
 				AMDGPU_GEM_DOMAIN_DGMA)) ?
 				ALLOC_MEM_FLAGS_VRAM : ALLOC_MEM_FLAGS_GTT;
 
@@ -477,6 +475,13 @@ int amdgpu_amdkfd_get_dmabuf_info(struct kgd_dev *kgd, int dma_buf_fd,
 out_put:
 	dma_buf_put(dma_buf);
 	return r;
+}
+
+uint64_t amdgpu_amdkfd_get_vram_usage(struct kgd_dev *kgd)
+{
+	struct amdgpu_device *adev = (struct amdgpu_device *)kgd;
+	uint64_t usage = (u64)atomic64_read(&adev->vram_usage);
+	return usage;
 }
 
 bool amdgpu_amdkfd_is_kfd_vmid(struct amdgpu_device *adev,

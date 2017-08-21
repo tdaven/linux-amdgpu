@@ -651,7 +651,7 @@ static void destruct(struct dce110_resource_pool *pool)
 		dal_irq_service_destroy(&pool->base.irqs);
 }
 
-static enum dc_status validate_mapped_resource(
+static enum dc_status build_mapped_resource(
 		const struct core_dc *dc,
 		struct validate_context *context,
 		struct validate_context *old_context)
@@ -660,8 +660,7 @@ static enum dc_status validate_mapped_resource(
 	uint8_t i, j;
 
 	for (i = 0; i < context->stream_count; i++) {
-		struct core_stream *stream = context->streams[i];
-		struct core_link *link = stream->sink->link;
+		struct dc_stream_state *stream = context->streams[i];
 
 		if (old_context && resource_is_stream_unchanged(old_context, stream))
 			continue;
@@ -673,24 +672,7 @@ static enum dc_status validate_mapped_resource(
 			if (context->res_ctx.pipe_ctx[j].stream != stream)
 				continue;
 
-			if (!pipe_ctx->tg->funcs->validate_timing(
-				pipe_ctx->tg, &stream->public.timing))
-				return DC_FAIL_CONTROLLER_VALIDATE;
-
 			status = dce110_resource_build_pipe_hw_param(pipe_ctx);
-
-			if (status != DC_OK)
-				return status;
-
-			if (!link->link_enc->funcs->validate_output_with_stream(
-				link->link_enc,
-				pipe_ctx))
-				return DC_FAIL_ENC_VALIDATE;
-
-			/* TODO: validate audio ASIC caps, encoder */
-			status = dc_link_validate_mode_timing(stream,
-							      link,
-							      &stream->public.timing);
 
 			if (status != DC_OK)
 				return status;
@@ -723,13 +705,13 @@ static bool dce100_validate_surface_sets(
 	int i;
 
 	for (i = 0; i < set_count; i++) {
-		if (set[i].surface_count == 0)
+		if (set[i].plane_count == 0)
 			continue;
 
-		if (set[i].surface_count > 1)
+		if (set[i].plane_count > 1)
 			return false;
 
-		if (set[i].surfaces[0]->format
+		if (set[i].plane_states[0]->format
 				>= SURFACE_PIXEL_FORMAT_VIDEO_BEGIN)
 			return false;
 	}
@@ -752,8 +734,8 @@ enum dc_status dce100_validate_with_context(
 		return DC_FAIL_SURFACE_VALIDATE;
 
 	for (i = 0; i < set_count; i++) {
-		context->streams[i] = DC_STREAM_TO_CORE(set[i].stream);
-		dc_stream_retain(&context->streams[i]->public);
+		context->streams[i] = set[i].stream;
+		dc_stream_retain(context->streams[i]);
 		context->stream_count++;
 	}
 
@@ -769,7 +751,7 @@ enum dc_status dce100_validate_with_context(
 	}
 
 	if (result == DC_OK)
-		result = validate_mapped_resource(dc, context, old_context);
+		result = build_mapped_resource(dc, context, old_context);
 
 	if (result == DC_OK)
 		result = resource_build_scaling_params_for_context(dc, context);
@@ -783,13 +765,13 @@ enum dc_status dce100_validate_with_context(
 
 enum dc_status dce100_validate_guaranteed(
 		const struct core_dc *dc,
-		const struct dc_stream *dc_stream,
+		struct dc_stream_state *dc_stream,
 		struct validate_context *context)
 {
 	enum dc_status result = DC_ERROR_UNEXPECTED;
 
-	context->streams[0] = DC_STREAM_TO_CORE(dc_stream);
-	dc_stream_retain(&context->streams[0]->public);
+	context->streams[0] = dc_stream;
+	dc_stream_retain(context->streams[0]);
 	context->stream_count++;
 
 	result = resource_map_pool_resources(dc, context, NULL);
@@ -798,7 +780,7 @@ enum dc_status dce100_validate_guaranteed(
 		result = resource_map_clock_resources(dc, context, NULL);
 
 	if (result == DC_OK)
-		result = validate_mapped_resource(dc, context, NULL);
+		result = build_mapped_resource(dc, context, NULL);
 
 	if (result == DC_OK) {
 		validate_guaranteed_copy_streams(
@@ -822,12 +804,22 @@ static void dce100_destroy_resource_pool(struct resource_pool **pool)
 	*pool = NULL;
 }
 
+enum dc_status dce100_validate_plane(const struct dc_plane_state *plane_state)
+{
+
+	if (plane_state->format < SURFACE_PIXEL_FORMAT_VIDEO_BEGIN)
+		return DC_OK;
+
+	return DC_FAIL_SURFACE_VALIDATE;
+}
+
 static const struct resource_funcs dce100_res_pool_funcs = {
 	.destroy = dce100_destroy_resource_pool,
 	.link_enc_create = dce100_link_encoder_create,
 	.validate_with_context = dce100_validate_with_context,
 	.validate_guaranteed = dce100_validate_guaranteed,
-	.validate_bandwidth = dce100_validate_bandwidth
+	.validate_bandwidth = dce100_validate_bandwidth,
+	.validate_plane = dce100_validate_plane,
 };
 
 static bool construct(
@@ -837,7 +829,7 @@ static bool construct(
 {
 	unsigned int i;
 	struct dc_context *ctx = dc->ctx;
-	struct firmware_info info;
+	struct dc_firmware_info info;
 	struct dc_bios *bp;
 	struct dm_pp_static_clock_info static_clk_info = {0};
 
@@ -966,7 +958,7 @@ static bool construct(
 		}
 	}
 
-	dc->public.caps.max_surfaces =  pool->base.pipe_count;
+	dc->public.caps.max_planes =  pool->base.pipe_count;
 
 	if (!resource_construct(num_virtual_links, dc, &pool->base,
 			&res_create_funcs))

@@ -337,51 +337,16 @@ static void amdgpu_block_invalid_wreg(struct amdgpu_device *adev,
 
 static int amdgpu_vram_scratch_init(struct amdgpu_device *adev)
 {
-	int r;
-
-	if (adev->vram_scratch.robj == NULL) {
-		r = amdgpu_bo_create(adev, AMDGPU_GPU_PAGE_SIZE,
-				     PAGE_SIZE, true, AMDGPU_GEM_DOMAIN_VRAM,
-				     AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED |
-				     AMDGPU_GEM_CREATE_VRAM_CONTIGUOUS,
-				     NULL, NULL, &adev->vram_scratch.robj);
-		if (r) {
-			return r;
-		}
-	}
-
-	r = amdgpu_bo_reserve(adev->vram_scratch.robj, false);
-	if (unlikely(r != 0))
-		return r;
-	r = amdgpu_bo_pin(adev->vram_scratch.robj,
-			  AMDGPU_GEM_DOMAIN_VRAM, &adev->vram_scratch.gpu_addr);
-	if (r) {
-		amdgpu_bo_unreserve(adev->vram_scratch.robj);
-		return r;
-	}
-	r = amdgpu_bo_kmap(adev->vram_scratch.robj,
-				(void **)&adev->vram_scratch.ptr);
-	if (r)
-		amdgpu_bo_unpin(adev->vram_scratch.robj);
-	amdgpu_bo_unreserve(adev->vram_scratch.robj);
-
-	return r;
+	return amdgpu_bo_create_kernel(adev, AMDGPU_GPU_PAGE_SIZE,
+				       PAGE_SIZE, AMDGPU_GEM_DOMAIN_VRAM,
+				       &adev->vram_scratch.robj,
+				       &adev->vram_scratch.gpu_addr,
+				       (void **)&adev->vram_scratch.ptr);
 }
 
 static void amdgpu_vram_scratch_fini(struct amdgpu_device *adev)
 {
-	int r;
-
-	if (adev->vram_scratch.robj == NULL) {
-		return;
-	}
-	r = amdgpu_bo_reserve(adev->vram_scratch.robj, true);
-	if (likely(r == 0)) {
-		amdgpu_bo_kunmap(adev->vram_scratch.robj);
-		amdgpu_bo_unpin(adev->vram_scratch.robj);
-		amdgpu_bo_unreserve(adev->vram_scratch.robj);
-	}
-	amdgpu_bo_unref(&adev->vram_scratch.robj);
+	amdgpu_bo_free_kernel(&adev->vram_scratch.robj, NULL, NULL);
 }
 
 /**
@@ -540,7 +505,8 @@ static int amdgpu_wb_init(struct amdgpu_device *adev)
 	int r;
 
 	if (adev->wb.wb_obj == NULL) {
-		r = amdgpu_bo_create_kernel(adev, AMDGPU_MAX_WB * sizeof(uint32_t),
+		/* AMDGPU_MAX_WB * sizeof(uint32_t) * 8 = AMDGPU_MAX_WB 256bit slots */
+		r = amdgpu_bo_create_kernel(adev, AMDGPU_MAX_WB * sizeof(uint32_t) * 8,
 					    PAGE_SIZE, AMDGPU_GEM_DOMAIN_GTT,
 					    &adev->wb.wb_obj, &adev->wb.gpu_addr,
 					    (void **)&adev->wb.wb);
@@ -571,47 +537,10 @@ static int amdgpu_wb_init(struct amdgpu_device *adev)
 int amdgpu_wb_get(struct amdgpu_device *adev, u32 *wb)
 {
 	unsigned long offset = find_first_zero_bit(adev->wb.used, adev->wb.num_wb);
+
 	if (offset < adev->wb.num_wb) {
 		__set_bit(offset, adev->wb.used);
-		*wb = offset;
-		return 0;
-	} else {
-		return -EINVAL;
-	}
-}
-
-/**
- * amdgpu_wb_get_64bit - Allocate a wb entry
- *
- * @adev: amdgpu_device pointer
- * @wb: wb index
- *
- * Allocate a wb slot for use by the driver (all asics).
- * Returns 0 on success or -EINVAL on failure.
- */
-int amdgpu_wb_get_64bit(struct amdgpu_device *adev, u32 *wb)
-{
-	unsigned long offset = bitmap_find_next_zero_area_off(adev->wb.used,
-				adev->wb.num_wb, 0, 2, 7, 0);
-	if ((offset + 1) < adev->wb.num_wb) {
-		__set_bit(offset, adev->wb.used);
-		__set_bit(offset + 1, adev->wb.used);
-		*wb = offset;
-		return 0;
-	} else {
-		return -EINVAL;
-	}
-}
-
-int amdgpu_wb_get_256Bit(struct amdgpu_device *adev, u32 *wb)
-{
-	int i = 0;
-	unsigned long offset = bitmap_find_next_zero_area_off(adev->wb.used,
-				adev->wb.num_wb, 0, 8, 63, 0);
-	if ((offset + 7) < adev->wb.num_wb) {
-		for (i = 0; i < 8; i++)
-			__set_bit(offset + i, adev->wb.used);
-		*wb = offset;
+		*wb = offset * 8; /* convert to dw offset */
 		return 0;
 	} else {
 		return -EINVAL;
@@ -630,39 +559,6 @@ void amdgpu_wb_free(struct amdgpu_device *adev, u32 wb)
 {
 	if (wb < adev->wb.num_wb)
 		__clear_bit(wb, adev->wb.used);
-}
-
-/**
- * amdgpu_wb_free_64bit - Free a wb entry
- *
- * @adev: amdgpu_device pointer
- * @wb: wb index
- *
- * Free a wb slot allocated for use by the driver (all asics)
- */
-void amdgpu_wb_free_64bit(struct amdgpu_device *adev, u32 wb)
-{
-	if ((wb + 1) < adev->wb.num_wb) {
-		__clear_bit(wb, adev->wb.used);
-		__clear_bit(wb + 1, adev->wb.used);
-	}
-}
-
-/**
- * amdgpu_wb_free_256bit - Free a wb entry
- *
- * @adev: amdgpu_device pointer
- * @wb: wb index
- *
- * Free a wb slot allocated for use by the driver (all asics)
- */
-void amdgpu_wb_free_256bit(struct amdgpu_device *adev, u32 wb)
-{
-	int i = 0;
-
-	if ((wb + 7) < adev->wb.num_wb)
-		for (i = 0; i < 8; i++)
-			__clear_bit(wb + i, adev->wb.used);
 }
 
 /**
@@ -1203,6 +1099,13 @@ static void amdgpu_check_arguments(struct amdgpu_device *adev)
 			amdgpu_vm_size_aligned *= 2;
 
 		amdgpu_vm_size = amdgpu_vm_size_aligned;
+	}
+
+	/* valid range is between 4 and 9 inclusive */
+	if (amdgpu_vm_fragment_size != -1 &&
+	    (amdgpu_vm_fragment_size > 9 || amdgpu_vm_fragment_size < 4)) {
+		dev_warn(adev->dev, "valid range is between 4 and 9\n");
+		amdgpu_vm_fragment_size = -1;
 	}
 
 	amdgpu_check_vm_size(adev);
@@ -1979,7 +1882,8 @@ static int amdgpu_sriov_reinit_late(struct amdgpu_device *adev)
 		AMD_IP_BLOCK_TYPE_DCE,
 		AMD_IP_BLOCK_TYPE_GFX,
 		AMD_IP_BLOCK_TYPE_SDMA,
-		AMD_IP_BLOCK_TYPE_VCE,
+		AMD_IP_BLOCK_TYPE_UVD,
+		AMD_IP_BLOCK_TYPE_VCE
 	};
 
 	for (i = 0; i < ARRAY_SIZE(ip_order); i++) {
@@ -2075,6 +1979,9 @@ bool amdgpu_device_asic_has_dc_support(enum amd_asic_type asic_type)
 #if defined(CONFIG_DRM_AMD_DC)
 	case CHIP_BONAIRE:
 	case CHIP_HAWAII:
+	case CHIP_KAVERI:
+	case CHIP_KABINI:
+	case CHIP_MULLINS:
 	case CHIP_CARRIZO:
 	case CHIP_STONEY:
 	case CHIP_POLARIS11:
@@ -3256,6 +3163,27 @@ int amdgpu_debugfs_add_files(struct amdgpu_device *adev,
 #endif
 	return 0;
 }
+
+#if defined(BUILD_AS_DKMS) &&  LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
+void amdgpu_debugfs_cleanup(struct drm_minor *minor)
+{
+	struct drm_info_node *node, *tmp;
+
+	if (!&minor->debugfs_root)
+		return 0;
+
+	mutex_lock(&minor->debugfs_lock);
+	list_for_each_entry_safe(node, tmp,
+		&minor->debugfs_list, list) {
+		debugfs_remove(node->dent);
+		list_del(&node->list);
+		kfree(node);
+	}
+	mutex_unlock(&minor->debugfs_lock);
+
+	return 0;
+}
+#endif
 
 #if defined(CONFIG_DEBUG_FS)
 

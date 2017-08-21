@@ -33,14 +33,8 @@
 #endif
 #include <linux/notifier.h>
 #include <linux/compat.h>
-#include <linux/mm.h>
-#include <asm/tlb.h>
+#include <linux/mman.h>
 #include <linux/highmem.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-#include <asm-generic/mman-common.h>
-#else
-#include <uapi/asm-generic/mman-common.h>
-#endif
 #include "kfd_ipc.h"
 
 struct mm_struct;
@@ -77,7 +71,7 @@ static struct workqueue_struct *kfd_process_wq;
 #define MAX_IDR_ID 0 /*0 - for unlimited*/
 
 static struct kfd_process *find_process(const struct task_struct *thread,
-		bool lock);
+		bool ref);
 static void kfd_process_ref_release(struct kref *ref);
 static struct kfd_process *create_process(const struct task_struct *thread,
 					struct file *filep);
@@ -113,10 +107,7 @@ static void kfd_process_free_gpuvm(struct kgd_mem *mem,
  *	This function should be only called right after the process
  *	is created and when kfd_processes_mutex is still being held
  *	to avoid concurrency. Because of that exclusiveness, we do
- *	not need to take p->lock. Because kfd_processes_mutex instead
- *	of p->lock is held, we do not need to release the lock when
- *	calling into kgd through functions such as alloc_memory_of_gpu()
- *	etc.
+ *	not need to take p->mutex.
  */
 static int kfd_process_alloc_gpuvm(struct kfd_process *p,
 		struct kfd_dev *kdev, uint64_t gpu_va, uint32_t size,
@@ -148,7 +139,7 @@ static int kfd_process_alloc_gpuvm(struct kfd_process *p,
 
 	/* Create an obj handle so kfd_process_device_remove_obj_handle
 	 * will take care of the bo removal when the process finishes.
-	 * We do not need to take p->lock, because the process is just
+	 * We do not need to take p->mutex, because the process is just
 	 * created and the ioctls have not had the chance to run.
 	 */
 	if (kfd_process_device_create_obj_handle(
@@ -412,6 +403,8 @@ static void kfd_process_wq_release(struct work_struct *work)
 
 	kfd_pasid_free(p->pasid);
 
+	mutex_destroy(&p->mutex);
+
 	put_task_struct(p->lead_thread);
 
 	kfree(p);
@@ -459,7 +452,7 @@ static void kfd_process_notifier_release(struct mmu_notifier *mn,
 	mutex_unlock(&kfd_processes_mutex);
 	synchronize_srcu(&kfd_processes_srcu);
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	/* Iterate over all process device data structures and if the pdd is in
 	 * debug mode,we should first force unregistration, then we will be
@@ -467,7 +460,7 @@ static void kfd_process_notifier_release(struct mmu_notifier *mn,
 	 */
 	list_for_each_entry(pdd, &p->per_device_data, per_device_list) {
 		dev = pdd->dev;
-		mutex_lock(get_dbgmgr_mutex());
+		mutex_lock(kfd_get_dbgmgr_mutex());
 
 		if (dev && dev->dbgmgr && (dev->dbgmgr->pasid == p->pasid)) {
 
@@ -477,7 +470,7 @@ static void kfd_process_notifier_release(struct mmu_notifier *mn,
 				dev->dbgmgr = NULL;
 			}
 		}
-		mutex_unlock(get_dbgmgr_mutex());
+		mutex_unlock(kfd_get_dbgmgr_mutex());
 	}
 
 	kfd_process_dequeue_from_all_devices(p);
@@ -498,7 +491,7 @@ static void kfd_process_notifier_release(struct mmu_notifier *mn,
 	/* Indicate to other users that MM is no longer valid */
 	p->mm = NULL;
 
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	mmu_notifier_unregister_no_release(&p->mmu_notifier, mm);
 	mmu_notifier_call_srcu(&p->rcu, &kfd_process_destroy_delayed);
@@ -542,7 +535,7 @@ static int kfd_process_init_cwsr(struct kfd_process *p, struct file *filep)
 				 */
 				return ret;
 		} else {
-			offset = (kfd_get_gpu_id(dev) |
+			offset = (dev->id |
 				KFD_MMAP_TYPE_RESERVED_MEM) << PAGE_SHIFT;
 			qpd->tba_addr = (uint64_t)vm_mmap(filep, 0,
 				dev->cwsr_size,	PROT_READ | PROT_EXEC,
@@ -586,7 +579,7 @@ static struct kfd_process *create_process(const struct task_struct *thread,
 		goto err_alloc_pasid;
 
 	kref_init(&process->ref);
-	init_rwsem(&process->lock);
+	mutex_init(&process->mutex);
 
 	process->mm = thread->mm;
 
@@ -643,9 +636,9 @@ err_init_apertures:
 err_process_pqm_init:
 	hash_del_rcu(&process->kfd_processes);
 	synchronize_rcu();
-	mmu_notifier_unregister_no_release(&process->mmu_notifier,
-					process->mm);
+	mmu_notifier_unregister_no_release(&process->mmu_notifier, process->mm);
 err_mmu_notifier:
+	mutex_destroy(&process->mutex);
 	kfd_pasid_free(process->pasid);
 err_alloc_pasid:
 	kfree(process);
@@ -705,7 +698,6 @@ struct kfd_process_device *kfd_create_process_device_data(struct kfd_dev *dev,
 	pdd->qpd.dqm = dev->dqm;
 	pdd->qpd.pqm = &p->pqm;
 	pdd->qpd.evicted = 0;
-	pdd->reset_wavefronts = false;
 	pdd->process = p;
 	pdd->bound = PDD_UNBOUND;
 	pdd->already_dequeued = false;
@@ -785,10 +777,10 @@ int kfd_bind_processes_to_device(struct kfd_dev *dev)
 	int idx = srcu_read_lock(&kfd_processes_srcu);
 
 	hash_for_each_rcu(kfd_processes_table, temp, p, kfd_processes) {
-		down_write(&p->lock);
+		mutex_lock(&p->mutex);
 		pdd = kfd_get_process_device_data(dev, p);
 		if (pdd->bound != PDD_BOUND_SUSPENDED) {
-			up_write(&p->lock);
+			mutex_unlock(&p->mutex);
 			continue;
 		}
 
@@ -797,12 +789,12 @@ int kfd_bind_processes_to_device(struct kfd_dev *dev)
 		if (err < 0) {
 			pr_err("Unexpected pasid %d binding failure\n",
 					p->pasid);
-			up_write(&p->lock);
+			mutex_unlock(&p->mutex);
 			break;
 		}
 
 		pdd->bound = PDD_BOUND;
-		up_write(&p->lock);
+		mutex_unlock(&p->mutex);
 	}
 
 	srcu_read_unlock(&kfd_processes_srcu, idx);
@@ -820,12 +812,12 @@ void kfd_unbind_processes_from_device(struct kfd_dev *dev)
 
 
 	hash_for_each_rcu(kfd_processes_table, temp, p, kfd_processes) {
-		down_write(&p->lock);
+		mutex_lock(&p->mutex);
 		pdd = kfd_get_process_device_data(dev, p);
 
 		if (pdd->bound == PDD_BOUND)
 			pdd->bound = PDD_BOUND_SUSPENDED;
-		up_write(&p->lock);
+		mutex_unlock(&p->mutex);
 	}
 
 	srcu_read_unlock(&kfd_processes_srcu, idx);
@@ -847,7 +839,7 @@ void kfd_process_iommu_unbind_callback(struct kfd_dev *dev, unsigned int pasid)
 
 	pr_debug("Unbinding process %d from IOMMU\n", pasid);
 
-	mutex_lock(get_dbgmgr_mutex());
+	mutex_lock(kfd_get_dbgmgr_mutex());
 
 	if (dev->dbgmgr && (dev->dbgmgr->pasid == p->pasid)) {
 
@@ -857,9 +849,9 @@ void kfd_process_iommu_unbind_callback(struct kfd_dev *dev, unsigned int pasid)
 		}
 	}
 
-	mutex_unlock(get_dbgmgr_mutex());
+	mutex_unlock(kfd_get_dbgmgr_mutex());
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	pdd = kfd_get_process_device_data(dev, p);
 	if (pdd)
@@ -868,7 +860,7 @@ void kfd_process_iommu_unbind_callback(struct kfd_dev *dev, unsigned int pasid)
 		 */
 		kfd_process_dequeue_from_device(pdd);
 
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	kfd_unref_process(p);
 }
@@ -1126,9 +1118,9 @@ int kfd_debugfs_mqds_by_process(struct seq_file *m, void *data)
 		seq_printf(m, "Process %d PASID %d:\n",
 			   p->lead_thread->tgid, p->pasid);
 
-		down_read(&p->lock);
+		mutex_lock(&p->mutex);
 		r = pqm_debugfs_mqds(m, &p->pqm);
-		up_read(&p->lock);
+		mutex_unlock(&p->mutex);
 
 		if (r != 0)
 			break;

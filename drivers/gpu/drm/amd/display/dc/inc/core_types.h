@@ -32,85 +32,22 @@
 #include "ddc_service_types.h"
 #include "dc_bios_types.h"
 #include "mem_input.h"
-#if defined(CONFIG_DRM_AMD_DC_DCN1_0)
 #include "mpc.h"
-#endif
 
-struct core_stream;
-
-#define MAX_PIPES 6
 #define MAX_CLOCK_SOURCES 7
 
-
-/********* core_surface **********/
-#define DC_SURFACE_TO_CORE(dc_surface) \
-	container_of(dc_surface, struct core_surface, public)
-
-#define DC_GAMMA_TO_CORE(dc_gamma) \
-	container_of(dc_gamma, struct core_gamma, public)
-
-struct core_surface {
-	struct dc_surface public;
-	struct dc_surface_status status;
-	struct dc_context *ctx;
-};
-
-struct core_gamma {
-	struct dc_gamma public;
-	struct dc_context *ctx;
-};
-
-void enable_surface_flip_reporting(struct dc_surface *dc_surface,
+void enable_surface_flip_reporting(struct dc_plane_state *plane_state,
 		uint32_t controller_id);
 
-/********* core_stream ************/
 #include "grph_object_id.h"
 #include "link_encoder.h"
 #include "stream_encoder.h"
 #include "clock_source.h"
 #include "audio.h"
 #include "hw_sequencer_types.h"
-#include "opp.h"
 
-#define DC_STREAM_TO_CORE(dc_stream) container_of( \
-	dc_stream, struct core_stream, public)
-
-struct core_stream {
-	struct dc_stream public;
-
-	/* field internal to DC */
-	struct dc_context *ctx;
-	const struct core_sink *sink;
-
-	/* used by DCP and FMT */
-	struct bit_depth_reduction_params bit_depth_params;
-	struct clamping_and_pixel_encoding_params clamping;
-
-	int phy_pix_clk;
-	enum signal_type signal;
-
-	struct dc_stream_status status;
-};
-
-/************ core_sink *****************/
-
-#define DC_SINK_TO_CORE(dc_sink) \
-	container_of(dc_sink, struct core_sink, public)
-
-struct core_sink {
-	/** The public, read-only (for DM) area of sink. **/
-	struct dc_sink public;
-	/** End-of-public area. **/
-
-	/** The 'protected' area - read/write access, for use only inside DC **/
-	/* not used for now */
-	struct core_link *link;
-	struct dc_context *ctx;
-};
 
 /************ link *****************/
-#define DC_LINK_TO_CORE(dc_link) container_of(dc_link, struct core_link, public)
-
 struct link_init_data {
 	const struct core_dc *dc;
 	struct dc_context *ctx; /* TODO: remove 'dal' when DC is complete. */
@@ -119,61 +56,15 @@ struct link_init_data {
 				TODO: remove it when DC is complete. */
 };
 
-/* DP MST stream allocation (payload bandwidth number) */
-struct link_mst_stream_allocation {
-	/* DIG front */
-	const struct stream_encoder *stream_enc;
-	/* associate DRM payload table with DC stream encoder */
-	uint8_t vcp_id;
-	/* number of slots required for the DP stream in transport packet */
-	uint8_t slot_count;
-};
-
-/* DP MST stream allocation table */
-struct link_mst_stream_allocation_table {
-	/* number of DP video streams */
-	int stream_count;
-	/* array of stream allocations */
-	struct link_mst_stream_allocation
-	stream_allocations[MAX_CONTROLLER_NUM];
-};
-
-struct core_link {
-	struct dc_link public;
-	const struct core_dc *dc;
-
-	struct dc_context *ctx; /* TODO: AUTO remove 'dal' when DC is complete*/
-
-	struct link_encoder *link_enc;
-	struct graphics_object_id link_id;
-	union ddi_channel_mapping ddi_channel_mapping;
-	struct connector_device_tag_info device_tag;
-	struct dpcd_caps dpcd_caps;
-	unsigned int dpcd_sink_count;
-
-	enum edp_revision edp_revision;
-	bool psr_enabled;
-
-	/* MST record stream using this link */
-	struct link_flags {
-		bool dp_keep_receiver_powered;
-	} wa_flags;
-	struct link_mst_stream_allocation_table mst_stream_alloc_table;
-
-	struct dc_link_status link_status;
-};
-
-#define DC_LINK_TO_LINK(dc_link) container_of(dc_link, struct core_link, public)
-
-struct core_link *link_create(const struct link_init_data *init_params);
-void link_destroy(struct core_link **link);
+struct dc_link *link_create(const struct link_init_data *init_params);
+void link_destroy(struct dc_link **link);
 
 enum dc_status dc_link_validate_mode_timing(
-		const struct core_stream *stream,
-		struct core_link *link,
+		const struct dc_stream_state *stream,
+		struct dc_link *link,
 		const struct dc_crtc_timing *timing);
 
-void core_link_resume(struct core_link *link);
+void core_link_resume(struct dc_link *link);
 
 void core_link_enable_stream(struct pipe_ctx *pipe_ctx);
 
@@ -201,7 +92,7 @@ struct resource_funcs {
 
 	enum dc_status (*validate_guaranteed)(
 					const struct core_dc *dc,
-					const struct dc_stream *stream,
+					struct dc_stream_state *stream,
 					struct validate_context *context);
 
 	bool (*validate_bandwidth)(
@@ -211,7 +102,8 @@ struct resource_funcs {
 	struct pipe_ctx *(*acquire_idle_pipe_for_layer)(
 			struct validate_context *context,
 			const struct resource_pool *pool,
-			struct core_stream *stream);
+			struct dc_stream_state *stream);
+	enum dc_status (*validate_plane)(const struct dc_plane_state *plane_state);
 };
 
 struct audio_support{
@@ -230,7 +122,7 @@ struct resource_pool {
 	struct timing_generator *timing_generators[MAX_PIPES];
 	struct stream_encoder *stream_enc[MAX_PIPES * 2];
 #ifdef CONFIG_DRM_AMD_DC_DCN1_0
-	struct mpcc *mpcc[MAX_PIPES];
+	struct mpc *mpc;
 #endif
 
 	unsigned int pipe_count;
@@ -260,29 +152,35 @@ struct resource_pool {
 	const struct resource_caps *res_cap;
 };
 
-struct pipe_ctx {
-	struct core_surface *surface;
-	struct core_stream *stream;
+struct stream_resource {
+	struct output_pixel_processor *opp;
+	struct timing_generator *tg;
+	struct stream_encoder *stream_enc;
+	struct audio *audio;
+
+	struct pixel_clk_params pix_clk_params;
+	struct encoder_info_frame encoder_info_frame;
+};
+
+struct plane_resource {
+	struct scaler_data scl_data;
 
 	struct mem_input *mi;
 	struct input_pixel_processor *ipp;
 	struct transform *xfm;
-	struct output_pixel_processor *opp;
-	struct timing_generator *tg;
+};
 
-	struct scaler_data scl_data;
+struct pipe_ctx {
+	struct dc_plane_state *plane_state;
+	struct dc_stream_state *stream;
 
-	struct stream_encoder *stream_enc;
+	struct plane_resource plane_res;
+	struct stream_resource stream_res;
+
 	struct display_clock *dis_clk;
 	struct clock_source *clock_source;
 
-	struct audio *audio;
-
-	struct pixel_clk_params pix_clk_params;
 	struct pll_settings pll_settings;
-
-	/*fmt*/
-	struct encoder_info_frame encoder_info_frame;
 
 	uint8_t pipe_idx;
 
@@ -290,7 +188,6 @@ struct pipe_ctx {
 	struct pipe_ctx *bottom_pipe;
 
 #ifdef CONFIG_DRM_AMD_DC_DCN1_0
-	struct mpcc *mpcc;
 	struct _vcs_dpi_display_dlg_regs_st dlg_regs;
 	struct _vcs_dpi_display_ttu_regs_st ttu_regs;
 	struct _vcs_dpi_display_rq_regs_st rq_regs;
@@ -348,7 +245,7 @@ union bw_context {
 };
 
 struct validate_context {
-	struct core_stream *streams[MAX_PIPES];
+	struct dc_stream_state *streams[MAX_PIPES];
 	struct dc_stream_status stream_status[MAX_PIPES];
 	uint8_t stream_count;
 

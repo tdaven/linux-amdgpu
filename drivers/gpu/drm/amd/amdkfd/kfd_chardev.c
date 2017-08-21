@@ -34,11 +34,7 @@
 #include <uapi/linux/kfd_ioctl.h>
 #include <linux/time.h>
 #include <linux/mm.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-#include <asm-generic/mman-common.h>
-#else
-#include <uapi/asm-generic/mman-common.h>
-#endif
+#include <linux/mman.h>
 #include <asm/processor.h>
 #include <linux/ptrace.h>
 
@@ -46,7 +42,6 @@
 #include "kfd_device_queue_manager.h"
 #include "kfd_dbgmgr.h"
 #include "kfd_ipc.h"
-#include "cik_regs.h"
 
 static long kfd_ioctl(struct file *, unsigned int, unsigned long);
 static int kfd_open(struct inode *, struct file *);
@@ -293,7 +288,7 @@ static int kfd_ioctl_create_queue(struct file *filep, struct kfd_process *p,
 		return -EINVAL;
 	}
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	pdd = kfd_bind_process_to_device(dev, p);
 	if (IS_ERR(pdd)) {
@@ -324,7 +319,7 @@ static int kfd_ioctl_create_queue(struct file *filep, struct kfd_process *p,
 		 */
 		args->doorbell_offset |= q_properties.doorbell_off;
 
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	pr_debug("Queue id %d was created successfully\n", args->queue_id);
 
@@ -341,7 +336,7 @@ static int kfd_ioctl_create_queue(struct file *filep, struct kfd_process *p,
 
 err_create_queue:
 err_bind_process:
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 	return err;
 }
 
@@ -355,11 +350,11 @@ static int kfd_ioctl_destroy_queue(struct file *filp, struct kfd_process *p,
 				args->queue_id,
 				p->pasid);
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	retval = pqm_destroy_queue(&p->pqm, args->queue_id);
 
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 	return retval;
 }
 
@@ -401,11 +396,11 @@ static int kfd_ioctl_update_queue(struct file *filp, struct kfd_process *p,
 	pr_debug("Updating queue id %d for pasid %d\n",
 			args->queue_id, p->pasid);
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	retval = pqm_update_queue(&p->pqm, args->queue_id, &properties);
 
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	return retval;
 }
@@ -453,11 +448,11 @@ static int kfd_ioctl_set_cu_mask(struct file *filp, struct kfd_process *p,
 		return -EFAULT;
 	}
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	retval = pqm_set_cu_mask(&p->pqm, args->queue_id, &properties);
 
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	return retval;
 }
@@ -485,7 +480,7 @@ static int kfd_ioctl_set_memory_policy(struct file *filep,
 	if (!dev)
 		return -EINVAL;
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	pdd = kfd_bind_process_to_device(dev, p);
 	if (IS_ERR(pdd)) {
@@ -509,7 +504,7 @@ static int kfd_ioctl_set_memory_policy(struct file *filep,
 		err = -EINVAL;
 
 out:
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	return err;
 }
@@ -526,7 +521,7 @@ static int kfd_ioctl_set_trap_handler(struct file *filep,
 	if (!dev)
 		return -EINVAL;
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	pdd = kfd_bind_process_to_device(dev, p);
 	if (IS_ERR(pdd)) {
@@ -541,31 +536,30 @@ static int kfd_ioctl_set_trap_handler(struct file *filep,
 		err = -EINVAL;
 
 out:
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	return err;
 }
 
-static int
-kfd_ioctl_dbg_register(struct file *filep, struct kfd_process *p, void *data)
+static int kfd_ioctl_dbg_register(struct file *filep,
+				struct kfd_process *p, void *data)
 {
-	long status = -EFAULT;
 	struct kfd_ioctl_dbg_register_args *args = data;
 	struct kfd_dev *dev;
 	struct kfd_dbgmgr *dbgmgr_ptr;
 	struct kfd_process_device *pdd;
-	bool create_ok = false;
+	bool create_ok;
+	long status = 0;
 
 	dev = kfd_device_by_id(args->gpu_id);
-	if (!dev) {
-		pr_err("Getting device by id failed in %s\n", __func__);
-		return status;
-	}
+	if (!dev)
+		return -EINVAL;
 
-	down_write(&p->lock);
-	mutex_lock(get_dbgmgr_mutex());
+	mutex_lock(&p->mutex);
+	mutex_lock(kfd_get_dbgmgr_mutex());
 
-	/* make sure that we have pdd, if this the first queue created for
+	/*
+	 * make sure that we have pdd, if this the first queue created for
 	 * this process
 	 */
 	pdd = kfd_bind_process_to_device(dev, p);
@@ -576,7 +570,6 @@ kfd_ioctl_dbg_register(struct file *filep, struct kfd_process *p, void *data)
 
 	if (!dev->dbgmgr) {
 		/* In case of a legal call, we have no dbgmgr yet */
-
 		create_ok = kfd_dbgmgr_create(&dbgmgr_ptr, dev);
 		if (create_ok) {
 			status = kfd_dbgmgr_register(dbgmgr_ptr, p);
@@ -585,11 +578,14 @@ kfd_ioctl_dbg_register(struct file *filep, struct kfd_process *p, void *data)
 			else
 				dev->dbgmgr = dbgmgr_ptr;
 		}
+	} else {
+		pr_debug("debugger already registered\n");
+		status = -EINVAL;
 	}
 
 out:
-	mutex_unlock(get_dbgmgr_mutex());
-	up_write(&p->lock);
+	mutex_unlock(kfd_get_dbgmgr_mutex());
+	mutex_unlock(&p->mutex);
 
 	return status;
 }
@@ -597,25 +593,28 @@ out:
 static int kfd_ioctl_dbg_unregister(struct file *filep,
 				struct kfd_process *p, void *data)
 {
-	long status = -EFAULT;
 	struct kfd_ioctl_dbg_unregister_args *args = data;
 	struct kfd_dev *dev;
+	long status;
 
 	dev = kfd_device_by_id(args->gpu_id);
-	if (!dev) {
-		pr_err("Getting device by id failed in %s\n", __func__);
-		return status;
+	if (!dev)
+		return -EINVAL;
+
+	if (dev->device_info->asic_family == CHIP_CARRIZO) {
+		pr_debug("kfd_ioctl_dbg_unregister not supported on CZ\n");
+		return -EINVAL;
 	}
 
-	mutex_lock(get_dbgmgr_mutex());
+	mutex_lock(kfd_get_dbgmgr_mutex());
 
 	status = kfd_dbgmgr_unregister(dev->dbgmgr, p);
-	if (status == 0) {
+	if (!status) {
 		kfd_dbgmgr_destroy(dev->dbgmgr);
 		dev->dbgmgr = NULL;
 	}
 
-	mutex_unlock(get_dbgmgr_mutex());
+	mutex_unlock(kfd_get_dbgmgr_mutex());
 
 	return status;
 }
@@ -624,33 +623,28 @@ static int kfd_ioctl_dbg_unregister(struct file *filep,
  * Parse and generate variable size data structure for address watch.
  * Total size of the buffer and # watch points is limited in order
  * to prevent kernel abuse. (no bearing to the much smaller HW limitation
- * which is enforced by dbgdev module.
+ * which is enforced by dbgdev module)
  * please also note that the watch address itself are not "copied from user",
  * since it be set into the HW in user mode values.
  *
  */
-
-static int
-kfd_ioctl_dbg_address_watch(struct file *filep,
-		struct kfd_process *p,
-		void *data)
+static int kfd_ioctl_dbg_address_watch(struct file *filep,
+					struct kfd_process *p, void *data)
 {
-	long status = -EFAULT;
 	struct kfd_ioctl_dbg_address_watch_args *args = data;
 	struct kfd_dev *dev;
 	struct dbg_address_watch_info aw_info;
-	unsigned char *args_buff = NULL;
-	unsigned int args_idx = 0;
+	unsigned char *args_buff;
+	long status;
 	void __user *cmd_from_user;
 	uint64_t watch_mask_value = 0;
+	unsigned int args_idx = 0;
 
 	memset((void *) &aw_info, 0, sizeof(struct dbg_address_watch_info));
 
 	dev = kfd_device_by_id(args->gpu_id);
-	if (!dev) {
-		pr_err("Getting device by id failed in %s\n", __func__);
-		return -EFAULT;
-	}
+	if (!dev)
+		return -EINVAL;
 
 	cmd_from_user = (void __user *) args->content_ptr;
 
@@ -660,31 +654,26 @@ kfd_ioctl_dbg_address_watch(struct file *filep,
 
 	/* this is the actual buffer to work with */
 	args_buff = memdup_user(cmd_from_user,
-			args->buf_size_in_bytes - sizeof(*args));
-
+				args->buf_size_in_bytes - sizeof(*args));
 	if (IS_ERR(args_buff))
 		return PTR_ERR(args_buff);
 
 	aw_info.process = p;
 
-	aw_info.num_watch_points =
-		*((uint32_t *)(&args_buff[args_idx]));
+	aw_info.num_watch_points = *((uint32_t *)(&args_buff[args_idx]));
 	args_idx += sizeof(aw_info.num_watch_points);
 
-	aw_info.watch_mode =
-		(enum HSA_DBG_WATCH_MODE *) &args_buff[args_idx];
-	args_idx += sizeof(enum HSA_DBG_WATCH_MODE) *
-					aw_info.num_watch_points;
+	aw_info.watch_mode = (enum HSA_DBG_WATCH_MODE *) &args_buff[args_idx];
+	args_idx += sizeof(enum HSA_DBG_WATCH_MODE) * aw_info.num_watch_points;
 
-	/* set watch address base pointer to point on the array base
+	/*
+	 * set watch address base pointer to point on the array base
 	 * within args_buff
 	 */
-
 	aw_info.watch_address = (uint64_t *) &args_buff[args_idx];
 
 	/* skip over the addresses buffer */
-	args_idx += sizeof(aw_info.watch_address) *
-					aw_info.num_watch_points;
+	args_idx += sizeof(aw_info.watch_address) * aw_info.num_watch_points;
 
 	if (args_idx >= args->buf_size_in_bytes) {
 		status = -EINVAL;
@@ -694,21 +683,18 @@ kfd_ioctl_dbg_address_watch(struct file *filep,
 	watch_mask_value = (uint64_t) args_buff[args_idx];
 
 	if (watch_mask_value > 0) {
-		/* there is an array of masks */
-
-		/* set watch mask base pointer to point on the array
-		 * base within args_buff
+		/*
+		 * There is an array of masks.
+		 * set watch mask base pointer to point on the array base
+		 * within args_buff
 		 */
 		aw_info.watch_mask = (uint64_t *) &args_buff[args_idx];
 
 		/* skip over the masks buffer */
 		args_idx += sizeof(aw_info.watch_mask) *
-					aw_info.num_watch_points;
-	}
-
-	else
+				aw_info.num_watch_points;
+	} else {
 		/* just the NULL mask, set to NULL and skip over it */
-	{
 		aw_info.watch_mask = NULL;
 		args_idx += sizeof(aw_info.watch_mask);
 	}
@@ -721,11 +707,11 @@ kfd_ioctl_dbg_address_watch(struct file *filep,
 	/* Currently HSA Event is not supported for DBG */
 	aw_info.watch_event = NULL;
 
-	mutex_lock(get_dbgmgr_mutex());
+	mutex_lock(kfd_get_dbgmgr_mutex());
 
 	status = kfd_dbgmgr_address_watch(dev->dbgmgr, &aw_info);
 
-	mutex_unlock(get_dbgmgr_mutex());
+	mutex_unlock(kfd_get_dbgmgr_mutex());
 
 out:
 	kfree(args_buff);
@@ -733,29 +719,22 @@ out:
 	return status;
 }
 
-/*
- * Parse and generate fixed size data structure for wave control.
- * Buffer is generated in a "packed" form, for avoiding structure
- * packing/pending dependencies.
- */
-
-static int
-kfd_ioctl_dbg_wave_control(struct file *filep, struct kfd_process *p,
-		void *data)
+/* Parse and generate fixed size data structure for wave control */
+static int kfd_ioctl_dbg_wave_control(struct file *filep,
+					struct kfd_process *p, void *data)
 {
-	long status = -EFAULT;
 	struct kfd_ioctl_dbg_wave_control_args *args = data;
 	struct kfd_dev *dev;
 	struct dbg_wave_control_info wac_info;
-	unsigned char *args_buff = NULL;
-	unsigned int args_idx = 0;
-	void __user *cmd_from_user;
+	unsigned char *args_buff;
 	uint32_t computed_buff_size;
+	long status;
+	void __user *cmd_from_user;
+	unsigned int args_idx = 0;
 
 	memset((void *) &wac_info, 0, sizeof(struct dbg_wave_control_info));
 
 	/* we use compact form, independent of the packing attribute value */
-
 	computed_buff_size = sizeof(*args) +
 				sizeof(wac_info.mode) +
 				sizeof(wac_info.operand) +
@@ -763,71 +742,58 @@ kfd_ioctl_dbg_wave_control(struct file *filep, struct kfd_process *p,
 				sizeof(wac_info.dbgWave_msg.MemoryVA) +
 				sizeof(wac_info.trapId);
 
-
 	dev = kfd_device_by_id(args->gpu_id);
-	if (!dev) {
-		pr_err("Getting device by id failed in %s\n", __func__);
-		return -EFAULT;
-	}
+	if (!dev)
+		return -EINVAL;
 
 	/* input size must match the computed "compact" size */
-
 	if (args->buf_size_in_bytes != computed_buff_size) {
-		pr_err("Size mismatch, computed %u : actual %u\n",
+		pr_debug("size mismatch, computed : actual %u : %u\n",
 				args->buf_size_in_bytes, computed_buff_size);
 		return -EINVAL;
 	}
 
 	cmd_from_user = (void __user *) args->content_ptr;
 
+	if (cmd_from_user == NULL)
+		return -EINVAL;
+
 	/* copy the entire buffer from user */
 
 	args_buff = memdup_user(cmd_from_user,
-			args->buf_size_in_bytes - sizeof(*args));
+				args->buf_size_in_bytes - sizeof(*args));
 	if (IS_ERR(args_buff))
 		return PTR_ERR(args_buff);
 
-	if (copy_from_user(args_buff,
-			(void __user *) args->content_ptr,
-			args->buf_size_in_bytes - sizeof(*args))) {
-		pr_err("copy_from_user failed\n");
-		status = -EFAULT;
-		goto out;
-	}
-
 	/* move ptr to the start of the "pay-load" area */
-
 	wac_info.process = p;
 
-	wac_info.operand =
-		*((enum HSA_DBG_WAVEOP *)(&args_buff[args_idx]));
+	wac_info.operand = *((enum HSA_DBG_WAVEOP *)(&args_buff[args_idx]));
 	args_idx += sizeof(wac_info.operand);
 
-	wac_info.mode =
-		*((enum HSA_DBG_WAVEMODE *)(&args_buff[args_idx]));
+	wac_info.mode = *((enum HSA_DBG_WAVEMODE *)(&args_buff[args_idx]));
 	args_idx += sizeof(wac_info.mode);
 
 	wac_info.trapId = *((uint32_t *)(&args_buff[args_idx]));
 	args_idx += sizeof(wac_info.trapId);
 
 	wac_info.dbgWave_msg.DbgWaveMsg.WaveMsgInfoGen2.Value =
-		*((uint32_t *)(&args_buff[args_idx]));
+					*((uint32_t *)(&args_buff[args_idx]));
 	wac_info.dbgWave_msg.MemoryVA = NULL;
 
-	mutex_lock(get_dbgmgr_mutex());
+	mutex_lock(kfd_get_dbgmgr_mutex());
 
-	pr_info("Calling dbg manager process %p, operand %u, mode %u, trapId %u, message %u\n",
-			wac_info.process, wac_info.operand, wac_info.mode,
-			wac_info.trapId,
+	pr_debug("Calling dbg manager process %p, operand %u, mode %u, trapId %u, message %u\n",
+			wac_info.process, wac_info.operand,
+			wac_info.mode, wac_info.trapId,
 			wac_info.dbgWave_msg.DbgWaveMsg.WaveMsgInfoGen2.Value);
 
 	status = kfd_dbgmgr_wave_control(dev->dbgmgr, &wac_info);
 
-	pr_info("Returned status of dbg manager is %ld\n", status);
+	pr_debug("Returned status of dbg manager is %ld\n", status);
 
-	mutex_unlock(get_dbgmgr_mutex());
+	mutex_unlock(kfd_get_dbgmgr_mutex());
 
-out:
 	kfree(args_buff);
 
 	return status;
@@ -888,7 +854,7 @@ static int kfd_ioctl_get_process_apertures(struct file *filp,
 
 	args->num_of_nodes = 0;
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	/*if the process-device list isn't empty*/
 	if (kfd_has_process_device_data(p)) {
@@ -928,7 +894,7 @@ static int kfd_ioctl_get_process_apertures(struct file *filp,
 		} while (pdd && (args->num_of_nodes < NUM_OF_SUPPORTED_GPUS));
 	}
 
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	return 0;
 }
@@ -948,7 +914,7 @@ static int kfd_ioctl_get_process_apertures_new(struct file *filp,
 		/* Return number of nodes, so that user space can alloacate
 		 * sufficient memory
 		 */
-		down_write(&p->lock);
+		mutex_lock(&p->mutex);
 
 		if (!kfd_has_process_device_data(p))
 			goto out_upwrite;
@@ -972,7 +938,7 @@ static int kfd_ioctl_get_process_apertures_new(struct file *filp,
 	if (!pa)
 		return -ENOMEM;
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	if (!kfd_has_process_device_data(p)) {
 		args->num_of_nodes = 0;
@@ -1009,7 +975,7 @@ static int kfd_ioctl_get_process_apertures_new(struct file *filp,
 
 		pdd = kfd_get_next_process_device_data(p, pdd);
 	} while (pdd && (nodes < args->num_of_nodes));
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	args->num_of_nodes = nodes;
 	ret = copy_to_user(
@@ -1020,12 +986,12 @@ static int kfd_ioctl_get_process_apertures_new(struct file *filp,
 	return ret ? -EFAULT : 0;
 
 out_upwrite:
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 	return 0;
 }
 
-static int
-kfd_ioctl_create_event(struct file *filp, struct kfd_process *p, void *data)
+static int kfd_ioctl_create_event(struct file *filp, struct kfd_process *p,
+					void *data)
 {
 	struct kfd_ioctl_create_event_args *args = data;
 	struct kfd_dev *kfd;
@@ -1042,7 +1008,7 @@ kfd_ioctl_create_event(struct file *filp, struct kfd_process *p, void *data)
 			return -EFAULT;
 		}
 		if (!kfd->device_info->is_need_iommu_device) {
-			down_write(&p->lock);
+			mutex_lock(&p->mutex);
 			pdd = kfd_bind_process_to_device(kfd, p);
 			if (IS_ERR(pdd)) {
 				err = PTR_ERR(pdd);
@@ -1056,7 +1022,7 @@ kfd_ioctl_create_event(struct file *filp, struct kfd_process *p, void *data)
 				err = -EFAULT;
 				goto out_upwrite;
 			}
-			up_write(&p->lock);
+			mutex_unlock(&p->mutex);
 
 			/* Map dGPU gtt BO to kernel */
 			kfd->kfd2kgd->map_gtt_bo_to_kernel(kfd->kgd,
@@ -1077,37 +1043,36 @@ kfd_ioctl_create_event(struct file *filp, struct kfd_process *p, void *data)
 	return err;
 
 out_upwrite:
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 	return err;
-
 }
 
-static int
-kfd_ioctl_destroy_event(struct file *filp, struct kfd_process *p, void *data)
+static int kfd_ioctl_destroy_event(struct file *filp, struct kfd_process *p,
+					void *data)
 {
 	struct kfd_ioctl_destroy_event_args *args = data;
 
 	return kfd_event_destroy(p, args->event_id);
 }
 
-static int
-kfd_ioctl_set_event(struct file *filp, struct kfd_process *p, void *data)
+static int kfd_ioctl_set_event(struct file *filp, struct kfd_process *p,
+				void *data)
 {
 	struct kfd_ioctl_set_event_args *args = data;
 
 	return kfd_set_event(p, args->event_id);
 }
 
-static int
-kfd_ioctl_reset_event(struct file *filp, struct kfd_process *p, void *data)
+static int kfd_ioctl_reset_event(struct file *filp, struct kfd_process *p,
+				void *data)
 {
 	struct kfd_ioctl_reset_event_args *args = data;
 
 	return kfd_reset_event(p, args->event_id);
 }
 
-static int
-kfd_ioctl_wait_events(struct file *filp, struct kfd_process *p, void *data)
+static int kfd_ioctl_wait_events(struct file *filp, struct kfd_process *p,
+				void *data)
 {
 	struct kfd_ioctl_wait_events_args *args = data;
 	enum kfd_event_wait_result wait_result;
@@ -1137,7 +1102,7 @@ static int kfd_ioctl_alloc_scratch_memory(struct file *filep,
 	if (!dev)
 		return -EINVAL;
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	pdd = kfd_bind_process_to_device(dev, p);
 	if (IS_ERR(pdd)) {
@@ -1148,7 +1113,7 @@ static int kfd_ioctl_alloc_scratch_memory(struct file *filep,
 	pdd->sh_hidden_private_base_vmid = args->va_addr;
 	pdd->qpd.sh_hidden_private_base = args->va_addr;
 
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	if (dev->dqm->sched_policy == KFD_SCHED_POLICY_NO_HWS &&
 	    pdd->qpd.vmid != 0) {
@@ -1161,7 +1126,7 @@ static int kfd_ioctl_alloc_scratch_memory(struct file *filep,
 	return 0;
 
 bind_process_to_device_fail:
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 alloc_memory_of_scratch_failed:
 	return -EFAULT;
 }
@@ -1205,12 +1170,6 @@ static int kfd_ioctl_alloc_memory_of_gpu(struct file *filep,
 	if (!dev)
 		return -EINVAL;
 
-	down_write(&p->lock);
-	pdd = kfd_bind_process_to_device(dev, p);
-	up_write(&p->lock);
-	if (IS_ERR(pdd))
-		return PTR_ERR(pdd);
-
 	if (flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR) {
 		/* Check if the userptr corresponds to another (or third-party)
 		 * device local memory. If so treat is as a doorbell. User
@@ -1232,24 +1191,30 @@ static int kfd_ioctl_alloc_memory_of_gpu(struct file *filep,
 		offset = kfd_get_process_doorbells(dev, p);
 	}
 
+	mutex_lock(&p->mutex);
+
+	pdd = kfd_bind_process_to_device(dev, p);
+	if (IS_ERR(pdd)) {
+		err = PTR_ERR(pdd);
+		goto err_unlock;
+	}
+
 	err = dev->kfd2kgd->alloc_memory_of_gpu(
 		dev->kgd, args->va_addr, args->size,
 		pdd->vm, (struct kgd_mem **) &mem, &offset,
 		NULL, flags);
 
-	if (err != 0)
-		return err;
+	if (err)
+		goto err_unlock;
 
-	down_write(&p->lock);
 	idr_handle = kfd_process_device_create_obj_handle(pdd, mem,
 			args->va_addr, args->size, NULL);
-	up_write(&p->lock);
 	if (idr_handle < 0) {
-		dev->kfd2kgd->free_memory_of_gpu(dev->kgd,
-						 (struct kgd_mem *) mem,
-						 pdd->vm);
-		return -EFAULT;
+		err = -EFAULT;
+		goto err_free;
 	}
+
+	mutex_unlock(&p->mutex);
 
 	args->handle = MAKE_HANDLE(args->gpu_id, idr_handle);
 	if ((args->flags & KFD_IOC_ALLOC_MEM_FLAGS_VRAM) != 0 &&
@@ -1263,6 +1228,14 @@ static int kfd_ioctl_alloc_memory_of_gpu(struct file *filep,
 	}
 
 	return 0;
+
+err_free:
+	dev->kfd2kgd->free_memory_of_gpu(dev->kgd,
+					 (struct kgd_mem *) mem,
+					 pdd->vm);
+err_unlock:
+	mutex_unlock(&p->mutex);
+	return err;
 }
 
 static int kfd_ioctl_free_memory_of_gpu(struct file *filep,
@@ -1278,7 +1251,7 @@ static int kfd_ioctl_free_memory_of_gpu(struct file *filep,
 	if (!dev)
 		return -EINVAL;
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	pdd = kfd_get_process_device_data(dev, p);
 	if (!pdd) {
@@ -1295,25 +1268,18 @@ static int kfd_ioctl_free_memory_of_gpu(struct file *filep,
 	}
 	run_rdma_free_callback(buf_obj);
 
-	up_write(&p->lock);
-
 	ret = dev->kfd2kgd->free_memory_of_gpu(dev->kgd, buf_obj->mem,
 					       pdd->vm);
 
 	/* If freeing the buffer failed, leave the handle in place for
 	 * clean-up during process tear-down.
 	 */
-	if (ret == 0) {
-		down_write(&p->lock);
+	if (ret == 0)
 		kfd_process_device_remove_obj_handle(
 			pdd, GET_IDR_HANDLE(args->handle));
-		up_write(&p->lock);
-	}
-
-	return ret;
 
 err_unlock:
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 	return ret;
 }
 
@@ -1353,7 +1319,7 @@ static int kfd_ioctl_map_memory_to_gpu(struct file *filep,
 		}
 	}
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	pdd = kfd_bind_process_to_device(dev, p);
 	if (IS_ERR(pdd)) {
@@ -1363,8 +1329,6 @@ static int kfd_ioctl_map_memory_to_gpu(struct file *filep,
 
 	mem = kfd_process_device_translate_handle(pdd,
 						GET_IDR_HANDLE(args->handle));
-	up_write(&p->lock);
-
 	if (!mem) {
 		err = PTR_ERR(mem);
 		goto get_mem_obj_from_handle_failed;
@@ -1380,9 +1344,8 @@ static int kfd_ioctl_map_memory_to_gpu(struct file *filep,
 				err = -EFAULT;
 				goto get_mem_obj_from_handle_failed;
 			}
-			down_write(&p->lock);
+
 			peer_pdd = kfd_bind_process_to_device(peer, p);
-			up_write(&p->lock);
 			if (!peer_pdd) {
 				err = -EFAULT;
 				goto get_mem_obj_from_handle_failed;
@@ -1398,6 +1361,8 @@ static int kfd_ioctl_map_memory_to_gpu(struct file *filep,
 		if (err != 0)
 			pr_err("Failed to map\n");
 	}
+
+	mutex_unlock(&p->mutex);
 
 	err = dev->kfd2kgd->sync_memory(dev->kgd, (struct kgd_mem *) mem, true);
 	if (err) {
@@ -1426,8 +1391,8 @@ static int kfd_ioctl_map_memory_to_gpu(struct file *filep,
 	return err;
 
 bind_process_to_device_failed:
-	up_write(&p->lock);
 get_mem_obj_from_handle_failed:
+	mutex_unlock(&p->mutex);
 copy_from_user_failed:
 sync_memory_failed:
 	kfree(devices_arr);
@@ -1485,7 +1450,7 @@ static int kfd_ioctl_unmap_memory_from_gpu(struct file *filep,
 		}
 	}
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	pdd = kfd_get_process_device_data(dev, p);
 	if (!pdd) {
@@ -1496,8 +1461,6 @@ static int kfd_ioctl_unmap_memory_from_gpu(struct file *filep,
 
 	mem = kfd_process_device_translate_handle(pdd,
 						GET_IDR_HANDLE(args->handle));
-	up_write(&p->lock);
-
 	if (!mem) {
 		err = PTR_ERR(mem);
 		goto get_mem_obj_from_handle_failed;
@@ -1511,9 +1474,8 @@ static int kfd_ioctl_unmap_memory_from_gpu(struct file *filep,
 				err = -EFAULT;
 				goto get_mem_obj_from_handle_failed;
 			}
-			down_write(&p->lock);
+
 			peer_pdd = kfd_get_process_device_data(peer, p);
-			up_write(&p->lock);
 			if (!peer_pdd) {
 				err = -EFAULT;
 				goto get_mem_obj_from_handle_failed;
@@ -1524,11 +1486,13 @@ static int kfd_ioctl_unmap_memory_from_gpu(struct file *filep,
 	} else
 		kfd_unmap_memory_from_gpu(mem, pdd);
 
+	mutex_unlock(&p->mutex);
+
 	return 0;
 
 bind_process_to_device_failed:
-	up_write(&p->lock);
 get_mem_obj_from_handle_failed:
+	mutex_unlock(&p->mutex);
 copy_from_user_failed:
 	kfree(devices_arr);
 	return err;
@@ -1546,7 +1510,7 @@ static int kfd_ioctl_set_process_dgpu_aperture(struct file *filep,
 	if (!dev)
 		return -EINVAL;
 
-	down_write(&p->lock);
+	mutex_lock(&p->mutex);
 
 	pdd = kfd_bind_process_to_device(dev, p);
 	if (IS_ERR(pdd)) {
@@ -1558,7 +1522,7 @@ static int kfd_ioctl_set_process_dgpu_aperture(struct file *filep,
 			args->dgpu_limit);
 
 exit:
-	up_write(&p->lock);
+	mutex_unlock(&p->mutex);
 	return err;
 }
 
@@ -1600,7 +1564,7 @@ static int kfd_ioctl_get_dmabuf_info(struct file *filep,
 		r = -EINVAL;
 		goto exit;
 	}
-	args->gpu_id = kfd_get_gpu_id(dev);
+	args->gpu_id = dev->id;
 	args->flags = flags;
 
 	/* Copy metadata buffer to user mode */
@@ -1825,11 +1789,11 @@ static int kfd_ioctl_cross_memory_copy(struct file *filep,
 	 *                             data will be sourced or copied
 	 */
 	dst_va_addr = dst_array[0].va_addr;
-	down_read(&dst_p->lock);
+	mutex_lock(&dst_p->mutex);
 	dst_bo = kfd_process_find_bo_from_interval(dst_p,
 			dst_va_addr,
 			dst_va_addr + dst_array[0].size - 1);
-	up_read(&dst_p->lock);
+	mutex_unlock(&dst_p->mutex);
 	if (!dst_bo) {
 		err = -EFAULT;
 		goto kfd_process_fail;
@@ -1841,11 +1805,11 @@ static int kfd_ioctl_cross_memory_copy(struct file *filep,
 					   src_array[i].size - 1;
 		uint64_t src_size_to_copy = src_array[i].size;
 
-		down_read(&src_p->lock);
+		mutex_lock(&src_p->mutex);
 		src_bo = kfd_process_find_bo_from_interval(src_p,
 				src_array[i].va_addr,
 				src_va_addr_end);
-		up_read(&src_p->lock);
+		mutex_unlock(&src_p->mutex);
 		if (!src_bo || src_va_addr_end > src_bo->it.last) {
 			pr_err("Cross mem copy failed. Invalid range\n");
 			err = -EFAULT;
@@ -1972,14 +1936,14 @@ static int kfd_ioctl_get_queue_wave_state(struct file *filep,
 	struct kfd_ioctl_get_queue_wave_state_args *args = data;
 	int r;
 
-	down_read(&p->lock);
+	mutex_lock(&p->mutex);
 
 	r = pqm_get_wave_state(&p->pqm, args->queue_id,
 			       (void __user *)args->ctl_stack_address,
 			       &args->ctl_stack_used_size,
 			       &args->save_area_used_size);
 
-	up_read(&p->lock);
+	mutex_unlock(&p->mutex);
 
 	return r;
 }
@@ -2118,8 +2082,7 @@ static long kfd_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	} else
 		goto err_i1;
 
-	dev_dbg(kfd_device, "ioctl cmd (#0x%x), arg 0x%lx\n",
-				nr, arg);
+	dev_dbg(kfd_device, "ioctl cmd 0x%x (#%d), arg 0x%lx\n", cmd, nr, arg);
 
 	process = kfd_get_process(current);
 	if (IS_ERR(process)) {
@@ -2174,8 +2137,7 @@ err_i1:
 		kfree(kdata);
 
 	if (retcode)
-		dev_dbg(kfd_device, "ioctl cmd (#0x%x), arg 0x%lx, failed %d\n",
-				nr, arg, retcode);
+		dev_dbg(kfd_device, "ret = %d\n", retcode);
 
 	return retcode;
 }
@@ -2218,5 +2180,3 @@ static int kfd_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	return -EFAULT;
 }
-
-

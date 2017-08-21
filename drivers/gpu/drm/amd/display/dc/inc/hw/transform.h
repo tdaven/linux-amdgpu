@@ -26,6 +26,7 @@
 #ifndef __DAL_TRANSFORM_H__
 #define __DAL_TRANSFORM_H__
 
+#include "hw_shared.h"
 #include "dc_hw_types.h"
 #include "fixed31_32.h"
 
@@ -37,6 +38,7 @@ struct transform {
 	const struct transform_funcs *funcs;
 	struct dc_context *ctx;
 	int inst;
+	struct pwl_params regamma_params;
 };
 
 /* Colorimetry */
@@ -112,14 +114,6 @@ struct xfm_grph_csc_adjustment {
 	enum graphics_gamut_adjust_type gamut_adjust_type;
 };
 
-enum lb_pixel_depth {
-	/* do not change the values because it is used as bit vector */
-	LB_PIXEL_DEPTH_18BPP = 1,
-	LB_PIXEL_DEPTH_24BPP = 2,
-	LB_PIXEL_DEPTH_30BPP = 4,
-	LB_PIXEL_DEPTH_36BPP = 8
-};
-
 struct overscan_info {
 	int left;
 	int right;
@@ -176,11 +170,6 @@ struct transform_funcs {
 	void (*transform_set_scaler)(struct transform *xfm,
 			const struct scaler_data *scl_data);
 
-	void (*transform_set_gamut_remap)(
-			struct transform *xfm,
-			const struct xfm_grph_csc_adjustment *adjust);
-
-
 	void (*transform_set_pixel_storage_depth)(
 			struct transform *xfm,
 			enum lb_pixel_depth depth,
@@ -190,6 +179,46 @@ struct transform_funcs {
 			struct transform *xfm,
 			struct scaler_data *scl_data,
 			const struct scaling_taps *in_taps);
+
+	void (*transform_set_gamut_remap)(
+			struct transform *xfm,
+			const struct xfm_grph_csc_adjustment *adjust);
+
+	void (*opp_set_csc_default)(
+		struct transform *xfm,
+		const struct default_adjustment *default_adjust);
+
+	void (*opp_set_csc_adjustment)(
+		struct transform *xfm,
+		const struct out_csc_color_matrix *tbl_entry);
+
+	void (*opp_power_on_regamma_lut)(
+		struct transform *xfm,
+		bool power_on);
+
+	void (*opp_program_regamma_lut)(
+			struct transform *xfm,
+			const struct pwl_result_data *rgb,
+			uint32_t num);
+
+	void (*opp_configure_regamma_lut)(
+			struct transform *xfm,
+			bool is_ram_a);
+
+	void (*opp_program_regamma_lutb_settings)(
+			struct transform *xfm,
+			const struct pwl_params *params);
+
+	void (*opp_program_regamma_luta_settings)(
+			struct transform *xfm,
+			const struct pwl_params *params);
+
+	bool (*opp_program_regamma_pwl)(
+		struct transform *xfm, const struct pwl_params *params);
+
+	void (*opp_set_regamma_mode)(
+			struct transform *xfm_base,
+			enum opp_regamma mode);
 };
 
 extern const uint16_t filter_2tap_16p[18];

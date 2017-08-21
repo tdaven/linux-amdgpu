@@ -312,7 +312,7 @@ static void tgn10_blank_crtc(struct timing_generator *tg)
 	 */
 	REG_WAIT(OTG_BLANK_CONTROL,
 			OTG_BLANK_DATA_EN, 1,
-			20000, 200000);
+			1, 100000);
 
 	REG_UPDATE(OTG_DOUBLE_BUFFER_CONTROL,
 			OTG_BLANK_DATA_DOUBLE_BUFFER_EN, 0);
@@ -345,36 +345,39 @@ static void tgn10_enable_optc_clock(struct timing_generator *tg, bool enable)
 	struct dcn10_timing_generator *tgn10 = DCN10TG_FROM_TG(tg);
 
 	if (enable) {
-		REG_UPDATE(OPTC_INPUT_CLOCK_CONTROL,
-				OPTC_INPUT_CLK_EN, 1);
+		REG_UPDATE_2(OPTC_INPUT_CLOCK_CONTROL,
+				OPTC_INPUT_CLK_EN, 1,
+				OPTC_INPUT_CLK_GATE_DIS, 1);
 
 		REG_WAIT(OPTC_INPUT_CLOCK_CONTROL,
 				OPTC_INPUT_CLK_ON, 1,
-				2000, 500);
+				1, 1000);
 
 		/* Enable clock */
-		REG_UPDATE(OTG_CLOCK_CONTROL,
-				OTG_CLOCK_EN, 1);
-
+		REG_UPDATE_2(OTG_CLOCK_CONTROL,
+				OTG_CLOCK_EN, 1,
+				OTG_CLOCK_GATE_DIS, 1);
 		REG_WAIT(OTG_CLOCK_CONTROL,
 				OTG_CLOCK_ON, 1,
-				2000, 500);
+				1, 1000);
 	} else  {
 		REG_UPDATE_2(OTG_CLOCK_CONTROL,
 				OTG_CLOCK_GATE_DIS, 0,
 				OTG_CLOCK_EN, 0);
 
-		REG_WAIT(OTG_CLOCK_CONTROL,
-				OTG_CLOCK_ON, 0,
-				2000, 500);
+		if (tg->ctx->dce_environment != DCE_ENV_FPGA_MAXIMUS)
+			REG_WAIT(OTG_CLOCK_CONTROL,
+					OTG_CLOCK_ON, 0,
+					1, 1000);
 
 		REG_UPDATE_2(OPTC_INPUT_CLOCK_CONTROL,
 				OPTC_INPUT_CLK_GATE_DIS, 0,
 				OPTC_INPUT_CLK_EN, 0);
 
-		REG_WAIT(OPTC_INPUT_CLOCK_CONTROL,
-				OPTC_INPUT_CLK_ON, 0,
-				2000, 500);
+		if (tg->ctx->dce_environment != DCE_ENV_FPGA_MAXIMUS)
+			REG_WAIT(OPTC_INPUT_CLOCK_CONTROL,
+					OPTC_INPUT_CLK_ON, 0,
+					1, 1000);
 	}
 }
 
@@ -426,7 +429,7 @@ static bool tgn10_disable_crtc(struct timing_generator *tg)
 	/* CRTC disabled, so disable  clock. */
 	REG_WAIT(OTG_CLOCK_CONTROL,
 			OTG_BUSY, 0,
-			2000, 20000);
+			1, 100000);
 
 	return true;
 }
@@ -442,43 +445,6 @@ static void tgn10_program_blank_color(
 			OTG_BLACK_COLOR_B_CB, black_color->color_b_cb,
 			OTG_BLACK_COLOR_G_Y, black_color->color_g_y,
 			OTG_BLACK_COLOR_R_CR, black_color->color_r_cr);
-}
-
-/**
- * dcn10_dcn10_timing_generator_disable_vga
- * Turn OFF VGA Mode and Timing  - DxVGA_CONTROL
- * VGA Mode and VGA Timing is used by VBIOS on CRT Monitors;
- */
-/* TODO FPGA FPGA setup is done by Diag which does not enable VGA mode.
- * VGA is disable by ASIC default. This function is not needed for
- * FPGA story.
- * usage:
- * init_hw  within dc.c
- * disable_vga_and_power_gate_all_controllers within dce110_hw_sequencer.c
- * We may move init_hw into DC specific so that we can remove
- * .disable_vga from upper layer stack
- */
-static void tgn10_disable_vga(
-			struct timing_generator *tg)
-{
-	struct dcn10_timing_generator *tgn10 = DCN10TG_FROM_TG(tg);
-
-	switch (tgn10->base.inst) {
-	case 0:
-		REG_WRITE(D1VGA_CONTROL, 0);
-		break;
-	case 1:
-		REG_WRITE(D2VGA_CONTROL, 0);
-		break;
-	case 2:
-		REG_WRITE(D2VGA_CONTROL, 0);
-		break;
-	case 3:
-		REG_WRITE(D4VGA_CONTROL, 0);
-		break;
-	default:
-		break;
-	}
 }
 
 static bool tgn10_validate_timing(
@@ -574,9 +540,10 @@ static void tgn10_lock(struct timing_generator *tg)
 	REG_SET(OTG_MASTER_UPDATE_LOCK, 0,
 			OTG_MASTER_UPDATE_LOCK, 1);
 
-	REG_WAIT(OTG_MASTER_UPDATE_LOCK,
-			UPDATE_LOCK_STATUS, 1,
-			1, 100);
+	if (tg->ctx->dce_environment != DCE_ENV_FPGA_MAXIMUS)
+		REG_WAIT(OTG_MASTER_UPDATE_LOCK,
+				UPDATE_LOCK_STATUS, 1,
+				1, 100);
 }
 
 static void tgn10_unlock(struct timing_generator *tg)
@@ -587,9 +554,9 @@ static void tgn10_unlock(struct timing_generator *tg)
 			OTG_MASTER_UPDATE_LOCK, 0);
 
 	/* why are we waiting here? */
-	/*REG_WAIT(OTG_DOUBLE_BUFFER_CONTROL,
+	REG_WAIT(OTG_DOUBLE_BUFFER_CONTROL,
 			OTG_UPDATE_PENDING, 0,
-			20000, 200000);*/
+			1, 100000);
 }
 
 static void tgn10_get_position(struct timing_generator *tg,
@@ -684,13 +651,13 @@ static void tgn10_wait_for_state(struct timing_generator *tg,
 	case CRTC_STATE_VBLANK:
 		REG_WAIT(OTG_STATUS,
 				OTG_V_BLANK, 1,
-				100, 100000); /* 1 vupdate at 10hz */
+				1, 100000); /* 1 vupdate at 10hz */
 		break;
 
 	case CRTC_STATE_VACTIVE:
 		REG_WAIT(OTG_STATUS,
 				OTG_V_ACTIVE_DISP, 1,
-				100, 100000); /* 1 vupdate at 10hz */
+				1, 100000); /* 1 vupdate at 10hz */
 		break;
 
 	default:
@@ -1140,7 +1107,6 @@ static struct timing_generator_funcs dcn10_tg_funcs = {
 		.set_blank = tgn10_set_blank,
 		.is_blanked = tgn10_is_blanked,
 		.set_blank_color = tgn10_program_blank_color,
-		.disable_vga = tgn10_disable_vga,
 		.did_triggered_reset_occur = tgn10_did_triggered_reset_occur,
 		.enable_reset_trigger = tgn10_enable_reset_trigger,
 		.disable_reset_trigger = tgn10_disable_reset_trigger,
