@@ -26,6 +26,12 @@
 #include "sid.h"
 #include "si_ih.h"
 
+#include "bif/bif_3_0_d.h"
+#include "bif/bif_3_0_sh_mask.h"
+
+#include "oss/oss_1_0_d.h"
+#include "oss/oss_1_0_sh_mask.h"
+
 static void si_ih_set_interrupt_funcs(struct amdgpu_device *adev);
 
 static void si_ih_enable_interrupts(struct amdgpu_device *adev)

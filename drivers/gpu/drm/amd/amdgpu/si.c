@@ -38,13 +38,15 @@
 #include "gmc_v6_0.h"
 #include "si_dma.h"
 #include "dce_v6_0.h"
+#include "uvd_v3_1.h"
 #include "si.h"
 #include "dce_virtual.h"
 #include "gca/gfx_6_0_d.h"
 #include "oss/oss_1_0_d.h"
+#include "oss/oss_1_0_sh_mask.h"
 #include "gmc/gmc_6_0_d.h"
 #include "dce/dce_6_0_d.h"
-#include "uvd/uvd_4_0_d.h"
+#include "uvd/uvd_3_1_d.h"
 #include "bif/bif_3_0_d.h"
 
 static const u32 tahiti_golden_registers[] =
@@ -970,6 +972,28 @@ static void si_smc_wreg(struct amdgpu_device *adev, u32 reg, u32 v)
 	spin_unlock_irqrestore(&adev->smc_idx_lock, flags);
 }
 
+static u32 si_uvd_ctx_rreg(struct amdgpu_device *adev, u32 reg)
+{
+   unsigned long flags;
+   u32 r;
+
+   spin_lock_irqsave(&adev->uvd_ctx_idx_lock, flags);
+   WREG32(mmUVD_CTX_INDEX, ((reg) & 0x1ff));
+   r = RREG32(mmUVD_CTX_DATA);
+   spin_unlock_irqrestore(&adev->uvd_ctx_idx_lock, flags);
+   return r;
+}
+
+static void si_uvd_ctx_wreg(struct amdgpu_device *adev, u32 reg, u32 v)
+{
+   unsigned long flags;
+
+   spin_lock_irqsave(&adev->uvd_ctx_idx_lock, flags);
+   WREG32(mmUVD_CTX_INDEX, ((reg) & 0x1ff));
+   WREG32(mmUVD_CTX_DATA, (v));
+   spin_unlock_irqrestore(&adev->uvd_ctx_idx_lock, flags);
+}
+
 static struct amdgpu_allowed_register_entry si_allowed_read_registers[] = {
 	{GRBM_STATUS},
 	{GB_ADDR_CONFIG},
@@ -1218,10 +1242,230 @@ static u32 si_get_xclk(struct amdgpu_device *adev)
 	return reference_clock;
 }
 
-//xxx:not implemented
+static unsigned si_uvd_calc_upll_post_div(unsigned vco_freq,
+                     unsigned target_freq,
+                     unsigned pd_min,
+                     unsigned pd_even)
+{
+   unsigned post_div = vco_freq / target_freq;
+
+   /* adjust to post divider minimum value */
+   if (post_div < pd_min)
+      post_div = pd_min;
+
+   /* we alway need a frequency less than or equal the target */
+   if ((vco_freq / post_div) > target_freq)
+      post_div += 1;
+
+   /* post dividers above a certain value must be even */
+   if (post_div > pd_even && post_div % 2)
+      post_div += 1;
+
+   return post_div;
+}
+
+/**
+ * si_uvd_calc_upll_dividers - calc UPLL clock dividers
+ *
+ * @rdev: radeon_device pointer
+ * @vclk: wanted VCLK
+ * @dclk: wanted DCLK
+ * @vco_min: minimum VCO frequency
+ * @vco_max: maximum VCO frequency
+ * @fb_factor: factor to multiply vco freq with
+ * @fb_mask: limit and bitmask for feedback divider
+ * @pd_min: post divider minimum
+ * @pd_max: post divider maximum
+ * @pd_even: post divider must be even above this value
+ * @optimal_fb_div: resulting feedback divider
+ * @optimal_vclk_div: resulting vclk post divider
+ * @optimal_dclk_div: resulting dclk post divider
+ *
+ * Calculate dividers for UVDs UPLL (R6xx-SI, except APUs).
+ * Returns zero on success -EINVAL on error.
+ */
+static int si_uvd_calc_upll_dividers(struct amdgpu_device *adev,
+              unsigned vclk, unsigned dclk,
+              unsigned vco_min, unsigned vco_max,
+              unsigned fb_factor, unsigned fb_mask,
+              unsigned pd_min, unsigned pd_max,
+              unsigned pd_even,
+              unsigned *optimal_fb_div,
+              unsigned *optimal_vclk_div,
+              unsigned *optimal_dclk_div)
+{
+   unsigned vco_freq, ref_freq = adev->clock.spll.reference_freq;
+
+   /* start off with something large */
+   unsigned optimal_score = ~0;
+
+   /* loop through vco from low to high */
+   vco_min = max(max(vco_min, vclk), dclk);
+   for (vco_freq = vco_min; vco_freq <= vco_max; vco_freq += 100) {
+
+      uint64_t fb_div = (uint64_t)vco_freq * fb_factor;
+      unsigned vclk_div, dclk_div, score;
+
+      do_div(fb_div, ref_freq);
+
+      /* fb div out of range ? */
+      if (fb_div > fb_mask)
+         break; /* it can oly get worse */
+
+      fb_div &= fb_mask;
+
+      /* calc vclk divider with current vco freq */
+      vclk_div = si_uvd_calc_upll_post_div(vco_freq, vclk,
+                      pd_min, pd_even);
+      if (vclk_div > pd_max)
+         break; /* vco is too big, it has to stop */
+
+      /* calc dclk divider with current vco freq */
+      dclk_div = si_uvd_calc_upll_post_div(vco_freq, dclk,
+                      pd_min, pd_even);
+      if (vclk_div > pd_max)
+         break; /* vco is too big, it has to stop */
+
+      /* calc score with current vco freq */
+      score = vclk - (vco_freq / vclk_div) + dclk - (vco_freq / dclk_div);
+
+      /* determine if this vco setting is better than current optimal settings */
+      if (score < optimal_score) {
+         *optimal_fb_div = fb_div;
+         *optimal_vclk_div = vclk_div;
+         *optimal_dclk_div = dclk_div;
+         optimal_score = score;
+         if (optimal_score == 0)
+            break; /* it can't get better than this */
+      }
+   }
+
+   /* did we found a valid setup ? */
+   if (optimal_score == ~0)
+      return -EINVAL;
+
+   return 0;
+}
+
+static int si_uvd_send_upll_ctlreq(struct amdgpu_device *adev,
+            unsigned cg_upll_func_cntl)
+{
+   unsigned i;
+
+   /* make sure UPLL_CTLREQ is deasserted */
+   WREG32_P(cg_upll_func_cntl, 0, ~UPLL_CTLREQ_MASK);
+
+   mdelay(10);
+
+   /* assert UPLL_CTLREQ */
+   WREG32_P(cg_upll_func_cntl, UPLL_CTLREQ_MASK, ~UPLL_CTLREQ_MASK);
+
+   /* wait for CTLACK and CTLACK2 to get asserted */
+   for (i = 0; i < 100; ++i) {
+      uint32_t mask = UPLL_CTLACK_MASK | UPLL_CTLACK2_MASK;
+      if ((RREG32(cg_upll_func_cntl) & mask) == mask)
+         break;
+      mdelay(10);
+   }
+
+   /* deassert UPLL_CTLREQ */
+   WREG32_P(cg_upll_func_cntl, 0, ~UPLL_CTLREQ_MASK);
+
+   if (i == 100) {
+      DRM_ERROR("Timeout setting UVD clocks!\n");
+      return -ETIMEDOUT;
+   }
+
+   return 0;
+}
+
 static int si_set_uvd_clocks(struct amdgpu_device *adev, u32 vclk, u32 dclk)
 {
-	return 0;
+   unsigned fb_div = 0, vclk_div = 0, dclk_div = 0;
+      int r;
+
+      /* bypass vclk and dclk with bclk */
+      WREG32_P(CG_UPLL_FUNC_CNTL_2,
+         VCLK_SRC_SEL(1) | DCLK_SRC_SEL(1),
+         ~(VCLK_SRC_SEL_MASK | DCLK_SRC_SEL_MASK));
+
+      /* put PLL in bypass mode */
+      WREG32_P(CG_UPLL_FUNC_CNTL, UPLL_BYPASS_EN_MASK, ~UPLL_BYPASS_EN_MASK);
+
+      if (!vclk || !dclk) {
+         /* keep the Bypass mode */
+         return 0;
+      }
+
+      r = si_uvd_calc_upll_dividers(adev, vclk, dclk, 125000, 250000,
+                    16384, 0x03FFFFFF, 0, 128, 5,
+                    &fb_div, &vclk_div, &dclk_div);
+      if (r)
+         return r;
+
+      /* set RESET_ANTI_MUX to 0 */
+      WREG32_P(CG_UPLL_FUNC_CNTL_5, 0, ~RESET_ANTI_MUX_MASK);
+
+      /* set VCO_MODE to 1 */
+      WREG32_P(CG_UPLL_FUNC_CNTL, UPLL_VCO_MODE_MASK, ~UPLL_VCO_MODE_MASK);
+
+      /* disable sleep mode */
+      WREG32_P(CG_UPLL_FUNC_CNTL, 0, ~UPLL_SLEEP_MASK);
+
+      /* deassert UPLL_RESET */
+      WREG32_P(CG_UPLL_FUNC_CNTL, 0, ~UPLL_RESET_MASK);
+
+      mdelay(1);
+
+      r = si_uvd_send_upll_ctlreq(adev, CG_UPLL_FUNC_CNTL);
+      if (r)
+         return r;
+
+      /* assert UPLL_RESET again */
+      WREG32_P(CG_UPLL_FUNC_CNTL, UPLL_RESET_MASK, ~UPLL_RESET_MASK);
+
+      /* disable spread spectrum. */
+      WREG32_P(CG_UPLL_SPREAD_SPECTRUM, 0, ~SSEN_MASK);
+
+      /* set feedback divider */
+      WREG32_P(CG_UPLL_FUNC_CNTL_3, UPLL_FB_DIV(fb_div), ~UPLL_FB_DIV_MASK);
+
+      /* set ref divider to 0 */
+      WREG32_P(CG_UPLL_FUNC_CNTL, 0, ~UPLL_REF_DIV_MASK);
+
+      if (fb_div < 307200)
+         WREG32_P(CG_UPLL_FUNC_CNTL_4, 0, ~UPLL_SPARE_ISPARE9);
+      else
+         WREG32_P(CG_UPLL_FUNC_CNTL_4, UPLL_SPARE_ISPARE9, ~UPLL_SPARE_ISPARE9);
+
+      /* set PDIV_A and PDIV_B */
+      WREG32_P(CG_UPLL_FUNC_CNTL_2,
+         UPLL_PDIV_A(vclk_div) | UPLL_PDIV_B(dclk_div),
+         ~(UPLL_PDIV_A_MASK | UPLL_PDIV_B_MASK));
+
+      /* give the PLL some time to settle */
+      mdelay(15);
+
+      /* deassert PLL_RESET */
+      WREG32_P(CG_UPLL_FUNC_CNTL, 0, ~UPLL_RESET_MASK);
+
+      mdelay(15);
+
+      /* switch from bypass mode to normal mode */
+      WREG32_P(CG_UPLL_FUNC_CNTL, 0, ~UPLL_BYPASS_EN_MASK);
+
+      r = si_uvd_send_upll_ctlreq(adev, CG_UPLL_FUNC_CNTL);
+      if (r)
+         return r;
+
+      /* switch VCLK and DCLK selection */
+      WREG32_P(CG_UPLL_FUNC_CNTL_2,
+         VCLK_SRC_SEL(2) | DCLK_SRC_SEL(2),
+         ~(VCLK_SRC_SEL_MASK | DCLK_SRC_SEL_MASK));
+
+      mdelay(100);
+
+      return 0;
 }
 
 static void si_detect_hw_virtualization(struct amdgpu_device *adev)
@@ -1259,8 +1503,8 @@ static int si_common_early_init(void *handle)
 	adev->pcie_wreg = &si_pcie_wreg;
 	adev->pciep_rreg = &si_pciep_rreg;
 	adev->pciep_wreg = &si_pciep_wreg;
-	adev->uvd_ctx_rreg = NULL;
-	adev->uvd_ctx_wreg = NULL;
+	adev->uvd_ctx_rreg = &si_uvd_ctx_rreg;
+	adev->uvd_ctx_wreg = &si_uvd_ctx_wreg;
 	adev->didt_rreg = NULL;
 	adev->didt_wreg = NULL;
 
@@ -1969,7 +2213,7 @@ int si_set_ip_blocks(struct amdgpu_device *adev)
 			amdgpu_ip_block_add(adev, &dce_v6_0_ip_block);
 		amdgpu_ip_block_add(adev, &gfx_v6_0_ip_block);
 		amdgpu_ip_block_add(adev, &si_dma_ip_block);
-		/* amdgpu_ip_block_add(adev, &uvd_v3_1_ip_block); */
+		amdgpu_ip_block_add(adev, &uvd_v3_1_ip_block);
 		/* amdgpu_ip_block_add(adev, &vce_v1_0_ip_block); */
 		break;
 	case CHIP_OLAND:
